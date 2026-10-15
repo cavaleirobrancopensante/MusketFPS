@@ -49,7 +49,10 @@ func _physics_process(delta: float) -> void:
 			melee_timer = MELEE_COOLDOWN
 			_thrust()
 			if randf() < 0.75:
-				target.take_damage(MELEE_DAMAGE)
+				var push := (target.global_position - global_position) * Vector3(1, 0, 1)
+				target.take_damage(MELEE_DAMAGE, self)
+				if target.has_method("stagger"):
+					target.stagger(push.normalized() * 2.5, 0.25)
 		return
 
 	# March to our slot in the line.

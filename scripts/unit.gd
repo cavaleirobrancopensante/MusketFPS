@@ -39,7 +39,7 @@ func is_valid_target(t: Node3D) -> bool:
 	return t != null and is_instance_valid(t) and t.get("alive") == true
 
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, _from: Node3D = null) -> void:
 	if not alive:
 		return
 	hp -= amount

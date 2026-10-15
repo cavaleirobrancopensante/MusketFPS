@@ -1,10 +1,21 @@
 extends CharacterBody3D
-## You: an officer with a musket. First-person movement, looking, and the
-## musket itself (one slow, inaccurate, devastating shot, then a long reload).
+## You: an officer with a musket. First-person movement, looking, the musket
+## (one slow, inaccurate, devastating shot, then a long reload) and the bayonet.
+##
+## Melee works like Mount & Blade: press to wind up, choose where the blow
+## comes from, release to strike. Holding longer charges a heavier blow.
+##   OVERHEAD   - comes down from above: big damage, one target
+##   LEFT/RIGHT - sweeps across from that side: wide arc, can hit two
+##   THRUST     - straight bayonet lunge: longest reach, one target
+## Blocking (hold) stops a lizardman's hack from the front and staggers him.
 
 signal fired(hit: bool)
+signal melee_hit(count: int)
+signal blocked
 signal hurt
 signal died
+
+enum Swing { NONE = -1, OVERHEAD, LEFT, RIGHT, THRUST }
 
 const SPEED := 5.0
 const GRAVITY := 20.0
@@ -12,6 +23,21 @@ const RELOAD_TIME := 3.5
 const RANGE := 90.0
 const SPREAD := 0.012 # radians of random error per shot
 const LOOK_SENS := 0.005 # radians per pixel of drag
+
+const SWITCH_TIME := 0.5 # musket <-> bayonet
+const MIN_WINDUP := 0.18 # fastest possible blow
+const FULL_CHARGE := 0.8 # hold this long for a fully charged blow
+const STRIKE_TIME := 0.16
+const RECOVER_TIME := 0.28
+const BLOCK_ARC := 70.0 # degrees either side of where you look
+
+## Per-direction tuning. "cone" is degrees either side of where you look.
+const SWINGS := {
+	Swing.OVERHEAD: {"reach": 2.3, "cone": 30.0, "targets": 1, "damage": 70.0, "charge_damage": 45.0, "knock": 3.5},
+	Swing.LEFT: {"reach": 2.2, "cone": 75.0, "targets": 2, "damage": 45.0, "charge_damage": 30.0, "knock": 3.0},
+	Swing.RIGHT: {"reach": 2.2, "cone": 75.0, "targets": 2, "damage": 45.0, "charge_damage": 30.0, "knock": 3.0},
+	Swing.THRUST: {"reach": 2.8, "cone": 18.0, "targets": 1, "damage": 60.0, "charge_damage": 45.0, "knock": 4.0},
+}
 
 var battle
 var hp := 100.0
@@ -21,7 +47,21 @@ var loaded := true
 var reload_left := 0.0
 var move_input := Vector2.ZERO # set by the HUD joystick, -1..1
 var camera: Camera3D
+
+# Melee state, read by the HUD to animate the viewmodel.
+var weapon := "musket" # "musket" or "melee"
+var switch_left := 0.0
+var swing_phase := "idle" # idle, windup, strike, recover
+var swing_dir: int = Swing.NONE
+var phase_time := 0.0
+var strike_charge := 0.0
+var blocking := false
+var block_held := false
+
 var _want_fire := false
+var _switch_to := "musket"
+var _release_requested := false
+var _hit_done := false
 
 
 func _ready() -> void:
@@ -44,6 +84,8 @@ func _ready() -> void:
 	camera.make_current()
 
 
+# ---------------------------------------------------------------- called by the HUD
+
 func add_look(drag: Vector2) -> void:
 	if not alive:
 		return
@@ -55,6 +97,53 @@ func request_fire() -> void:
 	_want_fire = true
 
 
+func toggle_weapon() -> void:
+	if not alive or switch_left > 0.0 or swing_phase != "idle":
+		return
+	_switch_to = "melee" if weapon == "musket" else "musket"
+	switch_left = SWITCH_TIME
+
+
+func is_switching() -> bool:
+	return switch_left > 0.0
+
+
+## Start winding up a blow. Returns false if you can't swing right now.
+func begin_swing() -> bool:
+	if not alive or weapon != "melee" or switch_left > 0.0 or swing_phase != "idle":
+		return false
+	swing_phase = "windup"
+	phase_time = 0.0
+	swing_dir = Swing.NONE
+	_release_requested = false
+	blocking = false
+	return true
+
+
+## Where the blow comes from; can change freely until you release.
+func set_swing_dir(dir: int) -> void:
+	if swing_phase == "windup":
+		swing_dir = dir
+
+
+func release_swing() -> void:
+	if swing_phase == "windup":
+		_release_requested = true
+
+
+func set_block(held: bool) -> void:
+	block_held = held
+
+
+## 0..1 how charged the current wind-up is.
+func charge() -> float:
+	if swing_phase == "windup":
+		return clampf((phase_time - MIN_WINDUP) / (FULL_CHARGE - MIN_WINDUP), 0.0, 1.0)
+	if swing_phase == "strike":
+		return strike_charge
+	return 0.0
+
+
 ## 0 while just fired, 1 when loaded.
 func reload_progress() -> float:
 	if loaded:
@@ -62,32 +151,48 @@ func reload_progress() -> float:
 	return 1.0 - reload_left / RELOAD_TIME
 
 
-## How far the musket is lowered for reloading (0 = shouldered, 1 = fully down).
-func reload_lowered() -> float:
-	if loaded:
-		return 0.0
-	var elapsed := RELOAD_TIME - reload_left
-	return clampf(minf(elapsed - 0.25, reload_left) / 0.35, 0.0, 1.0)
+## How far the weapon is lowered (reloading or switching): 0 = up, 1 = out of view.
+func weapon_lowered() -> float:
+	if switch_left > 0.0:
+		var k := switch_left / SWITCH_TIME
+		return 1.0 - absf(2.0 * k - 1.0)
+	if weapon == "musket" and not loaded:
+		var elapsed := RELOAD_TIME - reload_left
+		return clampf(minf(elapsed - 0.25, reload_left) / 0.35, 0.0, 1.0)
+	return 0.0
 
+
+# ---------------------------------------------------------------- update
 
 func _physics_process(delta: float) -> void:
 	if alive:
+		_keyboard_controls()
+
 		var input := move_input
 		var kb := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		if kb != Vector2.ZERO:
 			input = kb
+		var speed := SPEED
+		if blocking:
+			speed *= 0.5
+		elif swing_phase != "idle":
+			speed *= 0.7
 		var dir := global_transform.basis * Vector3(input.x, 0.0, input.y)
 		dir.y = 0.0
-		velocity.x = dir.x * SPEED
-		velocity.z = dir.z * SPEED
+		velocity.x = dir.x * speed
+		velocity.z = dir.z * speed
 
-		if Input.is_action_just_pressed("fire"):
-			_want_fire = true
+		_update_switch(delta)
+		_update_swing(delta)
+		blocking = block_held and weapon == "melee" and swing_phase == "idle" and switch_left <= 0.0
+
 		if _want_fire:
 			_want_fire = false
-			_fire()
+			if weapon == "musket" and switch_left <= 0.0:
+				_fire()
 
-		if not loaded:
+		# You need both hands on the musket to reload it.
+		if not loaded and weapon == "musket" and switch_left <= 0.0:
 			reload_left -= delta
 			if reload_left <= 0.0:
 				loaded = true
@@ -100,6 +205,117 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
+
+
+## PC testing: Space fires / winds up, arrow keys pick the blow, Q switches, E blocks.
+func _keyboard_controls() -> void:
+	if Input.is_action_just_pressed("switch_weapon"):
+		toggle_weapon()
+	if Input.is_action_just_pressed("block"):
+		block_held = true
+	if Input.is_action_just_released("block"):
+		block_held = false
+	if weapon == "musket":
+		if Input.is_action_just_pressed("fire"):
+			_want_fire = true
+		return
+	if Input.is_action_just_pressed("fire"):
+		begin_swing()
+	if swing_phase == "windup":
+		if Input.is_action_pressed("swing_up"):
+			swing_dir = Swing.OVERHEAD
+		elif Input.is_action_pressed("swing_left"):
+			swing_dir = Swing.LEFT
+		elif Input.is_action_pressed("swing_right"):
+			swing_dir = Swing.RIGHT
+		elif Input.is_action_pressed("swing_down"):
+			swing_dir = Swing.THRUST
+	if Input.is_action_just_released("fire"):
+		release_swing()
+
+
+func _update_switch(delta: float) -> void:
+	if switch_left <= 0.0:
+		return
+	var before := switch_left
+	switch_left -= delta
+	# The weapon changes hands at the bottom of the motion, out of view.
+	if before > SWITCH_TIME * 0.5 and switch_left <= SWITCH_TIME * 0.5:
+		weapon = _switch_to
+	if switch_left <= 0.0:
+		switch_left = 0.0
+		weapon = _switch_to
+
+
+func _update_swing(delta: float) -> void:
+	match swing_phase:
+		"windup":
+			phase_time += delta
+			if _release_requested and phase_time >= MIN_WINDUP:
+				strike_charge = charge()
+				if swing_dir == Swing.NONE:
+					swing_dir = Swing.THRUST # a quick tap is a thrust
+				swing_phase = "strike"
+				phase_time = 0.0
+				_hit_done = false
+		"strike":
+			phase_time += delta
+			if not _hit_done and phase_time >= STRIKE_TIME * 0.5:
+				_hit_done = true
+				_apply_melee()
+			if phase_time >= STRIKE_TIME:
+				swing_phase = "recover"
+				phase_time = 0.0
+		"recover":
+			phase_time += delta
+			if phase_time >= RECOVER_TIME:
+				swing_phase = "idle"
+				phase_time = 0.0
+				swing_dir = Swing.NONE
+
+
+func _flat_forward() -> Vector3:
+	var f := -global_transform.basis.z
+	f.y = 0.0
+	return f.normalized()
+
+
+func _apply_melee() -> void:
+	var data: Dictionary = SWINGS[swing_dir]
+	var reach: float = data["reach"]
+	var cone: float = data["cone"]
+	var fwd := _flat_forward()
+	var candidates := []
+	for e in battle.enemies:
+		var to: Vector3 = e.global_position - global_position
+		to.y = 0.0
+		var d := to.length()
+		if d > reach or d < 0.01:
+			continue
+		if rad_to_deg(fwd.angle_to(to)) > cone:
+			continue
+		candidates.append([d, e])
+	candidates.sort_custom(func(a, b): return a[0] < b[0])
+
+	var damage: float = data["damage"] + data["charge_damage"] * strike_charge
+	var knock: float = data["knock"] * (1.0 + strike_charge * 0.5)
+	var right := global_transform.basis.x
+	var count := 0
+	for c in candidates:
+		if count >= int(data["targets"]):
+			break
+		var e = c[1]
+		var push: Vector3 = (e.global_position - global_position) * Vector3(1, 0, 1)
+		push = push.normalized()
+		# Side blows also shove sideways, in the direction of the sweep.
+		if swing_dir == Swing.LEFT:
+			push = (push + right * 0.6).normalized()
+		elif swing_dir == Swing.RIGHT:
+			push = (push - right * 0.6).normalized()
+		e.take_damage(damage, self)
+		e.stagger(push * knock, 0.35 + 0.25 * strike_charge)
+		count += 1
+	melee_hit.emit(count)
 
 
 func _fire() -> void:
@@ -119,7 +335,7 @@ func _fire() -> void:
 	if not result.is_empty():
 		var collider: Object = result["collider"]
 		if collider != null and collider.has_method("take_damage"):
-			collider.call("take_damage", 100.0)
+			collider.call("take_damage", 100.0, self)
 			hit = true
 
 	var right := camera.global_transform.basis.x
@@ -128,9 +344,18 @@ func _fire() -> void:
 	fired.emit(hit)
 
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, from: Node3D = null) -> void:
 	if not alive:
 		return
+	if blocking and from != null and is_instance_valid(from):
+		var to := from.global_position - global_position
+		to.y = 0.0
+		if rad_to_deg(_flat_forward().angle_to(to)) <= BLOCK_ARC:
+			# Parried: no damage, and the attacker reels back.
+			if from.has_method("stagger"):
+				from.stagger(to.normalized() * 2.5, 0.5)
+			blocked.emit()
+			return
 	hp -= amount
 	hurt.emit()
 	if hp <= 0.0:
