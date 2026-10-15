@@ -17,6 +17,9 @@ signal died
 
 enum Swing { NONE = -1, OVERHEAD, LEFT, RIGHT, THRUST }
 
+const Rig3D := preload("res://scripts/rig3d.gd")
+const PlayerBody := preload("res://scripts/player_body.gd")
+
 const SPEED := 5.0
 const GRAVITY := 20.0
 const RELOAD_TIME := 3.5
@@ -50,6 +53,11 @@ var loaded := true
 var reload_left := 0.0
 var move_input := Vector2.ZERO # set by the HUD joystick, -1..1
 var camera: Camera3D
+var pitch := 0.0 # looking up (+) or down (-), radians
+
+# 3D mode: your own body, and first/third-person view.
+var rig = null
+var third_person := false
 
 # Melee state, read by the HUD to animate the viewmodel.
 var weapon := "musket" # "musket" or "melee"
@@ -85,9 +93,48 @@ func _ready() -> void:
 	camera = Camera3D.new()
 	camera.position = Vector3(0, 1.6, 0)
 	camera.fov = 72.0
+	camera.near = 0.03 # so your own musket doesn't clip in first person
 	camera.far = 400.0
 	add_child(camera)
 	camera.make_current()
+
+	if Settings.use_3d:
+		third_person = Settings.third_person
+		rig = Rig3D.new()
+		rig.kind = "officer"
+		rig.manual = true
+		add_child(rig)
+		var ctrl := PlayerBody.new()
+		ctrl.player = self
+		ctrl.rig = rig
+		add_child(ctrl)
+	_update_camera()
+
+
+## 3D mode: switch between first and third person.
+func toggle_view() -> void:
+	if rig != null:
+		third_person = not third_person
+
+
+func _process(_delta: float) -> void:
+	if alive:
+		_update_camera()
+
+
+func _update_camera() -> void:
+	if third_person and rig != null:
+		# Over the right shoulder; the orbit follows your pitch.
+		var pivot := Vector3(0.45, 1.65, 0.0)
+		var offset := Basis(Vector3.RIGHT, pitch) * Vector3(0.0, 0.2, 2.6)
+		var pos := pivot + offset
+		pos.y = maxf(pos.y, 0.35)
+		camera.position = pos
+	else:
+		# Eye sits just behind the head so your hands and musket keep a
+		# comfortable distance from the lens.
+		camera.position = Vector3(0, 1.66, 0.14)
+	camera.rotation = Vector3(pitch, 0, 0)
 
 
 # ---------------------------------------------------------------- called by the HUD
@@ -96,7 +143,7 @@ func add_look(drag: Vector2) -> void:
 	if not alive:
 		return
 	rotation.y -= drag.x * LOOK_SENS
-	camera.rotation.x = clampf(camera.rotation.x - drag.y * LOOK_SENS, -1.2, 1.2)
+	pitch = clampf(pitch - drag.y * LOOK_SENS, -1.2, 1.2)
 
 
 func request_fire() -> void:
@@ -221,6 +268,8 @@ func _physics_process(delta: float) -> void:
 func _keyboard_controls() -> void:
 	if Input.is_action_just_pressed("switch_weapon"):
 		toggle_weapon()
+	if Input.is_action_just_pressed("toggle_view"):
+		toggle_view()
 	if Input.is_action_just_pressed("block"):
 		block_held = true
 	if Input.is_action_just_released("block"):
@@ -353,8 +402,13 @@ func _fire() -> void:
 			hit = true
 
 	var right := camera.global_transform.basis.x
-	battle.spawn_smoke(from + fwd * 2.5 + right * 0.4 - Vector3.UP * 0.3, 0.8)
-	battle.spawn_flash(from + fwd * 1.2 + right * 0.3 - Vector3.UP * 0.25)
+	if rig != null:
+		var muzzle: Vector3 = rig.muzzle_global()
+		battle.spawn_smoke(muzzle + fwd * 1.2, 0.8)
+		battle.spawn_flash(muzzle + fwd * 0.1)
+	else:
+		battle.spawn_smoke(from + fwd * 2.5 + right * 0.4 - Vector3.UP * 0.3, 0.8)
+		battle.spawn_flash(from + fwd * 1.2 + right * 0.3 - Vector3.UP * 0.25)
 	fired.emit(hit)
 
 
