@@ -155,6 +155,10 @@ func _buttons() -> Array:
 	list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": "FOLLOW"})
 	list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": "HOLD"})
 	list.append({"id": "mode", "circle": false, "rect": Rect2(s.x - (bw + 10), y, bw, bh), "label": mode_label})
+	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": "MENU"})
+	if Settings.use_3d:
+		list.append({"id": "view", "circle": false, "rect": Rect2(140, 92, 150, 46),
+			"label": "3RD PERSON" if player.third_person else "1ST PERSON"})
 	if restart_visible:
 		list.append({"id": "restart", "circle": false, "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 + 30, 260, 72), "label": "RESTART"})
 	return list
@@ -261,6 +265,10 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			battle.toggle_fire_mode()
 		"restart":
 			battle.restart()
+		"menu":
+			battle.to_menu()
+		"view":
+			player.toggle_view()
 
 
 func _process(delta: float) -> void:
@@ -356,7 +364,8 @@ func _update_body(delta: float) -> void:
 
 func _draw() -> void:
 	var s := size
-	_draw_weapon(s)
+	if not Settings.use_3d:
+		_draw_weapon(s) # in 3D you see your own 3D arms and musket instead
 
 	# Crosshair and hit marker.
 	var c := s * 0.5
