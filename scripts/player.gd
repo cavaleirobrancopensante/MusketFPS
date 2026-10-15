@@ -24,7 +24,10 @@ const RANGE := 90.0
 const SPREAD := 0.012 # radians of random error per shot
 const LOOK_SENS := 0.005 # radians per pixel of drag
 
-const SWITCH_TIME := 0.5 # musket <-> bayonet
+const FIX_TIME := 1.1 # draw the bayonet from its scabbard and lock it on
+const UNFIX_TIME := 0.9
+## Reload progress (0..1) at which the ramrod hits bottom: one clink each.
+const RAM_STROKES := [0.46, 0.58, 0.70]
 const MIN_WINDUP := 0.18 # fastest possible blow
 const FULL_CHARGE := 0.8 # hold this long for a fully charged blow
 const STRIKE_TIME := 0.16
@@ -51,6 +54,8 @@ var camera: Camera3D
 # Melee state, read by the HUD to animate the viewmodel.
 var weapon := "musket" # "musket" or "melee"
 var switch_left := 0.0
+var switch_total := 1.0
+var switch_target := "musket"
 var swing_phase := "idle" # idle, windup, strike, recover
 var swing_dir: int = Swing.NONE
 var phase_time := 0.0
@@ -59,7 +64,8 @@ var blocking := false
 var block_held := false
 
 var _want_fire := false
-var _switch_to := "musket"
+var _last_reload_p := 1.0
+var _bayonet_sound_done := false
 var _release_requested := false
 var _hit_done := false
 
@@ -100,8 +106,10 @@ func request_fire() -> void:
 func toggle_weapon() -> void:
 	if not alive or switch_left > 0.0 or swing_phase != "idle":
 		return
-	_switch_to = "melee" if weapon == "musket" else "musket"
-	switch_left = SWITCH_TIME
+	switch_target = "melee" if weapon == "musket" else "musket"
+	switch_total = FIX_TIME if switch_target == "melee" else UNFIX_TIME
+	switch_left = switch_total
+	_bayonet_sound_done = false
 
 
 func is_switching() -> bool:
@@ -151,15 +159,11 @@ func reload_progress() -> float:
 	return 1.0 - reload_left / RELOAD_TIME
 
 
-## How far the weapon is lowered (reloading or switching): 0 = up, 1 = out of view.
-func weapon_lowered() -> float:
-	if switch_left > 0.0:
-		var k := switch_left / SWITCH_TIME
-		return 1.0 - absf(2.0 * k - 1.0)
-	if weapon == "musket" and not loaded:
-		var elapsed := RELOAD_TIME - reload_left
-		return clampf(minf(elapsed - 0.25, reload_left) / 0.35, 0.0, 1.0)
-	return 0.0
+## 0..1 through fixing or unfixing the bayonet (1 when not switching).
+func switch_progress() -> float:
+	if switch_left <= 0.0:
+		return 1.0
+	return 1.0 - switch_left / switch_total
 
 
 # ---------------------------------------------------------------- update
@@ -194,8 +198,14 @@ func _physics_process(delta: float) -> void:
 		# You need both hands on the musket to reload it.
 		if not loaded and weapon == "musket" and switch_left <= 0.0:
 			reload_left -= delta
+			var p := reload_progress()
+			for stroke in RAM_STROKES:
+				if _last_reload_p < stroke and p >= stroke:
+					battle.play_sound_ui("ramrod", -8.0)
+			_last_reload_p = p
 			if reload_left <= 0.0:
 				loaded = true
+				_last_reload_p = 1.0
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -237,14 +247,15 @@ func _keyboard_controls() -> void:
 func _update_switch(delta: float) -> void:
 	if switch_left <= 0.0:
 		return
-	var before := switch_left
 	switch_left -= delta
-	# The weapon changes hands at the bottom of the motion, out of view.
-	if before > SWITCH_TIME * 0.5 and switch_left <= SWITCH_TIME * 0.5:
-		weapon = _switch_to
+	# Time the scrape-and-click so the click lands as the bayonet locks on.
+	var click_at := 0.46 if switch_target == "melee" else 0.05
+	if not _bayonet_sound_done and switch_progress() >= click_at:
+		_bayonet_sound_done = true
+		battle.play_sound_ui("bayonet", -6.0)
 	if switch_left <= 0.0:
 		switch_left = 0.0
-		weapon = _switch_to
+		weapon = switch_target
 
 
 func _update_swing(delta: float) -> void:
@@ -315,6 +326,7 @@ func _apply_melee() -> void:
 		e.take_damage(damage, self)
 		e.stagger(push * knock, 0.35 + 0.25 * strike_charge)
 		count += 1
+	battle.play_sound_ui("stab" if count > 0 else "swish", -2.0 if count > 0 else -6.0)
 	melee_hit.emit(count)
 
 
@@ -323,6 +335,8 @@ func _fire() -> void:
 		return
 	loaded = false
 	reload_left = RELOAD_TIME
+	_last_reload_p = 0.0
+	battle.play_sound_ui("musket", 0.0)
 
 	var from := camera.global_position
 	var fwd := -camera.global_transform.basis.z
@@ -354,9 +368,12 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 			# Parried: no damage, and the attacker reels back.
 			if from.has_method("stagger"):
 				from.stagger(to.normalized() * 2.5, 0.5)
+			battle.play_sound_ui("clang", -3.0)
 			blocked.emit()
 			return
 	hp -= amount
+	battle.play_sound_ui("stab", -4.0)
+	battle.play_sound_ui("grunt", -6.0)
 	hurt.emit()
 	if hp <= 0.0:
 		hp = 0.0

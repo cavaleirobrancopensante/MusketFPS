@@ -1,8 +1,8 @@
 extends Node3D
-## Firing-line prototype.
-## You (an officer with a musket) and a company of musketeers hold a field
-## against waves of charging lizardmen. Everything is built in code, so the
-## scene file is just this one node.
+## The battle. You (an officer with a musket) and a company of musketeers
+## hold a field against waves of charging lizardmen. Everything is built in
+## code, so the scene file is just this one node. Settings.use_3d (set in the
+## main menu) picks sprites or 3D models; everything else is shared.
 ##
 ## The company is the "squad brain": it owns the line (anchor + facing) and
 ## hands each soldier a slot. Soldiers and lizardmen themselves stay dumb.
@@ -12,6 +12,9 @@ const SoldierScript := preload("res://scripts/soldier.gd")
 const LizardScript := preload("res://scripts/lizardman.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
+const SoundFactory := preload("res://scripts/sound_factory.gd")
+const MENU := "res://scenes/menu.tscn"
+const MAX_SOUNDS := 24
 
 enum FireMode { ON_COMMAND, AT_WILL }
 enum Order { FOLLOW, HOLD }
@@ -36,9 +39,11 @@ var wave := 0
 var game_state := "starting" # starting, fighting, between, won, lost
 var state_timer := 5.0
 
-var soldier_tex: Texture2D
-var lizard_tex: Texture2D
+var soldier_frames: Dictionary
+var lizard_frames: Dictionary
 var smoke_tex: Texture2D
+var sounds: Dictionary
+var _active_sounds := 0
 
 var _autotest := false
 var _autotest_timer := 0.0
@@ -47,9 +52,11 @@ var _autotest_timer := 0.0
 func _ready() -> void:
 	_autotest = "--autotest" in OS.get_cmdline_user_args()
 	_setup_input()
-	soldier_tex = SpriteFactory.soldier_texture()
-	lizard_tex = SpriteFactory.lizard_texture()
+	if not Settings.use_3d:
+		soldier_frames = SpriteFactory.soldier_frames()
+		lizard_frames = SpriteFactory.lizard_frames()
 	smoke_tex = SpriteFactory.smoke_texture()
+	sounds = SoundFactory.build_all()
 	_build_world()
 
 	player = PlayerScript.new()
@@ -63,7 +70,7 @@ func _ready() -> void:
 	for i in COMPANY_SIZE:
 		var s = SoldierScript.new()
 		s.battle = self
-		s.sprite_texture = soldier_tex
+		s.frames = soldier_frames
 		soldiers.append(s)
 	_reassign_slots()
 	for s in soldiers:
@@ -129,6 +136,47 @@ func loaded_count() -> int:
 
 func restart() -> void:
 	get_tree().reload_current_scene()
+
+
+func to_menu() -> void:
+	get_tree().change_scene_to_file(MENU)
+
+
+# ---------------------------------------------------------------- sound
+
+## A positional sound in the world (muskets, blades, roars).
+func play_sound(name: String, pos: Vector3, volume_db: float = 0.0) -> void:
+	if not sounds.has(name) or _active_sounds >= MAX_SOUNDS:
+		return
+	var p := AudioStreamPlayer3D.new()
+	p.stream = sounds[name]
+	p.position = pos
+	p.volume_db = volume_db
+	p.pitch_scale = randf_range(0.9, 1.1)
+	p.unit_size = 6.0
+	p.max_distance = 160.0
+	add_child(p)
+	_play_and_free(p)
+
+
+## A sound at the listener: your own musket, your own blows.
+func play_sound_ui(name: String, volume_db: float = 0.0) -> void:
+	if not sounds.has(name):
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = sounds[name]
+	p.volume_db = volume_db
+	p.pitch_scale = randf_range(0.95, 1.05)
+	add_child(p)
+	_play_and_free(p)
+
+
+func _play_and_free(p: Node) -> void:
+	_active_sounds += 1
+	p.finished.connect(func():
+		_active_sounds -= 1
+		p.queue_free())
+	p.play()
 
 
 # ---------------------------------------------------------------- formation
@@ -270,7 +318,7 @@ func _start_wave() -> void:
 	for i in count:
 		var l = LizardScript.new()
 		l.battle = self
-		l.sprite_texture = lizard_tex
+		l.frames = lizard_frames
 		var pos := centre + right * randf_range(-22.0, 22.0) + line_forward * randf_range(0.0, 15.0)
 		l.position = Vector3(pos.x, 0, pos.z)
 		enemies.append(l)

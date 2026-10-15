@@ -1,6 +1,9 @@
 extends "res://scripts/unit.gd"
 ## One musketeer of your company. Keeps his place in the line, loads, fires
 ## (on your command or at will) and uses the bayonet when lizardmen close in.
+##
+## Animations: idle, walk, aim (musket levelled, shot coming), fire, reload
+## (ramming), guard (bayonet charged) and thrust.
 
 const SPEED := 3.8
 const RANGE := 40.0
@@ -16,10 +19,12 @@ var shot_timer := -1.0 # >= 0 means a shot is scheduled
 var melee_timer := 0.0
 var retarget_timer := 0.0
 var target: Node3D = null
+var _ram_sound_t := 0.0
 
 
 func _ready() -> void:
 	add_to_group("friendlies")
+	rig_kind = "soldier"
 	_setup_body(4, 0.35, 1.8, 1.8)
 	reload_time = randf_range(4.5, 5.5)
 	retarget_timer = randf() * 0.4
@@ -30,6 +35,10 @@ func _physics_process(delta: float) -> void:
 		return
 	if not loaded:
 		reload_left -= delta
+		_ram_sound_t -= delta
+		if _ram_sound_t <= 0.0 and reload_left > 0.8:
+			_ram_sound_t = 0.8
+			battle.play_sound("ramrod", global_position + Vector3.UP * 1.4, -14.0)
 		if reload_left <= 0.0:
 			loaded = true
 	melee_timer -= delta
@@ -45,14 +54,20 @@ func _physics_process(delta: float) -> void:
 	# Bayonet: stand and fight when a lizardman is on top of us.
 	if dist_t <= MELEE_RANGE:
 		velocity = Vector3.ZERO
+		face_toward(target.global_position - global_position)
+		set_base_anim("guard")
 		if melee_timer <= 0.0:
 			melee_timer = MELEE_COOLDOWN
-			_thrust()
+			play_oneshot("thrust", 0.3)
+			_punch(Vector3.ONE * 1.08, 0.25)
 			if randf() < 0.75:
 				var push := (target.global_position - global_position) * Vector3(1, 0, 1)
 				target.take_damage(MELEE_DAMAGE, self)
+				battle.play_sound("stab", target.global_position + Vector3.UP, -4.0)
 				if target.has_method("stagger"):
 					target.stagger(push.normalized() * 2.5, 0.25)
+			else:
+				battle.play_sound("swish", global_position + Vector3.UP, -8.0)
 		return
 
 	# March to our slot in the line.
@@ -64,9 +79,6 @@ func _physics_process(delta: float) -> void:
 	if gap > 0.3:
 		var spd := SPEED * (1.4 if gap > 6.0 else 1.0)
 		v = to_slot / gap * minf(spd, gap * 3.0)
-		_bob(0.06, 9.0)
-	else:
-		sprite.position.y = 0.0
 	var push: Vector3 = battle.separation(self, battle.soldiers, 1.0)
 	velocity = v + push * 2.0
 	move_and_slide()
@@ -78,6 +90,17 @@ func _physics_process(delta: float) -> void:
 			_shoot()
 	elif loaded and battle.is_at_will() and dist_t <= RANGE and gap < 1.5:
 		shot_timer = randf_range(0.3, 1.8)
+
+	# Look and animation.
+	if shot_timer >= 0.0 and is_valid_target(target):
+		face_toward(target.global_position - global_position)
+		set_base_anim("aim")
+	elif gap > 0.3:
+		face_toward(v)
+		set_base_anim("walk")
+	else:
+		face_toward(battle.line_forward)
+		set_base_anim("idle" if loaded else "reload")
 
 
 ## Called by the company when you order a volley.
@@ -100,24 +123,23 @@ func _shoot() -> void:
 		return
 	loaded = false
 	reload_left = reload_time
+	_ram_sound_t = 1.5
 	var to_t := target.global_position - global_position
 	var d := to_t.length()
 	var dir := to_t / maxf(d, 0.01)
-	var muzzle := global_position + dir * 0.7 + Vector3.UP * 1.45
+	face_toward(dir)
+	play_oneshot("fire", 0.25)
+	var muzzle := global_position + dir * 0.9 + Vector3.UP * 1.45
 	battle.spawn_smoke(muzzle, 1.0)
 	battle.spawn_flash(muzzle)
+	battle.play_sound("musket", muzzle, -2.0)
 	# Smoothbore muskets: good odds up close, poor at range.
 	var chance := clampf(0.8 - d * 0.014, 0.25, 0.8)
 	if randf() < chance:
 		target.take_damage(100.0)
 
 
-func _thrust() -> void:
-	var tw := create_tween()
-	tw.tween_property(sprite, "scale", Vector3(1.0, 1.0, 1.0) * 1.12, 0.08)
-	tw.tween_property(sprite, "scale", Vector3.ONE, 0.2)
-
-
 func _on_died() -> void:
 	remove_from_group("friendlies")
+	battle.play_sound("grunt", global_position + Vector3.UP * 1.5, -4.0)
 	battle.on_soldier_died(self)

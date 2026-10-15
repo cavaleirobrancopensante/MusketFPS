@@ -29,6 +29,18 @@ const THRUST := 3
 const POSE_MUSKET := [Vector2(0.71, 0.82), -2.34, 1.0]
 const POSE_MELEE_IDLE := [Vector2(0.70, 0.88), -2.25, 1.0]
 const POSE_BLOCK := [Vector2(0.55, 0.80), -3.05, 1.0]
+## Musket upright in front of you, muzzle up: reloading and fixing the bayonet.
+const POSE_UPRIGHT := [Vector2(0.56, 0.9), -1.66, 1.0]
+
+# Right-hand paths for the reload and bayonet animations: [progress, waypoint].
+# Waypoints (see _hand_waypoints): A wrist of the stock, B priming pan,
+# C just above the muzzle, D ramrod drawn out, E ramrod home / bayonet on,
+# F bayonet held above the muzzle, H bayonet scabbard at your hip.
+const RELOAD_PATH := [[0.0, "A"], [0.08, "A"], [0.16, "B"], [0.24, "B"], [0.32, "C"],
+	[0.38, "D"], [0.46, "E"], [0.52, "D"], [0.58, "E"], [0.64, "D"], [0.70, "E"],
+	[0.76, "D"], [0.84, "B"], [0.92, "A"], [1.0, "A"]]
+const FIX_PATH := [[0.0, "A"], [0.1, "A"], [0.3, "H"], [0.55, "F"], [0.72, "E"], [0.85, "E"], [1.0, "A"]]
+const UNFIX_PATH := [[0.0, "A"], [0.2, "E"], [0.4, "F"], [0.7, "H"], [1.0, "A"]]
 const POSE_WINDUP := {
 	OVERHEAD: [Vector2(0.62, 0.50), -1.75, 1.0],
 	LEFT: [Vector2(0.20, 0.80), -0.75, 1.0],
@@ -274,7 +286,22 @@ func _process(delta: float) -> void:
 func _update_pose(delta: float) -> void:
 	var target: Array = POSE_MUSKET
 	var rate := 18.0
-	if _melee():
+	if player.is_switching():
+		var sp: float = player.switch_progress()
+		var fixing: bool = player.switch_target == "melee"
+		rate = 10.0
+		if sp > 0.1 and sp < 0.86:
+			target = POSE_UPRIGHT
+		elif sp <= 0.1:
+			target = POSE_MUSKET if fixing else POSE_MELEE_IDLE
+		else:
+			target = POSE_MELEE_IDLE if fixing else POSE_MUSKET
+	elif not _melee() and not player.loaded:
+		var rp: float = player.reload_progress()
+		rate = 10.0
+		if rp > 0.06 and rp < 0.9:
+			target = POSE_UPRIGHT
+	elif _melee():
 		target = POSE_MELEE_IDLE
 		var dir: int = player.swing_dir
 		match player.swing_phase:
@@ -291,9 +318,6 @@ func _update_pose(delta: float) -> void:
 				if player.blocking:
 					target = POSE_BLOCK
 					rate = 22.0
-	# While the weapon is out of view (switching), snap to the new pose.
-	if player.weapon_lowered() > 0.95:
-		rate = 1000.0
 	var k := 1.0 - exp(-rate * delta)
 	pose_grip = pose_grip.lerp(target[0], k)
 	pose_angle = lerp_angle(pose_angle, target[1], k)
@@ -385,7 +409,7 @@ func _draw() -> void:
 
 func _pose_points(s: Vector2) -> Dictionary:
 	var u := s.y / 720.0
-	var off: Vector2 = Vector2(30, 55) * recoil * u + Vector2(60, 320) * player.weapon_lowered() * u
+	var off: Vector2 = Vector2(30, 55) * recoil * u
 	off += (bob + look_sway) * u
 	if _melee() and player.swing_phase == "windup" and player.charge() >= 1.0:
 		off += Vector2(randf_range(-2, 2), randf_range(-2, 2)) * u # straining at full charge
@@ -430,14 +454,21 @@ func _draw_weapon(s: Vector2) -> void:
 
 	_draw_arms(s, p)
 
-	if _melee():
-		# Socket bayonet: a short sleeve and a long triangular blade.
-		var b0 := tip - dir * 10 * u
-		var b1 := tip + dir * 85 * u
-		draw_line(b0, tip + dir * 6 * u, Color(0.45, 0.46, 0.5), 9 * u)
-		draw_colored_polygon(PackedVector2Array([
-			tip + side * 5 * u, b1, tip - side * 3 * u]), Color(0.82, 0.84, 0.88))
-	elif flash > 0.0:
+	# Ramrod: while ramming, the rod runs from your hand down into the muzzle.
+	if not _melee() and not player.is_switching() and not player.loaded:
+		var rp: float = player.reload_progress()
+		var hand: Vector2 = _hand_positions(p)[0]
+		if rp > 0.34 and rp < 0.77 and (hand - tip).dot(dir) > 0.0:
+			draw_line(hand + dir * 6 * u, tip, Color(0.75, 0.77, 0.8), 4 * u)
+			draw_circle(hand + dir * 8 * u, 4 * u, Color(0.75, 0.77, 0.8))
+
+	match _bayonet_state():
+		"on":
+			_draw_bayonet(tip, dir, u)
+		"hand":
+			var h: Vector2 = _hand_positions(p)[0]
+			_draw_bayonet(h, dir, u)
+	if not _melee() and not player.is_switching() and flash > 0.0:
 		draw_circle(tip + dir * 22 * u, 34 * flash * u, Color(1, 0.72, 0.25, flash))
 		draw_circle(tip + dir * 18 * u, 16 * flash * u, Color(1, 1, 0.85, flash))
 
@@ -462,7 +493,61 @@ func _hand_positions(p: Dictionary) -> Array:
 	var dir: Vector2 = p["dir"]
 	var u: float = p["u"]
 	var forward := 130.0 if not _melee() else 120.0
-	return [grip - dir * 30.0 * u, grip + dir * forward * u]
+	var right := grip - dir * 30.0 * u
+	if player.is_switching():
+		var path: Array = FIX_PATH if player.switch_target == "melee" else UNFIX_PATH
+		right = _follow_path(path, player.switch_progress(), _hand_waypoints(p))
+	elif not _melee() and not player.loaded:
+		right = _follow_path(RELOAD_PATH, player.reload_progress(), _hand_waypoints(p))
+	return [right, grip + dir * forward * u]
+
+
+func _hand_waypoints(p: Dictionary) -> Dictionary:
+	var grip: Vector2 = p["grip"]
+	var dir: Vector2 = p["dir"]
+	var tip: Vector2 = p["tip"]
+	var u: float = p["u"]
+	var side := -dir.orthogonal()
+	return {
+		"A": grip - dir * 30.0 * u,
+		"B": grip + side * 30.0 * u + dir * 12.0 * u,
+		"C": tip + dir * 25.0 * u + side * 6.0 * u,
+		"D": tip + dir * 160.0 * u,
+		"E": tip + dir * 20.0 * u,
+		"F": tip + dir * 110.0 * u + side * 10.0 * u,
+		"H": Vector2(size.x * 0.95, size.y * 1.12),
+	}
+
+
+## Walk a hand along timed waypoints, easing between each pair.
+func _follow_path(path: Array, t: float, pts: Dictionary) -> Vector2:
+	for i in range(1, path.size()):
+		var t1: float = path[i][0]
+		if t <= t1 or i == path.size() - 1:
+			var t0: float = path[i - 1][0]
+			var a: Vector2 = pts[path[i - 1][1]]
+			var b: Vector2 = pts[path[i][1]]
+			var k := clampf((t - t0) / maxf(t1 - t0, 0.001), 0.0, 1.0)
+			return a.lerp(b, k * k * (3.0 - 2.0 * k))
+	return pts["A"]
+
+
+## Where the bayonet is: "off" (in its scabbard), "hand", or "on" the muzzle.
+func _bayonet_state() -> String:
+	if player.is_switching():
+		var sp: float = player.switch_progress()
+		if player.switch_target == "melee":
+			return "off" if sp < 0.3 else ("hand" if sp < 0.72 else "on")
+		return "on" if sp < 0.2 else ("hand" if sp < 0.7 else "off")
+	return "on" if _melee() else "off"
+
+
+## Socket bayonet: a short sleeve and a long triangular blade, socket at `base`.
+func _draw_bayonet(base: Vector2, dir: Vector2, u: float) -> void:
+	var side := dir.orthogonal()
+	draw_line(base - dir * 10 * u, base + dir * 6 * u, Color(0.45, 0.46, 0.5), 9 * u)
+	draw_colored_polygon(PackedVector2Array([
+		base + side * 5 * u, base + dir * 85 * u, base - side * 3 * u]), Color(0.82, 0.84, 0.88))
 
 
 func _draw_arms(s: Vector2, p: Dictionary) -> void:

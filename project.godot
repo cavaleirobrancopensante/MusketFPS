@@ -5,10 +5,14 @@ config_version=5
 [application]
 
 config/name="MusketFPS"
-config/description="Firing-line prototype: an officer with a musket and his company against lizardmen."
-run/main_scene="res://scenes/battle.tscn"
+config/description="An officer with a musket and his company against lizardmen. 2D and 3D versions."
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+
+[autoload]
+
+Settings="*res://scripts/settings.gd"
 
 [display]
 
