@@ -288,7 +288,15 @@ func _on_player_died() -> void:
 
 ## Headless smoke test: `godot --headless -- --autotest` fires volleys and the
 ## player's musket on a timer so every code path runs without a human.
+var _at_swing_t := 0.0
+var _at_dir := 0
+var _at_stats := {"swings": 0, "hits": 0, "blocks": 0}
+
+
 func _run_autotest(delta: float) -> void:
+	if _at_stats["swings"] == 0 and not player.melee_hit.is_connected(_at_on_hit):
+		player.melee_hit.connect(_at_on_hit)
+		player.blocked.connect(func(): _at_stats["blocks"] += 1)
 	_autotest_timer += delta
 	if _autotest_timer > 1.5:
 		_autotest_timer = 0.0
@@ -296,9 +304,38 @@ func _run_autotest(delta: float) -> void:
 		player.request_fire()
 		if wave == 2 and not is_at_will():
 			toggle_fire_mode()
+
+	# Melee: face the nearest lizardman, bayonet when close, cycle all four blows.
+	var near := nearest_enemy(player.global_position, 6.0)
+	if near != null and player.alive:
+		var to: Vector3 = near.global_position - player.global_position
+		player.rotation.y = atan2(-to.x, -to.z)
+		if player.weapon == "musket":
+			player.toggle_weapon()
+		elif player.swing_phase == "idle":
+			# Block if he's rearing up, otherwise attack.
+			var rearing: bool = near.get("windup") >= 0.15
+			player.set_block(rearing)
+			if not rearing and player.begin_swing():
+				_at_swing_t = 0.0
+				_at_dir = (_at_dir + 1) % 4
+				player.set_swing_dir(_at_dir)
+				_at_stats["swings"] += 1
+		elif player.swing_phase == "windup":
+			_at_swing_t += delta
+			if _at_swing_t > 0.35:
+				player.release_swing()
+	elif player.weapon == "melee" and player.swing_phase == "idle":
+		player.set_block(false)
+		player.toggle_weapon()
+
 	if game_state == "won" or game_state == "lost":
-		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size())
+		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size(), " melee ", _at_stats)
 		get_tree().quit()
+
+
+func _at_on_hit(count: int) -> void:
+	_at_stats["hits"] += count
 
 
 # ---------------------------------------------------------------- effects
@@ -340,6 +377,12 @@ func _setup_input() -> void:
 	_add_key("move_right", KEY_D)
 	_add_key("fire", KEY_SPACE)
 	_add_key("volley", KEY_F)
+	_add_key("switch_weapon", KEY_Q)
+	_add_key("block", KEY_E)
+	_add_key("swing_up", KEY_UP)
+	_add_key("swing_left", KEY_LEFT)
+	_add_key("swing_right", KEY_RIGHT)
+	_add_key("swing_down", KEY_DOWN)
 	_add_key("order_follow", KEY_1)
 	_add_key("order_hold", KEY_2)
 	_add_key("toggle_fire_mode", KEY_3)
