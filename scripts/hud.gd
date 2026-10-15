@@ -73,6 +73,13 @@ var pose_angle := -2.34
 var pose_scale := 1.0
 var trail: Array = [] # recent bayonet-tip positions during a strike
 
+# Body motion that makes the arms feel attached to a person.
+var bob_t := 0.0
+var walk_amount := 0.0
+var bob := Vector2.ZERO # walking bob / breathing, in 720p pixels
+var look_sway := Vector2.ZERO # weapon lags behind when you turn
+var shoulder_twist := Vector2.ZERO # torso turns into big swings
+
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -175,7 +182,9 @@ func _input(event: InputEvent) -> void:
 			if dir != NONE:
 				player.set_swing_dir(dir)
 		elif d.index == look_index:
-			player.add_look(d.position - look_last)
+			var drag := d.position - look_last
+			player.add_look(drag)
+			look_sway = (look_sway - drag * 0.25).limit_length(28.0)
 			look_last = d.position
 
 
@@ -256,6 +265,7 @@ func _process(delta: float) -> void:
 	hit_marker = move_toward(hit_marker, 0.0, delta)
 	block_flash = move_toward(block_flash, 0.0, delta)
 	_update_pose(delta)
+	_update_body(delta)
 	queue_redraw()
 
 
@@ -295,6 +305,27 @@ func _update_pose(delta: float) -> void:
 			trail.pop_front()
 	elif not trail.is_empty():
 		trail.pop_front()
+
+
+## Walking bob, breathing, look sway and torso twist.
+func _update_body(delta: float) -> void:
+	var v: Vector3 = player.velocity
+	var moving := clampf(Vector2(v.x, v.z).length() / 5.0, 0.0, 1.0)
+	walk_amount = lerpf(walk_amount, moving, 1.0 - exp(-6.0 * delta))
+	bob_t += delta * (1.7 + 8.0 * walk_amount)
+	var walk := Vector2(sin(bob_t) * 9.0, -absf(cos(bob_t)) * 11.0)
+	var breathe := Vector2(0.0, sin(bob_t) * 3.0)
+	bob = walk * walk_amount + breathe * (1.0 - walk_amount)
+	look_sway = look_sway.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
+
+	# The shoulders follow the hands a little (the torso twists into a swing),
+	# but lag behind them, which is what makes the arms look driven by a body.
+	var s := size
+	var hands := _hand_positions(_pose_points(s))
+	var mid: Vector2 = (hands[0] + hands[1]) * 0.5
+	var neutral := Vector2(0.62 * s.x, 0.84 * s.y)
+	var target := (mid - neutral) * 0.45
+	shoulder_twist = shoulder_twist.lerp(target, 1.0 - exp(-7.0 * delta))
 
 
 # ---------------------------------------------------------------- drawing
@@ -355,6 +386,7 @@ func _draw() -> void:
 func _pose_points(s: Vector2) -> Dictionary:
 	var u := s.y / 720.0
 	var off: Vector2 = Vector2(30, 55) * recoil * u + Vector2(60, 320) * player.weapon_lowered() * u
+	off += (bob + look_sway) * u
 	if _melee() and player.swing_phase == "windup" and player.charge() >= 1.0:
 		off += Vector2(randf_range(-2, 2), randf_range(-2, 2)) * u # straining at full charge
 	var grip := Vector2(pose_grip.x * s.x, pose_grip.y * s.y) + off
@@ -396,6 +428,8 @@ func _draw_weapon(s: Vector2) -> void:
 	draw_circle(grip + side * 16 * u, 10 * u, Color(0.28, 0.28, 0.3)) # lock plate
 	draw_line(grip + side * 16 * u, grip + side * 30 * u + dir * 10 * u, Color(0.2, 0.2, 0.22), 5 * u) # hammer
 
+	_draw_arms(s, p)
+
 	if _melee():
 		# Socket bayonet: a short sleeve and a long triangular blade.
 		var b0 := tip - dir * 10 * u
@@ -406,6 +440,113 @@ func _draw_weapon(s: Vector2) -> void:
 	elif flash > 0.0:
 		draw_circle(tip + dir * 22 * u, 34 * flash * u, Color(1, 0.72, 0.25, flash))
 		draw_circle(tip + dir * 18 * u, 16 * flash * u, Color(1, 1, 0.85, flash))
+
+
+# ---------------------------------------------------------------- arms
+
+const UPPER_ARM := 235.0
+const FOREARM := 225.0
+const SLEEVE_EDGE := Color(0.06, 0.08, 0.18)
+const SLEEVE := Color(0.13, 0.18, 0.38)
+const SLEEVE_LIGHT := Color(0.22, 0.3, 0.52)
+const CUFF := Color(0.58, 0.1, 0.1)
+const GOLD := Color(0.85, 0.68, 0.2)
+const SKIN := Color(0.86, 0.67, 0.52)
+const SKIN_DARK := Color(0.64, 0.45, 0.33)
+
+
+## Where each hand holds the weapon: [right hand on the wrist of the stock,
+## left hand under the forestock].
+func _hand_positions(p: Dictionary) -> Array:
+	var grip: Vector2 = p["grip"]
+	var dir: Vector2 = p["dir"]
+	var u: float = p["u"]
+	var forward := 130.0 if not _melee() else 120.0
+	return [grip - dir * 30.0 * u, grip + dir * forward * u]
+
+
+func _draw_arms(s: Vector2, p: Dictionary) -> void:
+	var u0 := s.y / 720.0
+	var hands := _hand_positions(p)
+	var dir: Vector2 = p["dir"]
+	var body := bob * 0.55 * u0 # shoulders move less than the weapon
+	# Shoulders sit well below the screen, so mostly forearms rise into view,
+	# foreshortened, the way first-person arms usually read.
+	var r_shoulder := Vector2(0.80 * s.x, 1.30 * s.y) + shoulder_twist + body
+	var l_shoulder := Vector2(0.42 * s.x, 1.36 * s.y) + shoulder_twist * 1.2 + body
+	# Left arm first: it's further from the camera on a right-handed hold.
+	_draw_arm(l_shoulder, hands[1], Vector2(-0.4, 0.92), dir, u0)
+	_draw_arm(r_shoulder, hands[0], Vector2(0.4, 0.92), dir, u0)
+
+
+## Two-bone IK: given shoulder and hand, find the elbow. Of the two possible
+## elbows, take the one bending toward `bend` (outward and down, like a real
+## arm). If the hand is out of reach the arm stretches a little rather than
+## letting go of the weapon.
+func _draw_arm(shoulder: Vector2, hand: Vector2, bend: Vector2, along: Vector2, u: float) -> void:
+	var l1 := UPPER_ARM * u
+	var l2 := FOREARM * u
+	var d := shoulder.distance_to(hand)
+	var stretch := clampf(d / (l1 + l2 - 1.0), 1.0, 1.7)
+	l1 *= stretch
+	l2 *= stretch
+	d = clampf(d, absf(l1 - l2) + 1.0, l1 + l2 - 0.5)
+	var to := (hand - shoulder).normalized()
+	var ang := acos(clampf((l1 * l1 + d * d - l2 * l2) / (2.0 * l1 * d), -1.0, 1.0))
+	var e1 := shoulder + to.rotated(ang) * l1
+	var e2 := shoulder + to.rotated(-ang) * l1
+	var mid := (shoulder + hand) * 0.5
+	var elbow := e1 if (e1 - mid).dot(bend) > (e2 - mid).dot(bend) else e2
+
+	# Perspective: thick near the shoulder (close to the camera), thin at the wrist.
+	_limb(shoulder, elbow, 92.0 * u, 66.0 * u)
+	_limb(elbow, hand, 62.0 * u, 44.0 * u)
+	draw_circle(elbow, 35.0 * u, SLEEVE_EDGE)
+	draw_circle(elbow, 32.0 * u, SLEEVE)
+	# Red cuff with gold piping at the wrist.
+	var fdir := (hand - elbow).normalized()
+	var cuff_start := hand - fdir * 40.0 * u
+	_limb_flat(cuff_start, hand - fdir * 8.0 * u, 50.0 * u, 48.0 * u, CUFF)
+	var n := fdir.orthogonal()
+	draw_line(cuff_start + n * 25.0 * u, cuff_start - n * 25.0 * u, GOLD, 3.0 * u)
+	_draw_hand(hand, along, elbow, u)
+
+
+func _limb(a: Vector2, b: Vector2, wa: float, wb: float) -> void:
+	var n := (b - a).normalized().orthogonal()
+	var u := size.y / 720.0
+	_limb_flat(a, b, wa + 6.0 * u, wb + 6.0 * u, SLEEVE_EDGE) # outline
+	_limb_flat(a, b, wa, wb, SLEEVE)
+	# Light along one edge gives the sleeve some roundness.
+	draw_colored_polygon(PackedVector2Array([
+		a + n * wa * 0.5, b + n * wb * 0.5, b + n * wb * 0.18, a + n * wa * 0.18]), SLEEVE_LIGHT)
+
+
+func _limb_flat(a: Vector2, b: Vector2, wa: float, wb: float, col: Color) -> void:
+	var n := (b - a).normalized().orthogonal()
+	draw_colored_polygon(PackedVector2Array([
+		a + n * wa * 0.5, b + n * wb * 0.5, b - n * wb * 0.5, a - n * wa * 0.5]), col)
+
+
+## A fist wrapped around the weapon: back of the hand facing us, the row of
+## knuckles on the far side of the stock, the thumb on the near side.
+func _draw_hand(c: Vector2, along: Vector2, elbow: Vector2, u: float) -> void:
+	var n := along.orthogonal()
+	var arm_side := signf(n.dot(elbow - c))
+	if arm_side == 0.0:
+		arm_side = 1.0
+	draw_circle(c, 23.0 * u, SKIN_DARK)
+	draw_circle(c, 21.0 * u, SKIN)
+	draw_circle(c + along * 15.0 * u, 19.0 * u, SKIN)
+	# Knuckles / curled fingers over the stock.
+	for i in 4:
+		var k := c - n * arm_side * 15.0 * u + along * (-10.0 + i * 10.0) * u
+		draw_circle(k, 7.5 * u, SKIN_DARK)
+		draw_circle(k - n * arm_side * 1.5 * u, 6.0 * u, SKIN)
+	# Thumb.
+	var t := c + n * arm_side * 13.0 * u + along * 16.0 * u
+	draw_circle(t, 9.5 * u, SKIN_DARK)
+	draw_circle(t, 8.0 * u, SKIN)
 
 
 ## Gold marker by the crosshair on the side the blow will come from.
