@@ -191,6 +191,16 @@ things.
 
 ### Loot and the wagon's load
 
+**The kit of the dead comes home.** When a man falls in a fight you win, his
+comrades carry everything he had (musket, bayonet, hat, coat, cartridges,
+rations, water) back to the wagon, ready to arm the next man, a native
+recruit in time. The camp lists it under "Their kit, back in the wagon";
+anything that won't fit goes on the loot pile, where you can make room for
+it. A man who dies of hunger, thirst or sickness in camp leaves his kit in
+the wagon too. Lose the fight and the dead are left on the field with their
+muskets; men drowned or lost on the march, or lost scouting, are gone with
+theirs; deserters and mutineers take theirs with them.
+
 After a won fight, **LOOT THE FIELD**: on the left what's there (lizard
 cleavers and spears, shields, scaled hides, bone charms, whatever they had
 stolen, and the kit of your own fallen), on the right the wagon with its

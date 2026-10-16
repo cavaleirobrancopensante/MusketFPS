@@ -344,7 +344,10 @@ func apply_battle(result: Dictionary) -> void:
 				"battles": m["battles"], "kills": m["kills"]})
 			summary["fallen"].append(title(m))
 			if recover:
-				_strip_to_loot(m)
+				# His comrades carry his kit back to the wagon.
+				var back := recover_kit(m, true)
+				if back != "":
+					summary.get_or_add("kit_home", []).append("%s: %s" % [title(m), back])
 			continue
 		var gained := XP_SURVIVE + XP_KILL * int(r["kills"]) + (XP_VICTORY if won else 0)
 		var old_level := Men.level(m)
@@ -446,17 +449,34 @@ func _after_prologue(summary: Dictionary) -> void:
 	summary["pay"] = 0
 
 
-## A fallen man's kit and pack go on the loot pile.
-func _strip_to_loot(m: Dictionary) -> void:
+## A dead man's kit and pack go back to the wagon, to arm the next man
+## (a native recruit, say). Whatever won't fit goes on the loot pile when
+## there is one (after a won fight, where you can make room), or is left
+## behind. Returns what was stowed, e.g. "musket, bayonet, hat, 18 cartridges".
+func recover_kit(m: Dictionary, overflow_to_loot := false) -> String:
+	var got: Array = []
 	var gear: Dictionary = m.get("gear", {})
 	for slot in SLOTS:
 		var id := String(gear.get(slot, ""))
-		if ITEMS.has(id):
+		if not ITEMS.has(id):
+			continue
+		if stow(id, 1) == 1:
+			got.append(item_name(id).to_lower())
+		elif overflow_to_loot:
 			_add_loot(id, 1)
+		gear[slot] = ""
 	var pack: Dictionary = m.get("pack", {})
-	for k in ["rations", "ammo"]:
-		if int(pack.get(k, 0)) > 0:
-			_add_loot(k, int(pack[k]))
+	for k in ["water", "rations", "ammo"]:
+		var n := int(pack.get(k, 0))
+		if n <= 0:
+			continue
+		var k_in := stow(k, n)
+		if k_in > 0:
+			got.append(("water for %d day%s" % [k_in, "" if k_in == 1 else "s"]) if k == "water" else "%d %s" % [k_in, {"rations": "rations", "ammo": "cartridges"}[k]])
+		if k_in < n and overflow_to_loot:
+			_add_loot(k, n - k_in)
+		pack[k] = 0
+	return ", ".join(got)
 
 
 ## What the slain left behind: their weapons, hides and charms, and now and
@@ -802,7 +822,8 @@ func _road_day(water := "random") -> Dictionary:
 			var cause := "thirst" if int(m["thirst"]) >= 2 else ("sickness" if int(m["sick"]) > 0 else "hunger")
 			fallen.append({"name": m["name"], "rank": RANKS[int(m["rank"])], "day": day,
 				"battles": m["battles"], "kills": m["kills"], "cause": cause})
-			day_notes["died"].append("%s (%s)" % [title(m), cause])
+			var back := recover_kit(m)
+			day_notes["died"].append("%s (%s)%s" % [title(m), cause, "; his kit is in the wagon" if back != "" else ""])
 			roster.erase(m)
 	return day_notes
 
