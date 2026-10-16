@@ -87,6 +87,9 @@ func _ready() -> void:
 	mat.rim = 0.3
 	mat.rim_tint = 0.5
 	var box := _rounded_box()
+	# Far bodies (beyond the rig's detail range) use a plain box: 12 triangles
+	# instead of ~100, which is what a phone's GPU needs with a horde in view.
+	var far_box := BoxMesh.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.5
 	cyl.bottom_radius = 0.5
@@ -98,7 +101,7 @@ func _ready() -> void:
 	sph.height = 1.0
 	sph.radial_segments = 10
 	sph.rings = 6
-	for mesh in [box, cyl, sph]:
+	for mesh in [box, cyl, sph, far_box]:
 		if mesh is ArrayMesh:
 			(mesh as ArrayMesh).surface_set_material(0, mat)
 		else:
@@ -132,8 +135,8 @@ static func _rounded_box() -> ArrayMesh:
 	var sph := SphereMesh.new()
 	sph.radius = 0.5
 	sph.height = 1.0
-	sph.radial_segments = 16
-	sph.rings = 10
+	sph.radial_segments = 12
+	sph.rings = 7
 	var arrays := sph.get_mesh_arrays()
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var e := 0.32 # 0 = a cube, 1 = a sphere
@@ -243,7 +246,17 @@ func remove_sprite(kind: String, unit) -> void:
 
 func _process(_delta: float) -> void:
 	# 3D parts: concatenate each visible rig's ready-made buffers per shape.
-	for shape in 3:
+	var near_box := PackedFloat32Array()
+	var far_box := PackedFloat32Array()
+	for r in _rigs:
+		if r.draw_enabled():
+			if r._detail:
+				near_box.append_array(r.cache[0])
+			else:
+				far_box.append_array(r.cache[0])
+	_upload(_mm3d[0], near_box, FLOATS_3D)
+	_upload(_mm3d[3], far_box, FLOATS_3D)
+	for shape in [1, 2]:
 		var buf := PackedFloat32Array()
 		for r in _rigs:
 			if r.draw_enabled():

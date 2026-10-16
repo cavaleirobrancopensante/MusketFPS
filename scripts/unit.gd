@@ -53,6 +53,16 @@ var rig_look := "" # draw with this rig kind instead of rig_kind (the captain)
 var rig_gear := {} # his kit and pack, for the 3D model (see rig3d.gd)
 var rig_pack := {}
 var invulnerable := false # story characters until their moment comes
+## Thinking is time-sliced: a unit decides every `think_every` physics frames
+## (with the time that passed), each on its own beat so the work spreads out
+## evenly; walking happens every rendered frame in _process, so it still
+## looks smooth. Halves (or better) the cost of a horde.
+var think_every := 2
+var _think_skip := 0
+var _think_acc := 0.0
+var _moving := false # the last decision set him walking (velocity)
+var _move_f := 1.0
+var _standin_skip := 0
 
 
 func _setup_body(layer: int, radius: float, height: float, sprite_height_m: float) -> void:
@@ -60,13 +70,9 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	collision_mask = 0
 	hit_radius = radius
 	hit_height = height
-	var shape := CollisionShape3D.new()
-	var cap := CapsuleShape3D.new()
-	cap.radius = radius
-	cap.height = height
-	shape.shape = cap
-	shape.position.y = height * 0.5
-	add_child(shape)
+	# No collision shape: nothing queries the physics engine for units (shots
+	# and blades use the battle's grid and hit_radius/hit_height), and a
+	# shape on every one of hundreds of moving bodies costs every frame.
 
 	# The sprite is the far stand-in.
 	_sprite_h = sprite_height_m
@@ -74,6 +80,8 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	add_child(sprite_node)
 	battle.batcher.add_sprite(rig_kind, self)
 	_update_sprite_frame()
+	_think_skip = randi() % 4
+	_standin_skip = randi() % 6
 
 	rig = Rig3D.new()
 	rig.kind = rig_look if rig_look != "" else rig_kind
@@ -91,11 +99,26 @@ func _exit_tree() -> void:
 
 ## Units never collide with anything (they steer around each other), so
 ## skip the physics engine and just move: much cheaper with hundreds of them.
-func _move(delta: float) -> void:
-	var f := 1.0
+## The decision sets the velocity; _process walks it smoothly every frame.
+func _move(_delta: float) -> void:
+	_moving = true
+	_move_f = 1.0
 	if rig_kind == "lizard" and battle.prologue:
-		f = battle.ground_speed(position) # wading over earthworks
-	position += Vector3(velocity.x, 0.0, velocity.z) * delta * f
+		_move_f = battle.ground_speed(position) # wading over earthworks
+
+
+## Time to think? Returns the seconds since he last did, or -1 to skip this
+## physics frame. Call at the top of _physics_process.
+func _think(delta: float) -> float:
+	_think_acc += delta
+	_think_skip += 1
+	if _think_skip < think_every:
+		return -1.0
+	_think_skip = 0
+	var d := _think_acc
+	_think_acc = 0.0
+	_moving = false # each decision says again whether he walks
+	return d
 
 
 func is_valid_target(t) -> bool:
@@ -132,9 +155,14 @@ func set_tint(c: Color) -> void:
 
 func _process(delta: float) -> void:
 	if rig != null:
-		_update_standin()
+		_standin_skip += 1
+		if _standin_skip >= 6:
+			_standin_skip = 0
+			_update_standin()
 	if not alive:
 		return
+	if _moving:
+		position += Vector3(velocity.x, 0.0, velocity.z) * delta * _move_f
 	anim_time += delta * tempo
 	if _oneshot_left > 0.0:
 		_oneshot_left -= delta
@@ -151,7 +179,7 @@ func _process(delta: float) -> void:
 		rig.anim_time = anim_time
 		rig.move_speed = Vector2(velocity.x, velocity.z).length()
 		rig.tint = col
-	if sprite_on:
+	if sprite_on and _standin_skip % 2 == 0:
 		_sprite_col = col
 		_update_sprite_frame()
 
@@ -261,6 +289,7 @@ func _die() -> void:
 	alive = false
 	collision_layer = 0
 	velocity = Vector3.ZERO
+	_moving = false
 	if rig != null:
 		rig.die()
 	# Sprite corpse: the side frame laid flat on the ground.

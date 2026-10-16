@@ -57,6 +57,12 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
+	var dt := _think(delta)
+	if dt >= 0.0:
+		_brain(dt)
+
+
+func _brain(delta: float) -> void:
 	attack_timer -= delta
 	retarget_timer -= delta
 	_roar_t -= delta
@@ -106,6 +112,8 @@ func _physics_process(delta: float) -> void:
 	to_t.y = 0.0
 	var d := to_t.length()
 	face_toward(to_t)
+	# Far from a fight he needs fewer decisions: just keep coming.
+	think_every = 2 if d < 18.0 and not sprite_on else 4
 
 	if windup >= 0.0:
 		# Rearing up: stand, glow, then strike.
