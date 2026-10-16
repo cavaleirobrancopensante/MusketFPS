@@ -32,8 +32,8 @@ const PISTOL_SPREAD := 0.034
 const PISTOL_AIM_SPREAD := 0.012
 const DRAW_TIME := 0.55 # a pistol from the belt or a sabre from the scabbard
 ## How each blade swings, relative to the bayonet the swings were tuned for:
-## [damage x, reach x, speed x (shorter strike and recovery)].
-const BLADES := {"melee": [1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.3]}
+## [damage x, reach x, strike speed x, recovery speed x].
+const BLADES := {"melee": [1.0, 1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.0, 1.6]}
 const RANGE := 90.0
 const BALL_SPEED := 340.0
 const GRENADES_PER_BATTLE := 3
@@ -402,6 +402,15 @@ func reload_progress() -> float:
 	return 1.0 - reload_left / reload_time
 
 
+## How long the cut itself and the recovery take with the blade in hand.
+func strike_time() -> float:
+	return STRIKE_TIME / float(BLADES.get(weapon, [1, 1, 1, 1])[2])
+
+
+func recover_time() -> float:
+	return RECOVER_TIME / float(BLADES.get(weapon, [1, 1, 1, 1])[3])
+
+
 ## 0..1 through reloading the pistol.
 func pistol_reload_progress() -> float:
 	if pistol_loaded:
@@ -564,7 +573,7 @@ func _update_swing(delta: float) -> void:
 				_hit_done = false
 		"strike":
 			phase_time += delta
-			var quick: float = BLADES.get(weapon, [1, 1, 1])[2]
+			var quick: float = BLADES.get(weapon, [1, 1, 1, 1])[2]
 			if not _hit_done and phase_time >= STRIKE_TIME * 0.5 / quick:
 				_hit_done = true
 				_apply_melee()
@@ -573,7 +582,7 @@ func _update_swing(delta: float) -> void:
 				phase_time = 0.0
 		"recover":
 			phase_time += delta
-			if phase_time >= RECOVER_TIME / float(BLADES.get(weapon, [1, 1, 1])[2]):
+			if phase_time >= recover_time():
 				swing_phase = "idle"
 				phase_time = 0.0
 				swing_dir = Swing.NONE

@@ -78,6 +78,13 @@ var t_dir := Vector3(0, 1, 0.15)
 var t_hand_r = null # Vector3 in body space, or null = on the musket's wrist
 var t_hand_l = null # Vector3, or null = on the forestock
 var t_lean := 0.0
+# Turning side-on (the duellist's stance: the whole body, feet and all, turns
+# so the right shoulder faces the target) and twisting the upper body (the
+# wind-up and follow-through of a cut). Radians, + is to your left.
+var t_turn := 0.0
+var t_twist := 0.0
+var _turn := 0.0
+var _twist := 0.0
 var t_jaw := 0.0
 var aim_pitch := 0.0 # manual only: upper body follows the camera's pitch
 var pitch_pivot := Vector3(0.1, 1.45, 0.0) # what the upper body tilts around
@@ -446,6 +453,8 @@ func _build_pistol() -> void:
 	_part(_pistol, _cyl_mesh(0.011, 0.012, 0.24), STEEL, Vector3(0, 0.03, -0.17), Vector3(90, 0, 0)) # barrel
 	_part(_pistol, _box_mesh(Vector3(0.012, 0.035, 0.05)), STEEL, Vector3(0.022, 0.03, -0.01), Vector3.ZERO, true) # lock
 	_part(_pistol, _box_mesh(Vector3(0.018, 0.02, 0.025)), GOLD, Vector3(0, -0.09, 0.05), Vector3.ZERO, true) # butt cap
+	_part(_pistol, _box_mesh(Vector3(0.005, 0.016, 0.012)), GOLD, Vector3(0, 0.05, -0.28)) # front sight blade
+	_part(_pistol, _box_mesh(Vector3(0.026, 0.012, 0.01)), BLACK, Vector3(0, 0.047, -0.04)) # rear notch
 
 
 ## A sabre: a hilt with a brass guard and a long blade along -Z, and a
@@ -457,10 +466,36 @@ func _build_saber(id: String) -> void:
 	_part(_saber, _box_mesh(Vector3(0.03, 0.03, 0.12)), Color(0.15, 0.1, 0.06), Vector3(0, 0, 0.05)) # grip
 	_part(_saber, _box_mesh(Vector3(0.09, 0.02, 0.02)), GOLD, Vector3(0, 0, -0.02)) # cross-guard
 	_part(_saber, _box_mesh(Vector3(0.012, 0.06, 0.13)), GOLD, Vector3(0, -0.03, 0.04), Vector3(20, 0, 0), true) # knuckle bow
-	_part(_saber, _box_mesh(Vector3(0.008, 0.035, long * 0.6)), Color(0.85, 0.87, 0.9), Vector3(0, 0, -0.03 - long * 0.3))
-	_part(_saber, _box_mesh(Vector3(0.008, 0.03, long * 0.42)), Color(0.85, 0.87, 0.9), Vector3(0, 0.022, -0.03 - long * 0.79), Vector3(-7, 0, 0)) # the curve
-	# The scabbard, on the sash at the left hip.
-	_part(spine, _box_mesh(Vector3(0.035, 0.05, long + 0.04)), LEATHER.darkened(0.2), Vector3(-0.25, -0.18, 0.12), Vector3(-62, 0, -6))
+	# The blade: twelve short pieces along a true arc, curving back toward
+	# the spine (+Y) and narrowing to the point.
+	_arc(_saber, -0.03, long, 12, 16.0, 0.038, 0.012, 0.008, Color(0.86, 0.88, 0.92))
+	# The scabbard, hanging from the sash at the left hip, curved the same way
+	# so the sheathed blade lies inside it.
+	var scab := Node3D.new()
+	spine.add_child(scab)
+	scab.transform = Transform3D(_look_basis(SABER_SHEATH_DIR), SABER_SHEATH_AT)
+	_arc(scab, -0.02, long + 0.03, 8, 16.0, 0.052, 0.034, 0.026, LEATHER.darkened(0.25))
+	_part(scab, _box_mesh(Vector3(0.03, 0.058, 0.05)), GOLD, Vector3(0, 0, -0.04), Vector3.ZERO, true) # throat
+
+
+const SABER_SHEATH_DIR := Vector3(-0.1, -0.88, 0.46) # spine space
+const SABER_SHEATH_AT := Vector3(-0.25, 0.1, -0.02)
+
+
+## A curved strip made of `n` short boxes along an arc in the YZ plane of
+## `parent`: starting at z0, running `length` along -Z and bending `total_deg`
+## toward +Y, `w0` wide at the start and `w1` at the end (the width is the
+## blade's depth, along Y), `t` thick.
+func _arc(parent: Node3D, z0: float, length: float, n: int, total_deg: float, w0: float, w1: float, t: float, col: Color) -> void:
+	var seg := length / n
+	var pos := Vector3(0, 0, z0)
+	for i in n:
+		var th := deg_to_rad(total_deg * (i + 0.5) / n)
+		var d := Vector3(0, sin(th), -cos(th))
+		var c := pos + d * seg * 0.5
+		var w := lerpf(w0, w1, float(i) / maxf(1.0, n - 1))
+		_part(parent, _box_mesh(Vector3(t, w, seg * 1.12)), col, c, Vector3(rad_to_deg(th), 0, 0))
+		pos += d * seg
 
 
 func pistol_muzzle_global() -> Vector3:
@@ -601,7 +636,9 @@ func _update(delta: float, snap: bool) -> void:
 	var p := get_parent() as Node3D
 	if p != null:
 		parent_yaw = p.global_rotation.y
-	body.rotation.y = lerp_angle(body.rotation.y, want - parent_yaw, 1.0 if snap else 1.0 - exp(-10.0 * delta))
+	var kt := 1.0 if snap else 1.0 - exp(-9.0 * delta)
+	_turn = lerpf(_turn, t_turn, kt)
+	body.rotation.y = lerp_angle(body.rotation.y, want - parent_yaw + _turn, 1.0 if snap else 1.0 - exp(-10.0 * delta))
 
 	if not manual:
 		_npc_pose()
@@ -609,7 +646,10 @@ func _update(delta: float, snap: bool) -> void:
 	var kh := 1.0 if snap else 1.0 - exp(-pose_rate * 1.6 * delta)
 	_lean = lerpf(_lean, t_lean, k)
 	_jaw = lerpf(_jaw, t_jaw, k)
-	spine.rotation.x = -_lean
+	_twist = lerpf(_twist, t_twist, k)
+	spine.rotation = Vector3(-_lean, _twist, 0.0)
+	if head != null and kind != "lizard":
+		head.rotation.y = -_turn - _twist # the eyes stay on the target
 	# First person: your head (and the collar and epaulettes right under your
 	# eye) are hidden; the rest of you is there when you look down.
 	if head != null:
@@ -640,7 +680,8 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	_wdir = _wdir.lerp(t_dir.normalized(), k).normalized()
 	var grip := _grip
 	var wdir := _wdir
-	var pitch := Basis(Vector3.RIGHT, aim_pitch)
+	# Pitch about the axis across your line of sight, wherever the body is turned.
+	var pitch := Basis(Basis(Vector3.UP, -_turn) * Vector3.RIGHT, aim_pitch)
 	var pivot := pitch_pivot
 	if aim_pitch != 0.0:
 		grip = pivot + pitch * (grip - pivot)
@@ -676,7 +717,7 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 		if hand_item == "saber":
 			_saber.transform = Transform3D(_look_basis(wdir), _hand_r)
 		else:
-			_saber.transform = Transform3D(_look_basis(st.basis * Vector3(-0.1, -0.88, 0.46)), st * Vector3(-0.25, 0.1, -0.02))
+			_saber.transform = st * Transform3D(_look_basis(SABER_SHEATH_DIR), SABER_SHEATH_AT)
 
 	hand_bayonet.visible = bayonet_in_hand
 	if bayonet_in_hand:
