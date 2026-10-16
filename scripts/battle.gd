@@ -805,6 +805,8 @@ func _process(delta: float) -> void:
 		toggle_fire_mode()
 
 	_update_lines(delta)
+	if not _spawn_queue.is_empty():
+		_spawn_some()
 	if prologue:
 		_prologue_process(delta)
 	match game_state:
@@ -815,10 +817,10 @@ func _process(delta: float) -> void:
 		"fighting":
 			if prologue:
 				# The story decides how this ends; waves just keep it coming.
-				if enemies.is_empty() and story_phase == "line" and wave < waves.size():
+				if enemies.is_empty() and _spawn_queue.is_empty() and story_phase == "line" and wave < waves.size():
 					game_state = "between"
 					state_timer = 5.0
-			elif enemies.is_empty():
+			elif enemies.is_empty() and _spawn_queue.is_empty():
 				if wave >= waves.size():
 					hud.show_message("Victory! The field is ours.", 9999.0)
 					victory = true
@@ -832,6 +834,22 @@ func _process(delta: float) -> void:
 		_run_autotest(delta)
 
 
+## A big wave arrives over several frames (building 200 bodies at once froze
+## the game for a moment): SPAWN_PER_FRAME at a time.
+const SPAWN_PER_FRAME := 16
+var _spawn_queue: Array = []
+
+
+func _spawn_some() -> void:
+	for i in mini(SPAWN_PER_FRAME, _spawn_queue.size()):
+		var l = LizardScript.new()
+		l.battle = self
+		l.frames = lizard_frames
+		l.position = _spawn_queue.pop_back()
+		enemies.append(l)
+		add_child(l)
+
+
 func _start_wave() -> void:
 	wave += 1
 	game_state = "fighting"
@@ -843,14 +861,10 @@ func _start_wave() -> void:
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var centre := line_anchor + line_forward * SPAWN_DISTANCE
 	for i in count:
-		var l = LizardScript.new()
-		l.battle = self
-		l.frames = lizard_frames
 		var spread := 45.0 if Settings.stress else (40.0 if prologue else 22.0)
 		var pos := centre + right * randf_range(-spread, spread) + line_forward * randf_range(0.0, spread * 0.7)
-		l.position = Vector3(pos.x, 0, pos.z)
-		enemies.append(l)
-		add_child(l)
+		_spawn_queue.append(Vector3(pos.x, 0, pos.z))
+	_spawn_some()
 	if prologue:
 		hud.show_message("Here they come!" if wave == 1 else "The second wave! Hold the line!", 2.5)
 	elif wave == 1:

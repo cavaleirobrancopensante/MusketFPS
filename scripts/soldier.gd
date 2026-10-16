@@ -161,6 +161,12 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
+	var dt := _think(delta)
+	if dt >= 0.0:
+		_brain(dt)
+
+
+func _brain(delta: float) -> void:
 	_clock += delta
 	if asleep:
 		_sleep(delta)
