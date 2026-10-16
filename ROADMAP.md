@@ -43,6 +43,13 @@ The battle becomes a chain of linked fights before the map exists.
 - Aftermath screen: who fell, who's wounded, who was promoted, pay and loot.
 - Save and load (JSON in `user://`), autosave after every battle.
 
+### Projectiles ✅ done
+
+- Real ballistic musket balls (gravity, drag) that hit whoever is in the way,
+  with friendly fire both ways and men holding fire when the line is blocked.
+- Hand grenades: thrown, bouncing, fused, with blast and knockback.
+- A kinds table ready for javelins, arrows and round shot (M5).
+
 ### M2: Campaign map
 
 - A small region: a tilted 3D tabletop map, tap to march.

@@ -13,6 +13,7 @@ const HudScript := preload("res://scripts/hud.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
+const ProjectilesScript := preload("res://scripts/projectiles.gd")
 const MENU := "res://scenes/menu.tscn"
 const AFTERMATH := "res://scenes/aftermath.tscn"
 const MAX_SOUNDS := 24
@@ -47,6 +48,7 @@ var game_state := "starting" # starting, fighting, between, won, lost
 var state_timer := 5.0
 
 var batcher # draws every unit in a few instanced batches
+var projectiles # every musket ball, grenade and javelin in flight
 var soldier_frames: Dictionary # sprite atlas info (cells, counts)
 var lizard_frames: Dictionary
 var smoke_tex: Texture2D
@@ -65,6 +67,9 @@ func _ready() -> void:
 	batcher.add_to_group("batcher")
 	add_child(batcher)
 	# Sprite atlases are built in both modes (in 3D they're far stand-ins).
+	projectiles = ProjectilesScript.new()
+	projectiles.battle = self
+	add_child(projectiles)
 	soldier_frames = batcher.add_sprite_kind("soldier", SpriteFactory.soldier_frames())
 	lizard_frames = batcher.add_sprite_kind("lizard", SpriteFactory.lizard_frames())
 	smoke_tex = SpriteFactory.smoke_texture()
@@ -319,6 +324,24 @@ func separation(unit: Node3D, group: Array, radius: float) -> Vector3:
 	return push
 
 
+## Every unit (both sides) in the cells around the segment a->b, as
+## [unit, position] pairs. Projectiles sweep these instead of the whole field.
+func units_near_segment(a: Vector3, b: Vector3) -> Array:
+	var out: Array = []
+	var ca := _cell(a)
+	var cb := _cell(b)
+	for x in range(mini(ca.x, cb.x) - 1, maxi(ca.x, cb.x) + 2):
+		for z in range(mini(ca.y, cb.y) - 1, maxi(ca.y, cb.y) + 2):
+			var c := Vector2i(x, z)
+			var be = _grid_e.get(c)
+			if be != null:
+				out.append_array(be)
+			var bs = _grid_s.get(c)
+			if bs != null:
+				out.append_array(bs)
+	return out
+
+
 ## Nearest unit in a grid within max_dist (searches only the cells needed).
 func _nearest_in(grid: Dictionary, from: Vector3, max_dist: float) -> Node3D:
 	var best: Node3D = null
@@ -494,7 +517,7 @@ func _on_player_died() -> void:
 ## player's musket on a timer so every code path runs without a human.
 var _at_swing_t := 0.0
 var _at_dir := 0
-var _at_stats := {"swings": 0, "hits": 0, "blocks": 0, "shielded": 0}
+var _at_stats := {"swings": 0, "hits": 0, "blocks": 0, "shielded": 0, "grenades": 0}
 
 
 func _run_autotest(delta: float) -> void:
@@ -511,6 +534,16 @@ func _run_autotest(delta: float) -> void:
 			toggle_fire_mode()
 		if wave == 3 and not is_charging():
 			order_charge()
+
+	# Grenade: lob one into a pack 12-20 m out (aim slightly up for range).
+	var pack := nearest_enemy(player.global_position, 20.0)
+	if pack != null and player.grenades > 0 and not player.is_throwing() \
+			and pack.global_position.distance_to(player.global_position) > 12.0:
+		var tp: Vector3 = pack.global_position - player.global_position
+		player.rotation.y = atan2(-tp.x, -tp.z)
+		player.pitch = 0.15
+		player.throw_grenade()
+		_at_stats["grenades"] += 1
 
 	# Melee: face the nearest lizardman, bayonet when close, cycle all four blows.
 	var near := nearest_enemy(player.global_position, 6.0)
@@ -538,6 +571,7 @@ func _run_autotest(delta: float) -> void:
 
 	if game_state == "won" or game_state == "lost":
 		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size(), " melee ", _at_stats)
+		print("  shots: ", projectiles.stats, " slain ", slain)
 		if Company.active and Company.battles < 4:
 			# Campaign test: show the result, hire, march on, fight again.
 			var r: Dictionary = Company.last_result
@@ -573,10 +607,57 @@ func spawn_smoke(pos: Vector3, size_mult: float) -> void:
 	tw.chain().tween_callback(puff.queue_free)
 
 
-func spawn_flash(pos: Vector3) -> void:
+## A small coloured puff: dirt where a ball strikes the ground, blood on a hit.
+func spawn_puff(pos: Vector3, color: Color, size: float) -> void:
+	var puff := Sprite3D.new()
+	puff.texture = smoke_tex
+	puff.pixel_size = 0.02 * size
+	puff.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	puff.modulate = Color(color.r, color.g, color.b, 0.9)
+	puff.position = pos
+	add_child(puff)
+	var tw := puff.create_tween().set_parallel(true)
+	tw.tween_property(puff, "scale", Vector3.ONE * 2.2, 0.6).set_ease(Tween.EASE_OUT)
+	tw.tween_property(puff, "modulate:a", 0.0, 0.6)
+	tw.chain().tween_callback(puff.queue_free)
+
+
+## A grenade going off: everyone near it is hurt (friend or foe), closer
+## means worse; lizardmen are thrown back, and the blast shakes your view.
+func explode(pos: Vector3, radius: float, kill_radius: float, shooter: Node3D) -> void:
+	play_sound("boom", pos, 4.0)
+	spawn_flash(pos + Vector3.UP * 0.4, 9.0)
+	for i in 5:
+		var off := Vector3(randf_range(-1, 1), randf_range(0.1, 1.0), randf_range(-1, 1)) * 1.2
+		spawn_smoke(pos + off, randf_range(1.6, 2.6))
+	spawn_puff(pos + Vector3.UP * 0.3, Color(0.35, 0.28, 0.2), 3.0)
+	var victims: Array = []
+	victims.append_array(enemies)
+	victims.append_array(soldiers)
+	if player.alive:
+		victims.append(player)
+	for u in victims:
+		var to: Vector3 = u.global_position - pos
+		to.y = 0.0
+		var d := to.length()
+		if d > radius:
+			continue
+		# Full damage inside the kill radius, falling off to the edge.
+		var dmg := 120.0 if d <= kill_radius else lerpf(70.0, 15.0, (d - kill_radius) / (radius - kill_radius))
+		if u == player:
+			dmg *= 0.6
+		u.take_shot(dmg, shooter)
+		if u.alive and u.has_method("stagger"):
+			u.stagger(to.normalized() * lerpf(7.0, 2.0, d / radius), 0.9)
+	if player.alive:
+		var pd: float = player.global_position.distance_to(pos)
+		player.shake(clampf(1.2 - pd / 25.0, 0.0, 1.0))
+
+
+func spawn_flash(pos: Vector3, size: float = 1.0) -> void:
 	var f := Sprite3D.new()
 	f.texture = smoke_tex
-	f.pixel_size = 0.012
+	f.pixel_size = 0.012 * size
 	f.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	f.modulate = Color(1.0, 0.75, 0.3, 1.0)
 	f.position = pos
@@ -598,6 +679,7 @@ func _setup_input() -> void:
 	_add_key("switch_weapon", KEY_Q)
 	_add_key("block", KEY_E)
 	_add_key("toggle_view", KEY_V)
+	_add_key("grenade", KEY_G)
 	_add_key("aim", KEY_Z)
 	var rmb := InputEventMouseButton.new()
 	rmb.button_index = MOUSE_BUTTON_RIGHT

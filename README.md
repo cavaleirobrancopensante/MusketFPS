@@ -47,6 +47,7 @@ from the distance, sometimes in two groups.
 | **BAYONET / MUSKET** | Fix or unfix the bayonet (about a second, fully animated). You can't reload with the bayonet out. |
 | **OVER / LEFT / RIGHT / THRUST** (melee) | Four swing buttons replace FIRE, see below |
 | **BLOCK** (melee) | Hold to parry. Stops hacks from the front and makes the lizardman reel back |
+| **GRENADE** | Throw a hand grenade (3 per battle). It arcs, bounces, fizzes for about 2.5 s and bursts: deadly within 2 m, wounding out to 5 m, and it knocks men down. Mind your own line. |
 | **VOLLEY!** | Every loaded man in the company fires at once |
 | **FOLLOW** | The line moves with you and wheels when you turn more than 40° |
 | **HOLD** | The line forms where you are, facing where you look, and stays put |
@@ -84,8 +85,22 @@ balls.
 
 Keyboard for testing on a PC: WASD move, mouse-drag on the right half to look,
 Space fire (in melee: hold to wind up, release to strike), arrow keys pick the
-blow, right mouse button or Z aim, Q fix/unfix bayonet, E block, V switch view, F volley, 1 follow,
+blow, right mouse button or Z aim, Q fix/unfix bayonet, G grenade, E block, V switch view, F volley, 1 follow,
 2 hold, 3 toggle fire mode, 4 charge.
+
+### Real projectiles
+
+Every musket ball is a real projectile: it leaves the muzzle at about 330 m/s,
+drops under gravity, slows with air drag, and hits the first body in its
+path, **friend or foe**. A faint streak shows where each shot went. Shoot
+through your own line and you will hit your own men (the HUD tells you); a
+careless volley from behind you can hit you too. Your men hold their fire
+when a comrade is in the way (steadier men are more careful). Aimed shots
+are tight, hip shots scatter. Lizard shields don't stop balls, but they will
+stop thrown javelins once the skirmishers arrive.
+
+All of it lives in `projectiles.gd`: a new weapon (arrow, javelin, round
+shot) is one row in its `KINDS` table.
 
 ### Your men are not robots
 
@@ -117,7 +132,8 @@ only a couple of metres before standing; under CHARGE they press the attack.
 
 Musket shots (yours close, the company's positional, so a volley ripples down
 the line), ramrod clinks, bayonet scrape-and-click, stabs, parries, swishes,
-lizard roars, hisses and death cries, men's grunts. All synthesised in
+lizard roars, hisses and death cries, men's grunts, grenade blasts and
+thuds. All synthesised in
 `sound_factory.gd`; swap any of them for a recorded .wav by loading it into
 the same dictionary key.
 
@@ -139,9 +155,11 @@ aftermath node.
 - **Squad brain, dumb bodies.** `battle.gd` owns the line (an anchor point and
   a facing) and hands each soldier a slot. Soldiers walk to their slot, load,
   fire, and use the bayonet up close. Lizardmen charge the nearest man.
-- **No physics for walking.** Units steer directly on the flat field with a
-  simple push-apart rule; collision shapes exist only so your musket ball can
-  hit them.
+- **No physics engine.** Units steer directly on the flat field with a
+  simple push-apart rule. Projectiles are light records stepped every
+  physics tick; each step sweeps the segment it travelled against the upright
+  cylinders of nearby bodies (found through the spatial grid), so hundreds
+  of balls in flight stay cheap.
 
 | File | Purpose |
 |---|---|
@@ -150,6 +168,7 @@ aftermath node.
 | `scripts/company.gd` | `Company` autoload: the men, money, calendar, results, saving |
 | `scripts/aftermath.gd` | Between battles: results, the company, hiring, marching on |
 | `scripts/battle.gd` | The battle: world, waves, the company's line and orders, smoke, sound playback |
+| `scripts/projectiles.gd` | Musket balls, grenades and future arrows/javelins: flight, hits, tracers |
 | `scripts/player.gd` | Movement, looking, camera, musket, melee and blocking |
 | `scripts/player_body.gd` | Poses your own officer's body from your actions |
 | `scripts/unit.gd` | Shared base for soldiers and lizardmen: visual, animation state, damage, death |

@@ -30,6 +30,9 @@ const LEASH := 2.5 # in line orders, how far he'll give ground behind his place
 const BACKPEDAL := 1.3 # m/s stepping back under attack
 const WOUNDED := 35.0 # below this, a charging man falls back to you
 const MISFIRE_CHANCE := 0.04
+const BALL_SPEED := 320.0 # m/s leaving the muzzle
+const SPREAD_STEADY := 0.02 # radians: a steady man's cone of fire...
+const SPREAD_JUMPY := 0.045 # ...and a jumpy one's
 const REPRIME_TIME := 1.3
 
 var slot_index := 0
@@ -290,7 +293,7 @@ func _charge(delta: float) -> bool:
 ## A parry: if he's blocking and the hack comes from in front, steadier men
 ## catch it more often, and the lizardman reels, leaving him open.
 func take_damage(amount: float, from: Node3D = null) -> void:
-	if blocking and alive and from != null and is_instance_valid(from):
+	if blocking and not _shot and alive and from != null and is_instance_valid(from):
 		var to_from := from.global_position - global_position
 		to_from.y = 0.0
 		if facing.dot(to_from.normalized()) > 0.3 and randf() < 0.45 + 0.4 * steadiness:
@@ -326,6 +329,16 @@ func _shoot() -> void:
 	var dir := to_t / maxf(d, 0.01)
 	face_toward(dir)
 	var muzzle := global_position + dir * 0.9 + Vector3.UP * 1.45
+	if rig != null and rig.visible:
+		muzzle = rig.muzzle_global()
+	# Aim at the chest, leading a running lizardman a little.
+	var aim_point := target.global_position + Vector3.UP * 1.1
+	var tv: Vector3 = target.get("velocity") if target.get("velocity") != null else Vector3.ZERO
+	aim_point += tv * (muzzle.distance_to(aim_point) / BALL_SPEED)
+	# A comrade in the way? Steady men hold their fire; jumpy ones may not.
+	if battle.projectiles.line_blocked(muzzle, aim_point, self) and randf() < 0.25 + 0.7 * steadiness:
+		shot_timer = randf_range(0.3, 0.7)
+		return
 	if randf() < MISFIRE_CHANCE:
 		# Flash in the pan: a puff by the lock, no shot. Re-prime and try again.
 		battle.spawn_flash(muzzle - dir * 0.6)
@@ -339,10 +352,11 @@ func _shoot() -> void:
 	battle.spawn_smoke(muzzle, 1.0)
 	battle.spawn_flash(muzzle)
 	battle.play_sound("musket", muzzle, -2.0)
-	# Smoothbore muskets: good odds up close, poor at range; nerves matter.
-	var chance := clampf(0.8 - d * 0.014, 0.25, 0.8) * lerpf(0.85, 1.05, steadiness)
-	if randf() < chance:
-		target.take_damage(100.0, self)
+	# A real ball: smoothbores scatter, nerves make it worse, and a miss flies
+	# on to whatever is behind.
+	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness)
+	var v: Vector3 = battle.projectiles.spread_dir(aim_point - muzzle, spread) * BALL_SPEED
+	battle.projectiles.fire("ball", muzzle, v, self)
 
 
 func _on_died() -> void:
