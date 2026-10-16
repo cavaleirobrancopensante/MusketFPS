@@ -77,12 +77,12 @@ func _ready() -> void:
 	if not Company.loot.is_empty():
 		var lb := _button("LOOT THE FIELD (%d)" % Company.loot.size(), func():
 			Company.results_unseen = false
-			get_tree().change_scene_to_file(LOOT))
+			Loading.change(LOOT))
 		lb.add_theme_color_override("font_color", GOLD)
 		buttons.add_child(lb)
 	buttons.add_child(_button("YOU", func():
 		get_tree().set_meta("officer_back", "res://scenes/aftermath.tscn")
-		get_tree().change_scene_to_file("res://scenes/officer.tscn")))
+		Loading.change("res://scenes/officer.tscn")))
 	buttons.add_child(_button("COMPANY & KIT", _on_company))
 	buttons.add_child(_button("WAGON", func(): _logistics.open()))
 	buttons.add_child(_march)
@@ -319,13 +319,13 @@ func _on_hire() -> void:
 func _on_march() -> void:
 	Company.results_unseen = false
 	Company.save()
-	get_tree().change_scene_to_file(MAP)
+	Loading.change(MAP)
 
 
 func _on_company() -> void:
 	Company.results_unseen = false
 	Company.save()
-	get_tree().change_scene_to_file(COMPANY)
+	Loading.change(COMPANY)
 
 
 func _on_honour() -> void:
@@ -335,4 +335,4 @@ func _on_honour() -> void:
 
 func _on_menu() -> void:
 	Company.save()
-	get_tree().change_scene_to_file(MENU)
+	Loading.change(MENU)

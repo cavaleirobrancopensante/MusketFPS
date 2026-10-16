@@ -88,8 +88,12 @@ func new_world(s: int) -> void:
 
 
 func _build() -> void:
-	gen = Gen.new()
-	gen.generate(seed)
+	if _pre_gen != null and _pre_gen.seed == seed:
+		gen = _pre_gen
+	else:
+		gen = Gen.new()
+		gen.generate(seed)
+	_pre_gen = null
 	var n: int = Gen.SIZE * Gen.SIZE
 	explored.resize(n)
 	explored.fill(0)
@@ -188,7 +192,25 @@ func ensure() -> void:
 	if is_ready:
 		return
 	if not load_world():
-		new_world(randi() % 1000000)
+		new_world(_pre_gen.seed if _pre_gen != null else randi() % 1000000)
+
+
+var _pre_gen = null # a land generated ahead by prebuild(), used by _build()
+
+
+## Generate the land in stages for the loading screen (see map.gd), before
+## ensure() puts the rest of the world on it. `report(fraction, text)`.
+func prebuild(report: Callable) -> void:
+	if is_ready:
+		return
+	var s := randi() % 1000000
+	if has_save():
+		var data = JSON.parse_string(FileAccess.get_file_as_string(save_path()))
+		if typeof(data) == TYPE_DICTIONARY:
+			s = int(data["seed"])
+	var g := Gen.new()
+	await g.generate_staged(s, report)
+	_pre_gen = g
 
 
 func cell() -> Vector2i:

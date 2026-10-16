@@ -107,15 +107,30 @@ var _test_t := 0.0
 
 func _ready() -> void:
 	_test = "--maptest" in OS.get_cmdline_user_args()
+	# Built in stages behind the loading screen (see loading.gd); the
+	# fractions follow how long each stage takes.
+	Loading.begin(self)
+	# How long each stage takes (ms on a desktop; the phone is slower but in
+	# proportion): a new or reloaded land is most of it.
+	var f := Loading.plan([0 if World.is_ready else 1500, 670, 1, 140, 335, 20])
+	if not World.is_ready and Loading.active:
+		# The land itself, phase by phase (most of the wait on a new or loaded game).
+		await World.prebuild(func(fr: float, what: String):
+			await Loading.step(lerpf(f[0], f[1] - 0.08, fr), what))
+		await Loading.step(f[1] - 0.08, "Charting the roads and the march...")
 	World.ensure()
+	await Loading.step(f[1], "Drawing the land...")
 	_shader = Shader.new()
 	_shader.code = MAP_SHADER
 	_build_fog()
 	_mat = _material(false, Color.WHITE)
 	_build_env()
 	_build_terrain()
+	await Loading.step(f[2], "Rivers, lakes and the sea...")
 	_build_sea()
+	await Loading.step(f[3], "Planting the forests...")
 	_build_trees()
+	await Loading.step(f[4], "Roads, bridges, villages and towns...")
 	_build_bridges()
 	_build_settlements()
 	_build_player()
@@ -132,8 +147,10 @@ func _ready() -> void:
 	Music.set_context("camp" if World.camping else "map")
 	_target = _world_pos(World.pos)
 	_apply_battle_result()
+	await Loading.step(f[5], "Fog over the unknown...")
 	_update_fog(true)
 	_update_camera()
+	Loading.done(self)
 
 
 func _exit_tree() -> void:
@@ -642,7 +659,7 @@ func _go(scene: String) -> void:
 	World.stop()
 	World.save()
 	Company.save()
-	get_tree().change_scene_to_file(scene)
+	Loading.change(scene)
 
 
 func _update_hud() -> void:

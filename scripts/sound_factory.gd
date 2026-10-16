@@ -7,6 +7,21 @@ extends RefCounted
 const RATE := 22050
 
 
+## Built once per run: synthesising every sound takes a while on a phone,
+## and they never change.
+static var _cache: Dictionary = {}
+
+
+static func is_cached() -> bool:
+	return not _cache.is_empty()
+
+
+static func cached() -> Dictionary:
+	if _cache.is_empty():
+		_cache = build_all()
+	return _cache
+
+
 static func build_all() -> Dictionary:
 	return {
 		"musket": musket(),

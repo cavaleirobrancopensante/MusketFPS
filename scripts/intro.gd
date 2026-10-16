@@ -389,4 +389,4 @@ func _finish() -> void:
 		print("INTRO DONE at %.1fs" % _t)
 		get_tree().quit()
 		return
-	get_tree().change_scene_to_file(BATTLE)
+	Loading.change(BATTLE)

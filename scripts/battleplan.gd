@@ -470,9 +470,9 @@ func _on_done() -> void:
 	if _fighting:
 		Company.next_battle.erase("planning")
 		Company.save()
-		get_tree().change_scene_to_file(BATTLE)
+		Loading.change(BATTLE)
 	else:
-		get_tree().change_scene_to_file(MAP)
+		Loading.change(MAP)
 
 
 ## `-- --plantest`: draw a line for the muskets, put the pikes ahead, a new tag.

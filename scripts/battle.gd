@@ -114,6 +114,9 @@ func _ready() -> void:
 	spotted = camp and bool(nb.get("spotted", false))
 	night = camp or bool(nb.get("night", false))
 	_setup_input()
+	Loading.begin(self)
+	var f := Loading.plan([30, 0 if SoundFactory.is_cached() else 300, 40, 30, 10], 0.5)
+	await Loading.step(f[0], "Drawing the men and the enemy...")
 	# The batcher first: everything that draws a character registers with it.
 	batcher = BatcherScript.new()
 	batcher.add_to_group("batcher")
@@ -125,8 +128,11 @@ func _ready() -> void:
 	soldier_frames = batcher.add_sprite_kind("soldier", SpriteFactory.soldier_frames())
 	lizard_frames = batcher.add_sprite_kind("lizard", SpriteFactory.lizard_frames())
 	smoke_tex = SpriteFactory.smoke_texture()
-	sounds = SoundFactory.build_all()
+	await Loading.step(f[1], "Tuning the drums, priming the pans...")
+	sounds = SoundFactory.cached()
+	await Loading.step(f[2], "The ground, the sky, the trees...")
 	_build_world()
+	await Loading.step(f[3], "Mustering the company...")
 
 	player = PlayerScript.new()
 	player.battle = self
@@ -189,6 +195,7 @@ func _ready() -> void:
 	if camp:
 		_setup_camp()
 
+	await Loading.step(f[4], "Fall in!")
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	hud = HudScript.new()
@@ -212,6 +219,7 @@ func _ready() -> void:
 		state_timer = maxf(state_timer, 6.0)
 	else:
 		hud.show_message("Form the line! They're coming...", 4.5)
+	Loading.done(self)
 
 
 # ---------------------------------------------------------------- orders
@@ -325,7 +333,7 @@ func restart() -> void:
 
 
 func to_menu() -> void:
-	get_tree().change_scene_to_file(MENU)
+	Loading.change(MENU)
 
 
 # ---------------------------------------------------------------- sound
@@ -755,7 +763,7 @@ func _end_battle(won: bool) -> void:
 ## Leave the field for the aftermath screen (campaign) or replay (otherwise).
 func finish() -> void:
 	if Company.active:
-		get_tree().change_scene_to_file(AFTERMATH)
+		Loading.change(AFTERMATH)
 	else:
 		restart()
 
