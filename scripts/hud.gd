@@ -11,6 +11,7 @@ extends Control
 ##   top right  - FOLLOW / HOLD / fire mode toggle
 ##
 ## Touches are handled by hand (not Buttons) so several fingers work at once.
+const UI := preload("res://scripts/ui.gd")
 
 const JOY_RADIUS := 90.0
 
@@ -41,11 +42,14 @@ var block_flash := 0.0
 var pressed_id := ""
 var pressed_time := 0.0
 var font: Font
+var display: Font
+var _box_cache := {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	font = ThemeDB.fallback_font
+	font = UI.font("alegreya_sans_500")
+	display = UI.display_font()
 	player.fired.connect(_on_fired)
 	player.hurt.connect(_on_hurt)
 	player.melee_hit.connect(_on_melee_hit)
@@ -324,10 +328,15 @@ func _draw() -> void:
 	if hurt_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, 0.35 * hurt_flash))
 
-	# Health bar and status.
-	draw_rect(Rect2(20, 20, 264, 24), Color(0, 0, 0, 0.5))
-	draw_rect(Rect2(22, 22, 260.0 * player.hp / player.max_hp, 20), Color(0.8, 0.15, 0.1))
-	_text(battle.status_line(), Vector2(22, 72), 20, Color(1, 1, 1, 0.9))
+	# Health bar and status, on a strip of night.
+	var status: String = battle.status_line()
+	var sw := font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+	draw_style_box(_rbox(Color(UI.NIGHT, 0.55), Color(0, 0, 0, 0), 6), Rect2(12, 12, maxf(300.0, sw + 28.0), 66))
+	draw_style_box(_rbox(Color(UI.WOOL_DARK, 0.9), Color(UI.PIPECLAY, 0.35), 4), Rect2(22, 22, 264, 18))
+	var hpw := 262.0 * clampf(player.hp / player.max_hp, 0.0, 1.0)
+	if hpw > 2.0:
+		draw_style_box(_rbox(UI.MADDER.lightened(0.15), Color(0, 0, 0, 0), 3), Rect2(23, 23, hpw, 16))
+	_text(status, Vector2(24, 64), 18, Color(UI.PIPECLAY, 0.95))
 	if Settings.stress:
 		var fps := Engine.get_frames_per_second()
 		var fcol := Color(0.4, 1, 0.4) if fps >= 55 else (Color(1, 0.85, 0.3) if fps >= 30 else Color(1, 0.4, 0.3))
@@ -356,8 +365,8 @@ func _draw() -> void:
 	if message_time > 0.0 and message != "":
 		var alpha := clampf(message_time / 0.4, 0.0, 1.0)
 		var mc := Vector2(s.x * 0.5, s.y * 0.3)
-		_text_center(message, mc + Vector2(2, 2), 40, Color(0, 0, 0, 0.6 * alpha))
-		_text_center(message, mc, 40, Color(1, 0.93, 0.75, alpha))
+		_text_center(message, mc + Vector2(2, 3), 46, Color(0, 0, 0, 0.6 * alpha), display)
+		_text_center(message, mc, 46, Color(UI.PIPECLAY, alpha), display)
 
 
 ## A gold marker over where you need to go (or an arrow at the edge of the
@@ -398,9 +407,8 @@ func _draw_hint() -> void:
 	var fsize := 18
 	var tsize := font.get_multiline_string_size(hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 24.0, fsize)
 	var r := Rect2(20, 262, w, tsize.y + 40.0)
-	draw_rect(r, Color(0.05, 0.06, 0.1, 0.72 * alpha))
-	draw_rect(r, Color(0.95, 0.78, 0.3, 0.8 * alpha), false, 2)
-	_text("HOW TO", Vector2(32, 284), 15, Color(0.95, 0.78, 0.3, alpha))
+	draw_style_box(_rbox(Color(UI.WOOL, 0.85 * alpha), Color(UI.BRASS, 0.7 * alpha), 6), r)
+	draw_string(display, Vector2(32, 286), "How to", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(UI.BRASS, alpha))
 	draw_multiline_string(font, Vector2(32, 308), hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 24.0, fsize, -1,
 		Color(1, 1, 1, alpha))
 
@@ -443,21 +451,38 @@ func _draw_swing_indicator(c: Vector2) -> void:
 			draw_arc(c, 16, 0, TAU, 32, Color(1, 1, 1, 0.3), 2)
 
 
+## A rounded box for drawing (cached by its colours and radius).
+func _rbox(bg: Color, edge: Color, radius: int, width := 1) -> StyleBoxFlat:
+	var key := "%s|%s|%d|%d" % [bg.to_html(), edge.to_html(), radius, width]
+	if _box_cache.has(key):
+		return _box_cache[key]
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(radius)
+	sb.anti_aliasing = true
+	if edge.a > 0.0:
+		sb.border_color = edge
+		sb.set_border_width_all(width)
+	_box_cache[key] = sb
+	return sb
+
+
 func _draw_button(b: Dictionary) -> void:
 	var id: String = b["id"]
-	var bg := Color(0.08, 0.09, 0.12, 0.5)
-	var edge := Color(1, 1, 1, 0.7)
-	var label_col := Color(1, 1, 1, 0.95)
+	var bg := Color(UI.NIGHT, 0.5)
+	var edge := Color(UI.PIPECLAY, 0.6)
+	var label_col := Color(UI.PIPECLAY, 0.95)
 	var active: bool = (id == "follow" and battle.is_following()) \
 		or (id == "hold" and battle.is_holding()) \
 		or (id == "charge" and battle.is_charging()) \
 		or (id == "block" and player.blocking) \
 		or (id == "aim" and player.aim_wanted)
 	if active:
-		edge = Color(0.95, 0.78, 0.3)
-		label_col = Color(0.95, 0.78, 0.3)
+		edge = UI.BRASS
+		label_col = UI.BRASS.lightened(0.2)
+		bg = Color(UI.WOOL, 0.75)
 	if id == pressed_id and pressed_time > 0.0:
-		bg = Color(1, 1, 1, 0.35)
+		bg = Color(UI.MADDER, 0.75)
 	if id == "volley" and battle.loaded_count() == 0:
 		label_col = Color(1, 1, 1, 0.35)
 	if id in ["volley", "follow", "hold", "charge", "mode"] and not battle.can_command():
@@ -476,7 +501,7 @@ func _draw_button(b: Dictionary) -> void:
 		var pos: Vector2 = b["pos"]
 		var r: float = b["r"]
 		draw_circle(pos, r, bg)
-		draw_arc(pos, r, 0, TAU, 48, edge, 3)
+		draw_arc(pos, r, 0, TAU, 48, edge, 2.5, true)
 		var label: String = b["label"]
 		if id == "fire" and not _melee() and not player.is_loaded():
 			# Reload ring fills up around the fire button.
@@ -498,7 +523,7 @@ func _draw_button(b: Dictionary) -> void:
 		if id.begins_with("w_"):
 			# The weapon in hand is gold; the one you're switching to pulses.
 			var w := id.substr(2)
-			var gold := Color(0.95, 0.78, 0.3)
+			var gold := UI.BRASS
 			if w == player.weapon and not player.is_switching():
 				bg = Color(gold, 0.3)
 				edge = gold
@@ -511,23 +536,23 @@ func _draw_button(b: Dictionary) -> void:
 				prog = player.reload_progress()
 			elif w == "pistol":
 				prog = player.pistol_reload_progress()
-			draw_rect(rect, bg)
+			draw_style_box(_rbox(bg, Color(edge, edge.a * 0.8), 5, 2 if w == player.weapon else 1), rect)
 			if prog < 1.0:
-				draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - 5), Vector2(rect.size.x * prog, 5)), Color(gold, 0.8))
-			draw_rect(rect, edge, false, 2)
+				draw_rect(Rect2(rect.position + Vector2(4, rect.size.y - 6), Vector2((rect.size.x - 8) * prog, 3)), Color(gold, 0.85))
 			_text_center(b["label"], rect.get_center(), 16, label_col)
 			return
-		draw_rect(rect, bg)
-		draw_rect(rect, edge, false, 2)
-		_text_center(b["label"], rect.get_center(), 20, label_col)
+		draw_style_box(_rbox(bg, Color(edge, edge.a * 0.8), 5, 2 if active else 1), rect)
+		_text_center(b["label"], rect.get_center(), 19, label_col)
 
 
 func _text(t: String, pos: Vector2, fsize: int, col: Color) -> void:
 	draw_string(font, pos, t, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _text_center(t: String, centre: Vector2, fsize: int, col: Color) -> void:
-	var w := font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x
+func _text_center(t: String, centre: Vector2, fsize: int, col: Color, f: Font = null) -> void:
+	if f == null:
+		f = font
+	var w := f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x
 	# Keep labels on screen even when a control sits near the edge.
 	var x := clampf(centre.x - w * 0.5, 6.0, size.x - w - 6.0)
-	draw_string(font, Vector2(x, centre.y + fsize * 0.35), t, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+	draw_string(f, Vector2(x, centre.y + fsize * 0.35), t, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)

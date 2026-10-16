@@ -3,6 +3,7 @@ extends Control
 ## from the save slots (each slot is its own campaign in its own land), or
 ## run the stress test (50 musketeers against 200 lizardmen with an FPS
 ## counter). Built in code like the rest of the game.
+const UI := preload("res://scripts/ui.gd")
 
 const BATTLE := "res://scenes/battle.tscn"
 const CAMP := "res://scenes/aftermath.tscn"
@@ -10,6 +11,8 @@ const COMPANY := "res://scenes/company.tscn"
 const INTRO := "res://scenes/intro.tscn"
 const MusicBar := preload("res://scripts/music_bar.gd")
 const MAP := "res://scenes/map.tscn"
+const Vignette := preload("res://scripts/vignette.gd")
+const Lore := preload("res://scripts/lore.gd")
 
 var _tp_check: CheckButton
 var _slots_panel: PanelContainer
@@ -107,74 +110,137 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred(BATTLE)
 		return
 
+	# Behind the menu: the company's camp at night, live (vignette.gd), with
+	# a band of night down the left where the menu sits.
 	var bg := ColorRect.new()
-	bg.color = Color(0.07, 0.09, 0.14)
+	bg.color = UI.NIGHT
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-
-	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.add_theme_constant_override("separation", 18)
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	add_child(box)
+	var scene: Control = Vignette.make("menu", {"time": "night"})
+	add_child(scene)
+	scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var shade := TextureRect.new()
+	var grad := Gradient.new()
+	grad.set_color(0, Color(UI.NIGHT, 0.96))
+	grad.set_color(1, Color(UI.NIGHT, 0.0))
+	grad.add_point(0.42, Color(UI.NIGHT, 0.88))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.width = 256
+	gt.height = 4
+	gt.fill_to = Vector2(1, 0)
+	shade.texture = gt
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.anchor_bottom = 1.0
+	shade.anchor_right = 0.66
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(shade)
 	Music.set_context("menu")
-	MusicBar.attach(self, Vector2(20, 20))
 
-	var title := Label.new()
-	title.text = "MUSKET FPS"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)
-	title.add_theme_color_override("font_color", Color(0.95, 0.82, 0.45))
-	box.add_child(title)
+	var col := VBoxContainer.new()
+	col.anchor_top = 0.0
+	col.anchor_bottom = 1.0
+	col.offset_left = 72
+	col.offset_top = 52
+	col.offset_bottom = -36
+	col.offset_right = 72 + 520
+	col.add_theme_constant_override("separation", 12)
+	add_child(col)
 
+	var title := UI.heading("Musket FPS", 92, UI.PIPECLAY)
+	title.add_theme_constant_override("line_spacing", -18)
+	col.add_child(title)
 	var sub := Label.new()
-	sub.text = "Lead your company against the lizardmen"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_size_override("font_size", 24)
-	sub.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
-	box.add_child(sub)
+	sub.text = "%s, cast away on %s." % ["The " + Lore.REGIMENT.trim_prefix("the "), Lore.LAND]
+	sub.add_theme_font_override("font", UI.font("fell_italic"))
+	sub.add_theme_font_size_override("font_size", 25)
+	sub.add_theme_color_override("font_color", UI.BRASS)
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(sub)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 22)
+	col.add_child(gap)
 
 	var last := Settings.slot_summary(Settings.slot)
 	if not last.is_empty():
-		var cont := _button("CONTINUE", _on_continue)
-		cont.text = "CONTINUE  ·  slot %d, day %d" % [Settings.slot, int(last["day"])]
-		box.add_child(cont)
-	box.add_child(_button("NEW CAMPAIGN", _open_slots.bind("new")))
-	box.add_child(_button("LOAD", _open_slots.bind("load")))
+		var where := "on the beach" if bool(last.get("prologue", false)) else "day %d" % int(last["day"])
+		var cont := _button("Continue  ·  %s, %d men" % [where, int(last.get("men", 0))], _on_continue, true)
+		col.add_child(cont)
+	var new_b := _button("New campaign", _open_slots.bind("new"), last.is_empty())
+	col.add_child(new_b)
+	col.add_child(_button("Load a campaign", _open_slots.bind("load")))
+	var rule := ColorRect.new()
+	rule.color = Color(UI.PIPECLAY, 0.18)
+	rule.custom_minimum_size = Vector2(0, 1)
+	var rule_box := MarginContainer.new()
+	rule_box.add_theme_constant_override("margin_top", 8)
+	rule_box.add_theme_constant_override("margin_bottom", 8)
+	rule_box.add_child(rule)
+	col.add_child(rule_box)
+	var quick := HBoxContainer.new()
+	quick.add_theme_constant_override("separation", 10)
+	col.add_child(quick)
+	var sk := _button("Skirmish", _on_skirmish)
+	sk.tooltip_text = "A stand-alone fight with muskets, spears, bows and crossbows."
+	sk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quick.add_child(sk)
+	var stress := _button("Stress test", _on_stress)
+	stress.tooltip_text = "50 musketeers against 200 lizardmen, with a frame counter."
+	stress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quick.add_child(stress)
+	for b2 in [sk, stress]:
+		b2.custom_minimum_size = Vector2(0, 62)
+		b2.add_theme_font_size_override("font_size", 22)
 
-	box.add_child(_button("SKIRMISH  (muskets, spears, bows)", _on_skirmish))
-	var stress := _button("STRESS TEST  (50 vs 200)", _on_stress)
-	stress.custom_minimum_size = Vector2(520, 64)
-	stress.add_theme_font_size_override("font_size", 22)
-	box.add_child(stress)
-
-	_tp_check = CheckButton.new()
-	_tp_check.text = "Start battles in third person"
+	var sp := Control.new()
+	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(sp)
+	# Settings along the foot: view, graphics, music.
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 18)
+	col.add_child(foot)
+	_tp_check = CheckButton.new() # (hidden: the code that starts a game reads it)
+	_tp_check.visible = false
+	add_child(_tp_check)
 	_tp_check.button_pressed = Settings.third_person
-	_tp_check.add_theme_font_size_override("font_size", 22)
-	_tp_check.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_tp_check)
-	var gfx := _button("", func(): pass)
-	gfx.custom_minimum_size = Vector2(520, 60)
-	gfx.add_theme_font_size_override("font_size", 22)
-	var label := func(): gfx.text = "GRAPHICS: %s" % Settings.graphics.to_upper()
+	var view := Button.new()
+	view.flat = true
+	view.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
+	view.add_theme_font_size_override("font_size", 20)
+	var view_label := func(): view.text = "View: %s" % ("third person" if _tp_check.button_pressed else "first person")
+	view_label.call()
+	view.pressed.connect(func():
+		_tp_check.button_pressed = not _tp_check.button_pressed
+		Settings.third_person = _tp_check.button_pressed
+		Settings.save_prefs()
+		view_label.call())
+	foot.add_child(view)
+	var gfx := Button.new()
+	gfx.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
+	gfx.add_theme_font_size_override("font_size", 20)
+	gfx.flat = true
+	gfx.add_theme_color_override("font_color", UI.PIPECLAY)
+	var label := func(): gfx.text = "Graphics: %s" % Settings.graphics.capitalize()
 	label.call()
 	gfx.pressed.connect(func():
 		var i := Settings.GRAPHICS.find(Settings.graphics)
 		Settings.graphics = Settings.GRAPHICS[(i + 1) % Settings.GRAPHICS.size()]
 		Settings.save_prefs()
 		label.call())
-	box.add_child(gfx)
+	foot.add_child(gfx)
+	# The music button in the bottom-right corner, away from the menu.
+	MusicBar.attach(self, get_viewport_rect().size - Vector2(84, 84))
 	_build_slots()
 
 
-func _button(text: String, cb: Callable) -> Button:
+func _button(text: String, cb: Callable, primary := false) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(520, 84)
-	b.add_theme_font_size_override("font_size", 30)
+	b.custom_minimum_size = Vector2(0, 72)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.add_theme_font_size_override("font_size", 28)
+	if primary:
+		b.theme_type_variation = "PrimaryButton"
 	b.pressed.connect(cb)
 	return b
 
@@ -199,12 +265,7 @@ func _on_continue() -> void:
 
 func _build_slots() -> void:
 	_slots_panel = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.1, 0.12, 0.18)
-	sb.set_corner_radius_all(12)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 20)
-	_slots_panel.add_theme_stylebox_override("panel", sb)
+	_slots_panel.add_theme_stylebox_override("panel", UI.box(Color(UI.WOOL, 0.98), 24, 6, 0.3))
 	_slots_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_slots_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_slots_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -214,15 +275,14 @@ func _build_slots() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	_slots_panel.add_child(v)
-	_slots_title = Label.new()
-	_slots_title.add_theme_font_size_override("font_size", 30)
-	_slots_title.add_theme_color_override("font_color", Color(0.95, 0.82, 0.45))
+	_slots_title = UI.heading("", 34)
 	v.add_child(_slots_title)
 	_slots_box = VBoxContainer.new()
 	_slots_box.add_theme_constant_override("separation", 10)
 	v.add_child(_slots_box)
-	var back := _button("BACK", func(): _slots_panel.visible = false)
+	var back := _button("Back", func(): _slots_panel.visible = false)
 	back.custom_minimum_size = Vector2(200, 60)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	v.add_child(back)
 
 
@@ -234,7 +294,7 @@ func _open_slots(mode: String) -> void:
 
 
 func _fill_slots() -> void:
-	_slots_title.text = "NEW CAMPAIGN: choose a slot (each is a new land)" if _mode == "new" else "LOAD A CAMPAIGN"
+	_slots_title.text = "Choose a slot for the new campaign" if _mode == "new" else "Load a campaign"
 	for c in _slots_box.get_children():
 		c.queue_free()
 	for i in range(1, Settings.SLOTS + 1):
@@ -246,25 +306,25 @@ func _fill_slots() -> void:
 		l.add_theme_font_size_override("font_size", 20)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if info.is_empty():
-			l.text = "SLOT %d   ·   empty" % i
-			l.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
+			l.text = "Slot %d   ·   empty" % i
+			l.add_theme_color_override("font_color", UI.SLATE)
 		else:
 			var where := "on the beach" if info["prologue"] else "day %d" % int(info["day"])
-			l.text = "SLOT %d   ·   %s, %d men, %d crowns%s\nsaved %s" % [i, where, int(info["men"]),
+			l.text = "Slot %d   ·   %s, %d men, %d crowns%s\nsaved %s" % [i, where, int(info["men"]),
 				int(info["money"]), ("  ·  land %s" % info["seed"]) if info["seed"] != "" else "", info["when"]]
 		row.add_child(l)
 		var main := ""
 		if _mode == "new":
-			main = "START HERE" if info.is_empty() else ("TAP AGAIN TO OVERWRITE" if _armed == "new%d" % i else "OVERWRITE")
+			main = "Start here" if info.is_empty() else ("Tap again to overwrite" if _armed == "new%d" % i else "Overwrite")
 		else:
-			main = "LOAD"
+			main = "Load"
 		var b := _button(main, _on_slot.bind(i))
 		b.custom_minimum_size = Vector2(250, 60)
 		b.add_theme_font_size_override("font_size", 20)
 		b.disabled = _mode == "load" and info.is_empty()
 		row.add_child(b)
 		if not info.is_empty():
-			var d := _button("TAP AGAIN" if _armed == "del%d" % i else "DELETE", _on_delete.bind(i))
+			var d := _button("Tap again" if _armed == "del%d" % i else "Delete", _on_delete.bind(i))
 			d.custom_minimum_size = Vector2(140, 60)
 			d.add_theme_font_size_override("font_size", 18)
 			row.add_child(d)

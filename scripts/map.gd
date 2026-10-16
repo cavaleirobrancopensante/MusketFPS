@@ -12,6 +12,7 @@ extends Node3D
 ##            you can't see now (the fog texture: one texel per cell)
 ##   trees    one MultiMesh per chunk; settlements: one MultiMesh of boxes
 ##   parties  small figures with banners, shown only while in sight
+const UI := preload("res://scripts/ui.gd")
 
 const Gen := preload("res://scripts/world_gen.gd")
 const Lore := preload("res://scripts/lore.gd")
@@ -440,6 +441,7 @@ func _label_for(st: Dictionary, c: Vector3) -> void:
 	l.fixed_size = true
 	l.pixel_size = 0.0011
 	l.font_size = {"city": 34, "town": 28, "village": 22, "hold": 28, "nest": 26}[kind]
+	l.font = UI.display_font()
 	l.outline_size = 8
 	l.modulate = Color(1, 0.95, 0.85) if kind != "nest" else Color(0.75, 1.0, 0.6)
 	l.no_depth_test = true
@@ -537,7 +539,7 @@ func _build_hud() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(root)
-	var top := _panel(Color(0.05, 0.06, 0.1, 0.72))
+	var top := _panel(Color(UI.NIGHT, 0.8))
 	top.position = Vector2(12, 12)
 	root.add_child(top)
 	var tv := VBoxContainer.new()
@@ -546,7 +548,7 @@ func _build_hud() -> void:
 	tv.add_child(_clock)
 	_status = _label("", 17, Color.WHITE)
 	tv.add_child(_status)
-	var bottom := _panel(Color(0.05, 0.06, 0.1, 0.72))
+	var bottom := _panel(Color(UI.NIGHT, 0.8))
 	bottom.anchor_top = 1.0
 	bottom.anchor_bottom = 1.0
 	bottom.position = Vector2(12, -70)
@@ -587,7 +589,7 @@ func _build_hud() -> void:
 	br.add_child(_button("−", func(): _zoom(1.35)))
 	br.add_child(_button("+", func(): _zoom(1.0 / 1.35)))
 
-	_popup = _panel(Color(0.08, 0.1, 0.15, 0.96))
+	_popup = _panel(Color(UI.WOOL, 0.97))
 	_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_popup.custom_minimum_size = Vector2(620, 0)
 	_popup.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -622,12 +624,7 @@ func _build_hud() -> void:
 
 func _panel(col: Color) -> PanelContainer:
 	var p := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = col
-	sb.set_corner_radius_all(8)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 12)
-	p.add_theme_stylebox_override("panel", sb)
+	p.add_theme_stylebox_override("panel", UI.box(col, 12))
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	return p
 
@@ -637,6 +634,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	UI.dress(l, size)
 	return l
 
 
@@ -645,16 +643,7 @@ func _button(text: String, cb: Callable) -> Button:
 	b.text = text
 	b.custom_minimum_size = Vector2(96, 54)
 	b.add_theme_font_size_override("font_size", 19)
-	for st in ["normal", "hover", "pressed"]:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = {"normal": Color(0.18, 0.21, 0.3, 0.92), "hover": Color(0.24, 0.28, 0.4, 0.95),
-			"pressed": Color(0.5, 0.42, 0.22, 0.95)}[st]
-		sb.set_corner_radius_all(6)
-		sb.border_color = Color(0.95, 0.8, 0.45, 0.35)
-		sb.set_border_width_all(1)
-		for side in ["left", "right"]:
-			sb.set("content_margin_" + side, 12)
-		b.add_theme_stylebox_override(st, sb)
+	# (the theme's wool tabs)
 	b.pressed.connect(cb)
 	return b
 
@@ -1191,7 +1180,7 @@ func _build_scout_panel() -> void:
 		if (e is InputEventMouseButton or e is InputEventScreenTouch) and e.pressed:
 			_close_scouts())
 	_popup.get_parent().add_child(_scout_shade)
-	_scout_panel = _panel(Color(0.08, 0.1, 0.15, 0.97))
+	_scout_panel = _panel(Color(UI.WOOL, 0.97))
 	_scout_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_scout_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_scout_panel.grow_vertical = Control.GROW_DIRECTION_BOTH

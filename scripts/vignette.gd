@@ -137,7 +137,7 @@ func _build_grass() -> void:
 		return false
 	var grng := RandomNumberGenerator.new()
 	grng.seed = _rng.randi()
-	Look.grass(_root, Vector3.ZERO, 34.0, float(_cols.get("grass", 1.0)) * 0.3, _cols, [], grng, reject)
+	Look.grass(_root, Vector3.ZERO, 34.0, float(_cols.get("grass", 1.0)) * (0.12 if kind == "menu" else 0.3), _cols, [], grng, reject)
 
 
 func _mat(c: Color, unshaded := false) -> StandardMaterial3D:
@@ -542,6 +542,34 @@ func _stage() -> void:
 			_cam_from = Vector3(7, 2.6, 6)
 			_cam_to = Vector3(6, 3, -4)
 			_look = Vector3(0, 1, -2)
+		"menu":
+			# The main menu's backdrop: the company's camp on a strange shore
+			# at night. The fire sits right of centre, clear of the menu.
+			_fire(Vector3.ZERO)
+			var w3 := Props.wagon()
+			w3.position = Vector3(4.6, 0, -3.4)
+			w3.rotation.y = 0.9
+			_root.add_child(w3)
+			# The colours, planted by the wagon: Calder's blue with a white cross.
+			_cyl(0.03, 0.035, 3.2, Vector3(2.6, 1.6, -4.4), Color(0.45, 0.32, 0.18))
+			_box(Vector3(1.1, 0.75, 0.02), Vector3(3.17, 2.75, -4.4), Color(0.13, 0.2, 0.45))
+			_box(Vector3(1.1, 0.11, 0.025), Vector3(3.17, 2.75, -4.4), Color(0.9, 0.88, 0.8))
+			_box(Vector3(0.11, 0.75, 0.025), Vector3(2.95, 2.75, -4.4), Color(0.9, 0.88, 0.8))
+			# The sentry, musket shouldered, looking out into the dark.
+			_soldier(Vector3(-1.4, 0, -2.2), Vector3(-0.5, 0, -1), {"anim": "idle"})
+			# Two awake by the fire, the rest asleep on their blankets.
+			_soldier(Vector3(1.5, 0, -0.9), Vector3(-1, 0, 0.5), {"anim": "kneel"})
+			_soldier(Vector3(-0.3, 0, 1.7), Vector3(0.15, 0, -1), {"anim": "idle"})
+			for i in 6:
+				var a := lerpf(-0.2, PI * 0.9, (i + 0.5) / 6.0)
+				var d := Vector3(cos(a), 0, -sin(a))
+				_soldier(d * (3.4 + (i % 2) * 1.1), -d, {"anim": "sleep"})
+				_box(Vector3(0.78, 0.07, 1.95), d * (3.4 + (i % 2) * 1.1) + d * 0.85 + Vector3(0, 0.035, 0), Color(0.36, 0.3, 0.22), atan2(d.x, d.z))
+			_trees(26, 12, 45)
+			_cam_from = Vector3(-6.5, 2.6, 7.5)
+			_cam_to = Vector3(-4.0, 2.9, 8.6)
+			_look = Vector3(-2.6, 1.1, -1.5)
+			_period = 70.0
 		"camp_night", "dusk", "camp_attack":
 			_fire(Vector3.ZERO)
 			var w2 := Props.wagon()

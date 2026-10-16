@@ -28,6 +28,8 @@ const GRAPHICS := ["low", "medium", "high"]
 
 
 func _ready() -> void:
+	# The game's look for every screen (see ui.gd).
+	get_tree().root.theme = preload("res://scripts/ui.gd").theme()
 	var data = JSON.parse_string(FileAccess.get_file_as_string(PREFS)) if FileAccess.file_exists(PREFS) else null
 	if typeof(data) == TYPE_DICTIONARY:
 		slot = clampi(int(data.get("slot", 1)), 1, SLOTS)

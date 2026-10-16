@@ -193,7 +193,14 @@ func _ready() -> void:
 	else:
 		_build_soldier()
 	_update(0.0, true)
-	_batcher = get_tree().get_first_node_in_group("batcher")
+	# The batcher in this rig's own world (a preview or a pop-up scene has
+	# its own; while one screen gives way to another, two can exist).
+	for b in get_tree().get_nodes_in_group("batcher"):
+		if b.get_viewport() == get_viewport() and not b.is_queued_for_deletion():
+			_batcher = b
+			break
+	if _batcher == null:
+		_batcher = get_tree().get_first_node_in_group("batcher")
 	if _batcher != null:
 		_batcher.add_rig(self)
 	_emit()
