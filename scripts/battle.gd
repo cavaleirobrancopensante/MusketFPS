@@ -86,6 +86,7 @@ var _line_t := 0.0
 
 func _ready() -> void:
 	_autotest = "--autotest" in OS.get_cmdline_user_args()
+	Music.set_context("battle")
 	prologue = Company.active and Company.prologue
 	_setup_input()
 	# The batcher first: everything that draws a character registers with it.

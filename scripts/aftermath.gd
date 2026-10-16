@@ -6,6 +6,8 @@ extends Control
 ## roll of honour. Right: every man in the company with his rank, record,
 ## progress to the next rank and whether he's fit to fight.
 
+const UI := preload("res://scripts/ui.gd")
+const MusicBar := preload("res://scripts/music_bar.gd")
 const BATTLE := "res://scenes/battle.tscn"
 const MENU := "res://scenes/menu.tscn"
 const COMPANY := "res://scenes/company.tscn"
@@ -95,7 +97,7 @@ func _ready() -> void:
 	right.add_child(rbox)
 	_list_title = _label("", 24, GOLD)
 	rbox.add_child(_list_title)
-	var scroll := ScrollContainer.new()
+	var scroll := UI.scroll()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	rbox.add_child(scroll)
@@ -104,6 +106,8 @@ func _ready() -> void:
 	_list.add_theme_constant_override("separation", 6)
 	scroll.add_child(_list)
 
+	Music.set_context("camp")
+	MusicBar.attach(self, Vector2(get_viewport_rect().size.x - 84, get_viewport_rect().size.y - 84))
 	_logistics = LogisticsPopup.new()
 	add_child(_logistics)
 	_logistics.changed.connect(_refresh)

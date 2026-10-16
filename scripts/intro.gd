@@ -48,6 +48,7 @@ var _captions := [
 
 
 func _ready() -> void:
+	Music.set_context("intro")
 	var batcher := BatcherScript.new()
 	batcher.add_to_group("batcher")
 	add_child(batcher)

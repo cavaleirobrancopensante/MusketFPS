@@ -14,6 +14,7 @@ extends Control
 ##
 ## Opened from camp (later, from the campaign map).
 
+const UI := preload("res://scripts/ui.gd")
 const Rig3D := preload("res://scripts/rig3d.gd")
 const Men := preload("res://scripts/men.gd")
 const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
@@ -172,8 +173,8 @@ func _build_left() -> Control:
 		cell.add_child(v)
 		var plus := Button.new()
 		plus.text = "+"
-		plus.custom_minimum_size = Vector2(32, 30)
-		plus.add_theme_font_size_override("font_size", 16)
+		plus.custom_minimum_size = Vector2(52, 46)
+		plus.add_theme_font_size_override("font_size", 24)
 		plus.pressed.connect(_on_spend.bind(k))
 		cell.add_child(plus)
 		grid.add_child(cell)
@@ -376,7 +377,7 @@ func _build_middle() -> Control:
 	_picker.add_child(pvb)
 	_picker_title = _label("", 22, GOLD)
 	pvb.add_child(_picker_title)
-	var scroll := ScrollContainer.new()
+	var scroll := UI.scroll()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	pvb.add_child(scroll)
@@ -568,7 +569,7 @@ func _build_right() -> Control:
 	var mv := VBoxContainer.new()
 	men.add_child(mv)
 	mv.add_child(_label("THE MEN  ·  %d" % Company.roster.size(), 20, GOLD))
-	var scroll := ScrollContainer.new()
+	var scroll := UI.scroll()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	mv.add_child(scroll)

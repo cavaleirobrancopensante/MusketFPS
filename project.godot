@@ -15,6 +15,7 @@ config/icon="res://icon.svg"
 Settings="*res://scripts/settings.gd"
 Company="*res://scripts/company.gd"
 World="*res://scripts/world.gd"
+Music="*res://scripts/music.gd"
 
 [display]
 
@@ -32,3 +33,7 @@ pointing/emulate_touch_from_mouse=true
 
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
+
+[gui]
+
+common/default_scroll_deadzone=18
