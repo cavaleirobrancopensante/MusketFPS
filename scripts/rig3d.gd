@@ -97,6 +97,7 @@ var _wdir := Vector3(0, 1, 0.15).normalized()
 var _hand_r := Vector3(0.3, 0.9, 0.0)
 var _hand_l := Vector3(-0.3, 0.9, 0.0)
 var _lean := 0.0
+var _lie := 0.0 # 1 = lying on his back asleep (camp), easing back up to 0 as he gets up
 var _jaw := 0.0
 var _walk_phase := 0.0
 var _dead := false
@@ -536,6 +537,17 @@ func _update(delta: float, snap: bool) -> void:
 	else:
 		_update_soldier(delta, k, kh)
 	_update_legs(delta)
+	# Asleep on his bedroll: the whole body tips back about the feet to lie
+	# flat (head away from where he faces), then rolls up again when he wakes.
+	var want_lie := 1.0 if anim == "sleep" else 0.0
+	if snap:
+		_lie = want_lie
+	else:
+		_lie = move_toward(_lie, want_lie, delta * (6.0 if want_lie > _lie else 1.5))
+	if _lie > 0.0 or body.rotation.x != 0.0:
+		var e := _lie * _lie * (3.0 - 2.0 * _lie)
+		body.rotation.x = PI * 0.5 * e
+		body.position.y = 0.11 * e
 
 
 func _update_soldier(_delta: float, k: float, kh: float) -> void:
@@ -797,6 +809,14 @@ func _npc_pose() -> void:
 			t_hand_l = Vector3(-0.12, 0.22 - 0.06 * w, -0.5)
 			t_lean = 0.55
 			pose_rate = 9.0
+		"sleep":
+			# On his back, hands folded on his chest, musket laid on the
+			# ground beside him within reach.
+			t_grip = Vector3(0.4, 0.2, 0.02)
+			t_dir = Vector3(0, 1, 0)
+			t_hand_r = Vector3(0.1, 1.05, -0.16)
+			t_hand_l = Vector3(-0.1, 1.12, -0.16)
+			pose_rate = 8.0
 		"block":
 			# Musket held crosswise high, catching the blow on the stock.
 			t_grip = Vector3(0.32, 1.48, -0.34)

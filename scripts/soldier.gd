@@ -99,6 +99,9 @@ var _clock := 0.0
 var _glance_t := 0.0
 var _glance := 0.0 # radians he's looking off to the side
 var _reprime_left := 0.0
+var asleep := false # on his bedroll in a night camp (see battle._setup_camp)
+var wake_in := 0.0 # seconds until he wakes; noise, a lizard close by or a blow cut it short
+var _groggy := 0.0 # getting up off the ground: can't move or fight yet
 var blocking := false # musket up, catching a hack on the stock
 
 
@@ -153,6 +156,16 @@ func _physics_process(delta: float) -> void:
 	if not alive:
 		return
 	_clock += delta
+	if asleep:
+		_sleep(delta)
+		return
+	if _groggy > 0.0:
+		# Throwing off the blanket, grabbing the musket, on his feet.
+		_groggy -= delta
+		velocity = Vector3.ZERO
+		set_base_anim("idle")
+		_update_perception()
+		return
 	if battle.victory:
 		_after_victory(delta)
 		return
@@ -363,6 +376,8 @@ func _charge(delta: float) -> bool:
 ## A parry: if he's blocking and the hack comes from in front, steadier men
 ## catch it more often, and the lizardman reels, leaving him open.
 func take_damage(amount: float, from: Node3D = null) -> void:
+	if asleep:
+		wake_in = 0.0 # a blade in the dark is a hard way to wake
 	if blocking and not _shot and alive and from != null and is_instance_valid(from):
 		var to_from := from.global_position - global_position
 		to_from.y = 0.0
@@ -375,6 +390,29 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	if not _shot:
 		amount *= 1.0 - armour
 	super.take_damage(amount, from)
+
+
+## Asleep in camp: flat on his back until the noise reaches him. A lizard
+## within a few steps, or shots and shouting close by, wake him sooner.
+func _sleep(delta: float) -> void:
+	velocity = Vector3.ZERO
+	hit_height = 0.45
+	set_base_anim("sleep")
+	var rate := 1.0
+	if battle.nearest_enemy(global_position, 4.0) != null:
+		rate = 4.0
+	wake_in -= delta * rate
+	if wake_in <= 0.0:
+		wake()
+
+
+func wake() -> void:
+	if not asleep:
+		return
+	asleep = false
+	hit_height = 1.1 if pike else 1.8
+	_groggy = randf_range(0.8, 1.4) / pace
+	set_base_anim("idle")
 
 
 ## Called by the company when you order a volley.

@@ -68,7 +68,16 @@ func _ready() -> void:
 	if "--autotest" in args or "--shots" in args:
 		Settings.third_person = "--tp" in args
 		Settings.stress = "--stress" in args
-		if "--campaign" in args:
+		if "--camp" in args:
+			# A night camp attacked: -- --autotest --camp [--spotted]
+			Company.new_campaign()
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			for m in Company.roster:
+				m["wounded_days"] = 0
+			var fit := Company.fit_men()
+			Company.next_battle = {"enemy": 18, "terrain": 3, "party": -1, "ambush": false, "camp": true,
+				"spotted": "--spotted" in args, "night": true, "watch": [int(fit[0]["id"]), int(fit[1]["id"])]}
+		elif "--campaign" in args:
 			Company.new_campaign()
 		else:
 			Company.active = false

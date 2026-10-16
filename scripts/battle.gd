@@ -56,6 +56,14 @@ var slain := 0
 var _all_men: Array = [] # every soldier who took the field, fallen or not
 var _unplanned := 0 # men without a place in the battle plan (they form the line)
 var ambush := false
+var camp := false # attacked in the night camp: men asleep on bedrolls round the fire
+var spotted := false # ...and the watch saw them coming, so the men are up in time
+var night := false
+const CAMP_FIRE := Vector3(0, 0, 4.6)
+const CAMP_WAGON := Vector3(6.5, 0, 2.5)
+var _fire_light: OmniLight3D
+var _flames: Array = []
+var _fire_t := 0.0
 var wagon: Node3D # the baggage wagon (campaign battles)
 var wagon_looted := 0.0 # share of its stores the lizards have carried off (0..0.8)
 var _porters: Array = []
@@ -101,6 +109,10 @@ func _ready() -> void:
 	_autotest = "--autotest" in OS.get_cmdline_user_args()
 	Music.set_context("battle")
 	prologue = Company.active and Company.prologue
+	var nb: Dictionary = Company.next_battle if Company.active and not prologue else {}
+	camp = bool(nb.get("camp", false))
+	spotted = camp and bool(nb.get("spotted", false))
+	night = camp or bool(nb.get("night", false))
 	_setup_input()
 	# The batcher first: everything that draws a character registers with it.
 	batcher = BatcherScript.new()
@@ -147,11 +159,11 @@ func _ready() -> void:
 			s.frames = soldier_frames
 			soldiers.append(s)
 	_all_men = soldiers.duplicate()
-	ambush = Company.active and not prologue and bool(Company.next_battle.get("ambush", false))
+	ambush = Company.active and not prologue and bool(Company.next_battle.get("ambush", false)) and not camp
 	if Company.active and not prologue:
 		var crew := 0
 		for s in soldiers:
-			if String(s.record.get("tag", "")) == "Wagon":
+			if String(s.record.get("tag", "")) == "Wagon" and not camp: # in camp the wagon is parked
 				s.porter = crew
 				crew += 1
 				continue
@@ -174,6 +186,8 @@ func _ready() -> void:
 				s.position = porter_spot(s.porter)
 	if prologue:
 		_setup_prologue()
+	if camp:
+		_setup_camp()
 
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -185,6 +199,12 @@ func _ready() -> void:
 		state_timer = 11.0
 		say("", "%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs." % [Lore.BEACH, Lore.SHIP], 5.5)
 		say(Lore.COMMANDER, "Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today.", 5.5)
+	elif camp and spotted:
+		hud.show_message("\"Stand to!\" The watch has seen them. Up, and form on me!", 5.0)
+		state_timer = 7.0
+	elif camp:
+		hud.show_message("Screams in the dark: they're in the camp!", 5.0)
+		state_timer = 0.05
 	elif ambush:
 		hud.show_message("AMBUSH! Form on me!", 4.0)
 	elif Company.active and Company.march_note != "":
@@ -408,11 +428,15 @@ func _build_wagon() -> void:
 	wagon = Props.wagon()
 	add_child(wagon)
 	wagon.position = _wagon_target()
+	if camp:
+		wagon.rotation.y = 0.5 # parked for the night, off to one side of the fire
 	if ambush:
 		wagon.position = player.position + Vector3(randf_range(-4, 4), 0, randf_range(2, 6))
 
 
 func _wagon_target() -> Vector3:
+	if camp:
+		return CAMP_WAGON
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var wp: Array = Company.wagon_plan
 	return line_anchor + right * float(wp[0]) + line_forward * float(wp[1])
@@ -754,6 +778,8 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if _fire_light != null:
+		_flicker(delta)
 	if victory:
 		victory_t += delta
 	if Input.is_action_just_pressed("volley"):
@@ -800,6 +826,9 @@ func _start_wave() -> void:
 	game_state = "fighting"
 	_phase_t = 0.0
 	var count: int = waves[wave - 1]
+	if camp and not spotted and wave == 1:
+		_spawn_in_camp(count)
+		return
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var centre := line_anchor + line_forward * SPAWN_DISTANCE
 	for i in count:
@@ -1511,6 +1540,8 @@ func _build_world() -> void:
 	mesh.material_override = ground_mat
 	ground.add_child(mesh)
 
+	if night:
+		_make_night(env, sky_mat, sun)
 	if prologue:
 		env.fog_density = 0.009
 		env.fog_light_color = Color(0.78, 0.8, 0.78)
@@ -1580,3 +1611,161 @@ func _scatter_trees() -> void:
 	var c_inst := MultiMeshInstance3D.new()
 	c_inst.multimesh = crowns
 	add_child(c_inst)
+
+
+
+# ---------------------------------------------------------------- the night camp
+# Attacked where you sleep (map.gd decides whether the watch saw them). The
+# men lie on their bedrolls in a ring round the fire, the wagon parked to one
+# side, the watch out at the edge. Seen in time: the alarm gets everyone up
+# and the lizards come out of the dark from the front. Not seen: they're
+# already among the bedrolls, and each man wakes when the noise (or a blade)
+# reaches him.
+
+func _setup_camp() -> void:
+	_build_campfire(CAMP_FIRE)
+	var watch_ids: Array = Company.next_battle.get("watch", [])
+	var sleepers: Array = []
+	var watch: Array = []
+	for s in soldiers:
+		if s.record != null and int(s.record["id"]) in watch_ids:
+			watch.append(s)
+		else:
+			sleepers.append(s)
+	var n := sleepers.size()
+	for i in n:
+		# Round the fire, leaving the south side (your own bedroll) open.
+		var a := lerpf(-PI * 0.78, PI * 0.78, (i + 0.5) / maxf(1.0, n))
+		var dir := Vector3(sin(a), 0, -cos(a))
+		var r := 3.3 + (1.5 if i % 2 == 1 else 0.0) + randf_range(-0.2, 0.2)
+		var s = sleepers[i]
+		s.position = CAMP_FIRE + dir * r
+		s.facing = -dir # feet to the fire
+		s.asleep = true
+		# The alarm gets men up fast; asleep and unwarned, some sleep on through the first screams.
+		s.wake_in = randf_range(0.3, 2.0) if spotted else randf_range(2.0, 8.0) * (1.25 - 0.5 * s.steadiness)
+		_bedroll(s.position, dir, i)
+	# The watch: out at the edge of the firelight, looking out.
+	for k in watch.size():
+		var w = watch[k]
+		w.position = CAMP_FIRE + Vector3(-3.0 + 6.0 * k, 0, -9.5)
+		w.facing = Vector3.FORWARD
+	# You: on your bedroll on the near side of the fire.
+	_bedroll(player.position, Vector3.BACK, 99)
+	player.asleep_left = 0.4 if spotted else 1.6
+
+
+## Unseen, the warband is already in among the bedrolls when you wake.
+func _spawn_in_camp(count: int) -> void:
+	for i in count:
+		var l = LizardScript.new()
+		l.battle = self
+		l.frames = lizard_frames
+		var a := randf() * TAU
+		var d := randf_range(6.0, 18.0) if i % 3 != 0 else randf_range(18.0, 30.0)
+		var pos := CAMP_FIRE + Vector3(sin(a) * d, 0, -cos(a) * d)
+		l.position = Vector3(pos.x, 0, pos.z)
+		enemies.append(l)
+		add_child(l)
+	if _autotest:
+		print("wave 1 (in the camp) start: soldiers ", soldiers.size())
+
+
+func _bedroll(feet: Vector3, away: Vector3, i: int) -> void:
+	var cols := [Color(0.36, 0.3, 0.22), Color(0.3, 0.33, 0.4), Color(0.42, 0.25, 0.2), Color(0.32, 0.36, 0.26)]
+	var roll := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.78, 0.07, 1.95)
+	roll.mesh = bm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = cols[i % cols.size()]
+	roll.material_override = mat
+	add_child(roll)
+	var c := feet + away * 0.85
+	roll.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(c.x, 0.035, c.z))
+	# His pack for a pillow at the head end.
+	var pack := MeshInstance3D.new()
+	var pm := BoxMesh.new()
+	pm.size = Vector3(0.42, 0.22, 0.28)
+	pack.mesh = pm
+	var pmat := StandardMaterial3D.new()
+	pmat.albedo_color = Color(0.45, 0.36, 0.22)
+	pack.material_override = pmat
+	add_child(pack)
+	var h := feet + away * 1.95
+	pack.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(h.x, 0.11, h.z))
+
+
+func _build_campfire(at: Vector3) -> void:
+	var stone_mat := StandardMaterial3D.new()
+	stone_mat.albedo_color = Color(0.4, 0.4, 0.38)
+	for i in 9:
+		var a := TAU * i / 9.0
+		var st := MeshInstance3D.new()
+		var sm := BoxMesh.new()
+		sm.size = Vector3(0.22, 0.14, 0.18)
+		st.mesh = sm
+		st.material_override = stone_mat
+		add_child(st)
+		st.position = at + Vector3(cos(a) * 0.6, 0.07, sin(a) * 0.6)
+		st.rotation.y = a
+	var log_mat := StandardMaterial3D.new()
+	log_mat.albedo_color = Color(0.25, 0.16, 0.1)
+	for i in 4:
+		var lg := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.06
+		cm.bottom_radius = 0.07
+		cm.height = 0.9
+		lg.mesh = cm
+		lg.material_override = log_mat
+		add_child(lg)
+		lg.position = at + Vector3(0, 0.12, 0)
+		lg.rotation = Vector3(deg_to_rad(70), PI * 0.5 * i + 0.3, 0)
+	for k in 3:
+		var fl := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.0
+		cone.bottom_radius = 0.22 - 0.05 * k
+		cone.height = 0.75 - 0.15 * k
+		cone.radial_segments = 6
+		fl.mesh = cone
+		var fm := StandardMaterial3D.new()
+		fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		fm.albedo_color = [Color(1.0, 0.45, 0.1), Color(1.0, 0.7, 0.2), Color(1.0, 0.92, 0.55)][k]
+		fl.material_override = fm
+		add_child(fl)
+		fl.position = at + Vector3(0.06 * (k - 1), 0.2 + cone.height * 0.5, 0.04 * k)
+		_flames.append(fl)
+	_fire_light = OmniLight3D.new()
+	_fire_light.light_color = Color(1.0, 0.62, 0.3)
+	_fire_light.light_energy = 3.0
+	_fire_light.omni_range = 17.0
+	_fire_light.omni_attenuation = 1.3
+	_fire_light.position = at + Vector3(0, 0.9, 0)
+	add_child(_fire_light)
+
+
+func _flicker(delta: float) -> void:
+	_fire_t += delta
+	var f := sin(_fire_t * 13.0) * 0.5 + sin(_fire_t * 7.3 + 1.0) * 0.3 + sin(_fire_t * 23.0) * 0.2
+	_fire_light.light_energy = 3.0 + 0.6 * f
+	for k in _flames.size():
+		var fl: MeshInstance3D = _flames[k]
+		var g := 1.0 + 0.18 * sin(_fire_t * (11.0 + 4.0 * k) + k)
+		fl.scale = Vector3(1.0 / sqrt(g), g, 1.0 / sqrt(g))
+		fl.rotation.y = _fire_t * (0.8 + 0.4 * k)
+
+
+## Night: a dark sky, a low blue moon, dark fog. Firelight and muzzle flashes do the rest.
+func _make_night(env: Environment, sky_mat: ProceduralSkyMaterial, sun: DirectionalLight3D) -> void:
+	sky_mat.sky_top_color = Color(0.02, 0.03, 0.07)
+	sky_mat.sky_horizon_color = Color(0.07, 0.08, 0.13)
+	sky_mat.ground_horizon_color = Color(0.05, 0.05, 0.07)
+	sky_mat.ground_bottom_color = Color(0.02, 0.02, 0.03)
+	env.ambient_light_energy = 0.5 # dark, but a phone screen must still show a lizard at 20 m
+	env.fog_light_color = Color(0.05, 0.06, 0.1)
+	env.fog_density = maxf(env.fog_density, 0.02)
+	sun.rotation_degrees = Vector3(-38, -40, 0)
+	sun.light_color = Color(0.55, 0.65, 1.0)
+	sun.light_energy = 0.42
