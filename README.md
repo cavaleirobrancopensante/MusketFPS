@@ -42,6 +42,7 @@ lizardmen charging from the distance (8, 14, then 20).
 | **VOLLEY!** | Every loaded man in the company fires at once |
 | **FOLLOW** | The line moves with you and wheels when you turn more than 40° |
 | **HOLD** | The line forms where you are, facing where you look, and stays put |
+| **CHARGE** | Break ranks: every man picks his own fight, fires if he has a shot, and falls back to you when badly wounded. With no enemies left they regroup on you. |
 | **ON COMMAND / AT WILL** | Toggle whether your men wait for your volley order or fire on their own |
 | **MENU** | Back to the main menu |
 | **1ST / 3RD PERSON** | 3D only: switch camera |
@@ -67,10 +68,16 @@ lizardman back and cancels his attack.
 Lizardmen telegraph their hacks: they **rear up, cleaver high, and glow
 orange** for half a second. Hit them first, step back, or hold BLOCK.
 
+They also carry **shields**. Wind up a blow close in front of one and he may
+bring his shield up (you'll see it, and "SHIELD!" if you hit it); while it's
+up he blocks frontal blows and won't attack. A blow charged to 70% or more
+smashes through the guard and sends him reeling. Shields don't stop musket
+balls.
+
 Keyboard for testing on a PC: WASD move, mouse-drag on the right half to look,
 Space fire (in melee: hold to wind up, release to strike), arrow keys pick the
 blow, right mouse button or Z aim, Q fix/unfix bayonet, E block, V switch view (3D), F volley, 1 follow,
-2 hold, 3 toggle fire mode.
+2 hold, 3 toggle fire mode, 4 charge.
 
 ### Your men are not robots
 
@@ -81,6 +88,12 @@ Volleys come out as a ragged ripple as each man presents and takes aim. Shaky
 men fire sooner when firing at will, steady men wait and hit more. Muskets
 occasionally misfire (a flash in the pan) and must be re-primed. Standing men
 glance along the line, and nobody walks or rams in step.
+
+In close combat they fight to survive: when a lizardman rears up at a man he
+raises his musket to parry and steps back (steadier men parry more often), he
+keeps a bayonet's length of distance, and he thrusts when the enemy is open,
+straight after a parry or while it reels. In FOLLOW and HOLD they give ground
+only a couple of metres before standing; under CHARGE they press the attack.
 
 ### Animations
 

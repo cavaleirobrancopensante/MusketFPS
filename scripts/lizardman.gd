@@ -6,13 +6,22 @@ extends "res://scripts/unit.gd"
 ## so you can read it: block, step back, or hit it first. Hitting a lizardman
 ## staggers it, knocks it back and cancels its swing.
 ##
-## Animations: idle, walk, windup, strike, stagger.
+## They carry shields. When you wind up a blow close in front of one, he may
+## bring his shield up (you'll see it); while it's up he blocks frontal blows
+## and won't attack. A fully charged blow smashes through the guard. Now and
+## then he snaps the shield up just in time against a soldier's thrust too.
+## Shields don't stop musket balls.
+##
+## Animations: idle, walk, windup, strike, stagger, shield.
 
 const ATTACK_RANGE := 1.7
 const ATTACK_DAMAGE := 22.0
 const ATTACK_COOLDOWN := 1.0
 const WINDUP_TIME := 0.5
 const WINDUP_TINT := Color(1.0, 0.55, 0.25)
+const SHIELD_REACT_CHANCE := 0.45 # raises the shield against your wind-up
+const SHIELD_SNAP_CHANCE := 0.22 # catches an unannounced thrust anyway
+const SHIELD_TIME := 1.1
 
 var speed := 4.6
 var target: Node3D = null
@@ -22,6 +31,8 @@ var windup := -1.0 # >= 0 while rearing up for a hack
 var stagger_time := 0.0
 var knockback := Vector3.ZERO
 var _roar_t := 0.0
+var shield_up := 0.0 # seconds the shield stays raised
+var _read_windup := false # already reacted to the player's current wind-up
 
 
 func _ready() -> void:
@@ -44,6 +55,8 @@ func _physics_process(delta: float) -> void:
 		_roar_t = randf_range(5.0, 12.0)
 		battle.play_sound("roar", global_position + Vector3.UP * 1.6, -6.0)
 
+	_watch_player()
+
 	# Staggered: slide back from the blow, can't act.
 	if stagger_time > 0.0:
 		stagger_time -= delta
@@ -58,6 +71,18 @@ func _physics_process(delta: float) -> void:
 		if windup < 0.0: # don't switch targets mid-swing
 			target = battle.nearest_friendly(global_position)
 	var push: Vector3 = battle.separation(self, battle.enemies, 1.1)
+
+	# Behind the shield: face the threat and hold.
+	if shield_up > 0.0:
+		shield_up -= delta
+		var p: Node3D = battle.player
+		face_toward(p.global_position - global_position)
+		set_base_anim("shield")
+		velocity = push * 2.0
+		velocity.y = 0.0
+		move_and_slide()
+		return
+
 	if not is_valid_target(target):
 		_cancel_windup()
 		velocity = push * 2.0
@@ -111,11 +136,62 @@ func _cancel_windup() -> void:
 		set_tint(Color.WHITE)
 
 
+## If you wind up a blow close in front of him, he may raise his shield.
+func _watch_player() -> void:
+	var p = battle.player
+	var winding: bool = p.alive and p.weapon == "melee" and p.swing_phase == "windup"
+	if not winding:
+		_read_windup = false
+		return
+	if _read_windup or windup >= 0.0 or stagger_time > 0.0:
+		return
+	var to_me: Vector3 = global_position - p.global_position
+	to_me.y = 0.0
+	var p_fwd: Vector3 = -p.global_transform.basis.z
+	p_fwd.y = 0.0
+	if to_me.length() < 3.2 and p_fwd.normalized().dot(to_me.normalized()) > 0.6:
+		_read_windup = true # one decision per wind-up
+		if randf() < SHIELD_REACT_CHANCE:
+			raise_shield(SHIELD_TIME)
+
+
+func raise_shield(seconds: float) -> void:
+	_cancel_windup()
+	shield_up = maxf(shield_up, seconds)
+
+
+## A melee blow aimed at him. Returns "hit", "blocked" (on the shield) or
+## "broken" (a heavy blow that smashes through his guard).
+func receive_blow(damage: float, from: Node3D, heavy: bool) -> String:
+	if not alive:
+		return "hit"
+	var to_from := from.global_position - global_position
+	to_from.y = 0.0
+	var frontal := facing.dot(to_from.normalized()) > 0.3
+	var push := -to_from.normalized()
+	if frontal and shield_up > 0.0:
+		if heavy:
+			shield_up = 0.0
+			battle.play_sound("clang", global_position + Vector3.UP * 1.3, -2.0)
+			take_damage(damage * 0.5, from)
+			stagger(push * 4.5, 0.9)
+			return "broken"
+		battle.play_sound("clang", global_position + Vector3.UP * 1.3, -3.0)
+		return "blocked"
+	if frontal and windup < 0.0 and stagger_time <= 0.0 and randf() < SHIELD_SNAP_CHANCE:
+		raise_shield(0.45)
+		battle.play_sound("clang", global_position + Vector3.UP * 1.3, -3.0)
+		return "blocked"
+	take_damage(damage, from)
+	return "hit"
+
+
 ## Knocked back by a blow (or a parried hack). `push` is a horizontal velocity.
 func stagger(push: Vector3, seconds: float) -> void:
 	if not alive:
 		return
 	_cancel_windup()
+	shield_up = 0.0
 	stagger_time = maxf(stagger_time, seconds)
 	knockback = push
 	attack_timer = maxf(attack_timer, 0.3)

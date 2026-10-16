@@ -17,7 +17,7 @@ const W := 64
 const H := 64
 
 const SOLDIER_ANIMS := {"idle": 1, "walk": 4, "aim": 1, "fire": 1, "reload": 2, "guard": 1, "thrust": 1}
-const LIZARD_ANIMS := {"idle": 1, "walk": 4, "windup": 1, "strike": 1, "stagger": 1}
+const LIZARD_ANIMS := {"idle": 1, "walk": 4, "windup": 1, "strike": 1, "stagger": 1, "shield": 1}
 const VIEWS := ["front", "side", "back"]
 
 # Soldier palette.
@@ -119,6 +119,20 @@ static func _line(img: Image, x0: int, y0: int, x1: int, y1: int, c: Color, th: 
 		var x := roundi(lerpf(x0, x1, t))
 		var y := roundi(lerpf(y0, y1, t))
 		_px(img, x, y, th, th, c)
+
+
+## Round wooden shield with an iron rim and boss.
+static func _shield(img: Image, cx: int, cy: int, r: int) -> void:
+	_disc(img, cx, cy, r, STEEL)
+	_disc(img, cx, cy, r - 1, WOOD)
+	_px(img, cx - r + 2, cy - 1, 2 * r - 3, 1, Color(0.32, 0.2, 0.09)) # plank seam
+	_disc(img, cx, cy, maxi(1, r / 4), BRIGHT)
+
+
+## A shield seen edge-on (side view): a tall thin oval.
+static func _shield_edge(img: Image, x: int, y: int, h: int) -> void:
+	_px(img, x, y + 2, 3, h - 4, WOOD)
+	_px(img, x + 1, y, 1, h, STEEL)
 
 
 static func _flash(img: Image, x: int, y: int) -> void:
@@ -377,6 +391,19 @@ static func _lizard_front(img: Image, anim: String, leg: int) -> void:
 			_px(img, x0 + 39, 14, 6, 15, HIDE)
 			_cleaver(img, x0 + 44, 6, x0 + 42, 0, 8, 7)
 			_lizard_head_front(img, x0, dy, 4)
+			_shield(img, x0 + 5, 20, 7)
+		"shield":
+			# Shield brought up across the chest, cleaver held back ready.
+			_px(img, x0 + 35, 20, 6, 14, HIDE)
+			_cleaver(img, x0 + 41, 24, x0 + 39, 14, 8, 11)
+			_lizard_head_front(img, x0, 0, 1)
+			_shield(img, x0 + 20, 27, 11)
+	if anim in ["idle", "walk"]:
+		_shield(img, x0 + 9, 32 + leg * 2, 7)
+	elif anim == "windup":
+		_shield(img, x0 + 9, 9, 6)
+	elif anim == "strike":
+		_shield(img, x0 + 10, 33, 7)
 
 
 static func _lizard_side(img: Image, anim: String, leg: int) -> void:
@@ -420,6 +447,12 @@ static func _lizard_side(img: Image, anim: String, leg: int) -> void:
 		"stagger":
 			_px(img, 30, 14, 4, 14, HIDE_DARK)
 			_cleaver(img, 28, 6, 24, 2, 8, 6)
+		"shield":
+			_px(img, 34, 24, 4, 12, HIDE_DARK)
+			_cleaver(img, 30, 28, 24, 30, 7, 8)
+			_shield_edge(img, 50, 12, 26) # raised in front of the snout
+	if anim != "shield":
+		_shield_edge(img, 41, 25, 16) # on the far arm
 
 
 static func _lizard_back(img: Image, anim: String, leg: int) -> void:
@@ -442,9 +475,13 @@ static func _lizard_back(img: Image, anim: String, leg: int) -> void:
 			_px(img, x0 + 7, 6, 6, 18, HIDE)
 			_px(img, x0 + 35, 6, 6, 18, HIDE)
 			_cleaver(img, x0 + 8, 0, x0 + 0, 0, 8, 7)
-		"strike":
+		"strike", "shield":
 			_px(img, x0 + 9, 22, 5, 7, HIDE)
 			_px(img, x0 + 34, 22, 5, 7, HIDE)
+	if anim == "shield":
+		_px(img, x0 + 12, 16, 24, 3, WOOD) # shield rim showing over the shoulders
+	else:
+		_shield(img, x0 + 40, 32, 7) # back of the shield on his other arm
 	# Thick tail hanging toward the viewer, drawn last (closest).
 	_px(img, x0 + 19, 40, 10, 10, HIDE)
 	_px(img, x0 + 21, 50, 6, 8, HIDE)

@@ -27,7 +27,7 @@ const THRUST := 3
 const POSE_MUSKET := [Vector2(0.71, 0.82), -2.34, 1.0]
 ## Aiming down the sights: musket straight up the middle of the screen,
 ## drawn larger (closer), muzzle and front sight just under the crosshair.
-const POSE_AIM := [Vector2(0.5, 1.07), -PI * 0.5, 1.6]
+const POSE_AIM := [Vector2(0.5, 1.0), -PI * 0.5, 1.6]
 const POSE_MELEE_IDLE := [Vector2(0.70, 0.88), -2.25, 1.0]
 const POSE_BLOCK := [Vector2(0.55, 0.80), -3.05, 1.0]
 ## Musket upright in front of you, muzzle up: reloading and fixing the bayonet.
@@ -100,6 +100,7 @@ func _ready() -> void:
 	player.hurt.connect(_on_hurt)
 	player.melee_hit.connect(_on_melee_hit)
 	player.blocked.connect(_on_blocked)
+	player.struck_shield.connect(_on_struck_shield)
 
 
 func show_message(text: String, seconds: float) -> void:
@@ -125,6 +126,13 @@ func _on_melee_hit(count: int) -> void:
 
 func _on_blocked() -> void:
 	block_flash = 0.5
+
+
+var shield_flash := 0.0
+
+
+func _on_struck_shield() -> void:
+	shield_flash = 0.6
 
 
 func _on_hurt() -> void:
@@ -156,12 +164,13 @@ func _buttons() -> Array:
 	list.append({"id": "weapon", "circle": true, "pos": Vector2(s.x - 58, s.y - 330), "r": 46.0,
 		"label": "MUSKET" if _melee() else "BAYONET"})
 	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": "VOLLEY!"})
-	var bw := 160.0
+	var bw := 150.0
 	var bh := 56.0
 	var y := 18.0
 	var mode_label := "AT WILL" if battle.is_at_will() else "ON COMMAND"
-	list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": "FOLLOW"})
-	list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": "HOLD"})
+	list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 4 * (bw + 10), y, bw, bh), "label": "FOLLOW"})
+	list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": "HOLD"})
+	list.append({"id": "charge", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": "CHARGE"})
 	list.append({"id": "mode", "circle": false, "rect": Rect2(s.x - (bw + 10), y, bw, bh), "label": mode_label})
 	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": "MENU"})
 	if Settings.use_3d:
@@ -260,6 +269,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			battle.order_follow()
 		"hold":
 			battle.order_hold()
+		"charge":
+			battle.order_charge()
 		"mode":
 			battle.toggle_fire_mode()
 		"restart":
@@ -283,6 +294,7 @@ func _process(delta: float) -> void:
 	hurt_flash = move_toward(hurt_flash, 0.0, delta * 2.5)
 	hit_marker = move_toward(hit_marker, 0.0, delta)
 	block_flash = move_toward(block_flash, 0.0, delta)
+	shield_flash = move_toward(shield_flash, 0.0, delta)
 	_update_pose(delta)
 	_update_body(delta)
 	queue_redraw()
@@ -385,6 +397,8 @@ func _draw() -> void:
 	_draw_swing_indicator(c)
 	if block_flash > 0.0:
 		_text_center("BLOCKED", c + Vector2(0, 60), 30, Color(0.95, 0.78, 0.3, block_flash * 2.0))
+	if shield_flash > 0.0:
+		_text_center("SHIELD! charge your blow", c + Vector2(0, 60), 26, Color(0.85, 0.85, 0.9, shield_flash * 1.8))
 
 	if hurt_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, 0.35 * hurt_flash))
@@ -506,6 +520,8 @@ func _hand_positions(p: Dictionary) -> Array:
 	var dir: Vector2 = p["dir"]
 	var u: float = p["u"]
 	var forward := 130.0 if not _melee() else 120.0
+	if not _melee() and player.aim_amount > 0.5:
+		forward = 55.0 # left hand low on the stock, barrel top clear
 	var right := grip - dir * 30.0 * u
 	if player.is_switching():
 		var path: Array = FIX_PATH if player.switch_target == "melee" else UNFIX_PATH
@@ -671,7 +687,8 @@ func _draw_button(b: Dictionary) -> void:
 	var edge := Color(1, 1, 1, 0.7)
 	var label_col := Color(1, 1, 1, 0.95)
 	var active: bool = (id == "follow" and battle.is_following()) \
-		or (id == "hold" and not battle.is_following()) \
+		or (id == "hold" and battle.is_holding()) \
+		or (id == "charge" and battle.is_charging()) \
 		or (id == "block" and player.blocking) \
 		or (id == "aim" and player.aim_wanted)
 	if active:
