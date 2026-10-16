@@ -398,6 +398,30 @@ Space fire (in melee: hold to wind up, release to strike), arrow keys pick the
 blow, right mouse button or Z aim, Q fix/unfix bayonet, G grenade, E block, V switch view, F volley, 1 follow,
 2 hold, 3 toggle fire mode, 4 charge.
 
+### Your weapons: musket, bayonet, pistol, sabre
+
+A row of small buttons along the very bottom of the battle screen switches
+weapons: **MUSKET**, **BAYONET** (fixed on the musket), and, as an officer,
+your **PISTOL** and **SABRE** (both on your character sheet's kit; take one
+off and its button goes). Drawing the pistol from your sash or the sabre
+from its scabbard slings the musket across your back; the button of the
+weapon in hand is gold, and an unloaded gun's button fills as it reloads.
+
+- **The musket reload** is a full drill: bite the cartridge, prime the pan
+  and shut it, stand the musket up and pour, ram three times, return the
+  rod, bring it up and cock the hammer. About 5.5 seconds for you (your
+  Marksmanship and a rifle change that), two seconds longer for your men
+  than before. In exchange **a ball goes through**: it can pass through two
+  bodies and hit a third, losing speed and punch each time, so a volley
+  into a packed rank does real damage (and a careless one hits the men
+  behind your target too).
+- **The pistol:** one quick shot, wild beyond close range, through one body
+  at most; it only reloads while in your hand, from the same cartridge box.
+- **The sabre:** the same four directional cuts and block as the bayonet,
+  but quicker (about 30% faster to strike and recover), a little shorter,
+  and made for cutting: the thrust is weaker. Its damage follows your
+  Strength and Bladework.
+
 ### Real projectiles
 
 Every musket ball is a real projectile: it leaves the muzzle at about 330 m/s,

@@ -55,7 +55,8 @@ const SKILLS := {
 const SKILL_ORDER := ["marksmanship", "bladework", "leadership", "tactics", "surgery", "logistics",
 	"pathfinding", "trade", "training", "tongues"]
 
-const OFFICER_GEAR := {"head": "bicorne", "torso": "officer_coat", "primary": "musket", "secondary": "bayonet"}
+const OFFICER_GEAR := {"head": "bicorne", "torso": "officer_coat", "primary": "musket", "secondary": "bayonet",
+	"pistol": "pistol", "sword": "saber"}
 
 
 static func blank() -> Dictionary:
@@ -172,6 +173,13 @@ static func melee_mult() -> float:
 	# Your swings are balanced for a socket bayonet (34): a sword bayonet hits harder, a bare musket butt less.
 	var weapon := float(g["melee"]) / 34.0
 	return (1.0 + 0.04 * (attr("strength") - 5)) * (1.0 + 0.05 * skill("bladework")) * weapon
+
+
+## Your sword: balanced like the bayonet swings (34), then your Strength and Bladework.
+static func saber_mult() -> float:
+	var id := String(o().get("gear", {}).get("sword", ""))
+	var base := float(Company.ITEMS.get(id, {}).get("melee", 34.0)) / 34.0
+	return (1.0 + 0.04 * (attr("strength") - 5)) * (1.0 + 0.05 * skill("bladework")) * base
 
 
 static func block_arc() -> float:

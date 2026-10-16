@@ -278,7 +278,7 @@ func _build_middle() -> Control:
 	kit.add_theme_constant_override("h_separation", 8)
 	kit.add_theme_constant_override("v_separation", 8)
 	v.add_child(kit)
-	for slot in Company.SLOTS:
+	for slot in Company.OFFICER_SLOTS:
 		var b := Button.new()
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.add_theme_font_size_override("font_size", 15)
@@ -414,7 +414,7 @@ func _refresh() -> void:
 	var spts := int(o["skill_points"])
 	_skill_pts.text = "%d point%s to spend" % [spts, "" if spts == 1 else "s"] if spts > 0 else ""
 	var gear: Dictionary = o["gear"]
-	for slot in Company.SLOTS:
+	for slot in Company.OFFICER_SLOTS:
 		var id := String(gear.get(slot, ""))
 		(_cards[slot] as Button).text = "%s\n%s\n%s" % [String(Company.SLOT_NAMES[slot]).to_upper(),
 			Company.item_name(id), _effect(id, slot)]
@@ -530,7 +530,7 @@ func _open_picker(slot: String) -> void:
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.custom_minimum_size = Vector2(0, 76)
 		_picker_list.add_child(b)
-	if current != "" and slot in ["head", "secondary"]:
+	if current != "" and slot in ["head", "secondary", "pistol", "sword"]:
 		_picker_list.add_child(_button("Take it off (back to the wagon)", 18, _on_pick.bind("")))
 	if not any:
 		_picker_list.add_child(_label("Nothing spare for this slot in the wagon.", 18, DIM))

@@ -198,7 +198,7 @@ func _cancel_windup() -> void:
 ## If you wind up a blow close in front of him, he may raise his shield.
 func _watch_player() -> void:
 	var p = battle.player
-	var winding: bool = p.alive and p.weapon == "melee" and p.swing_phase == "windup"
+	var winding: bool = p.alive and p.is_melee() and p.swing_phase == "windup"
 	if not winding:
 		_read_windup = false
 		return

@@ -12,8 +12,12 @@ extends Node3D
 ## a look). `shield_stops` lets a raised lizard shield catch it.
 
 const KINDS := {
+	# A .75 ball goes through a man and on into the next: up to three bodies,
+	# losing speed and punch with each (see "pass_keep").
 	"ball": {"gravity": 9.8, "drag": 0.35, "life": 2.5, "damage": 100.0, "player_damage": 55.0,
-		"shield_stops": false, "tracer": true},
+		"shield_stops": false, "tracer": true, "pierce": 2, "pass_keep": 0.65},
+	"pistol": {"gravity": 9.8, "drag": 0.6, "life": 1.6, "damage": 80.0, "player_damage": 40.0,
+		"shield_stops": false, "tracer": true, "pierce": 1, "pass_keep": 0.55},
 	"grenade": {"gravity": 9.8, "drag": 0.05, "life": 10.0, "fuse": 2.6, "bounce": 0.35,
 		"blast_radius": 5.0, "kill_radius": 2.2},
 	# Field guns: a solid iron ball that ploughs through ranks and bounces on,
@@ -156,10 +160,12 @@ func _step(p: Dictionary, delta: float) -> bool:
 	if not hit.is_empty():
 		_impact_unit(p, k, hit["unit"], prev.lerp(pos, float(hit["t"])))
 		# Round shot ploughs on through the ranks behind.
-		if int(k.get("pierce", 0)) > done.size():
+		if int(k.get("pierce", 0)) > done.size() and hit["unit"] != battle.player:
 			done.append(hit["unit"])
 			p["hit_list"] = done
-			p["vel"] = vel * 0.8
+			var keep := float(k.get("pass_keep", 0.8))
+			p["vel"] = vel * keep
+			p["dmg_mult"] = float(p.get("dmg_mult", 1.0)) * keep
 			return true
 		_spent(p, false)
 		return false
@@ -289,6 +295,7 @@ func _impact_unit(p: Dictionary, k: Dictionary, u: Node3D, at: Vector3) -> void:
 	var dmg := float(k["damage"])
 	if u == battle.player:
 		dmg = float(k.get("player_damage", dmg))
+	dmg *= float(p.get("dmg_mult", 1.0))
 	u.take_shot(dmg, shooter)
 	battle.spawn_puff(at, Color(0.5, 0.08, 0.06), 0.3)
 	if shooter != null and is_instance_valid(shooter) and shooter.has_method("on_projectile_hit"):

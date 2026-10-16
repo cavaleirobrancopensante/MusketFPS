@@ -33,9 +33,37 @@ const STRIKE := {
 	3: [Vector3(0.1, 1.42, -0.62), Vector3(0, 0.02, -1)],
 }
 
-const RELOAD_PATH := [[0.0, "A"], [0.08, "A"], [0.16, "B"], [0.24, "B"], [0.32, "C"],
-	[0.38, "D"], [0.46, "E"], [0.52, "D"], [0.58, "E"], [0.64, "D"], [0.70, "E"],
-	[0.76, "D"], [0.84, "B"], [0.92, "A"], [1.0, "A"]]
+## The musket reload, step by step (fractions of the whole):
+## bite the cartridge (M, at your mouth), prime the pan and shut it (L, the
+## lock, musket held low across you), stand it up and pour (C), ram three
+## times (D-E), return the rod (B), bring it up and cock the hammer (L).
+const RELOAD_PATH := [[0.0, "A"], [0.06, "A"], [0.11, "M"], [0.16, "M"], [0.21, "L"], [0.27, "L"],
+	[0.31, "B"], [0.35, "C"], [0.41, "C"], [0.46, "D"], [0.50, "E"], [0.54, "D"], [0.58, "E"],
+	[0.62, "D"], [0.66, "E"], [0.71, "D"], [0.79, "B"], [0.86, "A"], [0.90, "L"], [0.95, "L"], [1.0, "A"]]
+## Musket held low across the body to prime the pan.
+const PRIME := [Vector3(0.1, 1.05, -0.42), Vector3(-0.3, 0.22, -1)]
+
+# The pistol: held out at the ready, arm straight to aim, muzzle up to load.
+const P_READY := [Vector3(0.21, 1.36, -0.5), Vector3(-0.05, 0.14, -1)]
+const P_AIM := [Vector3(0.1, 1.47, -0.74), Vector3(-0.04, 0.04, -1)]
+const P_LOAD := [Vector3(0.1, 1.12, -0.32), Vector3(-0.05, 1, -0.25)]
+const P_HOLSTER := Vector3(0.12, 1.02, -0.17)
+# The sabre: guard, a high parry, and one-handed cuts from each side.
+const S_IDLE := [Vector3(0.27, 1.3, -0.44), Vector3(0.12, 0.9, -0.55)]
+const S_BLOCK := [Vector3(0.22, 1.58, -0.4), Vector3(-1, 0.28, -0.1)]
+const S_HILT := Vector3(-0.25, 1.02, -0.06)
+const S_WINDUP := {
+	0: [Vector3(0.16, 1.82, -0.05), Vector3(0, 0.55, 0.8)],
+	1: [Vector3(-0.32, 1.55, -0.22), Vector3(-0.9, 0.45, 0.25)],
+	2: [Vector3(0.5, 1.58, -0.12), Vector3(0.9, 0.5, 0.2)],
+	3: [Vector3(0.22, 1.3, 0.02), Vector3(0, 0.05, -1)],
+}
+const S_STRIKE := {
+	0: [Vector3(0.1, 1.15, -0.55), Vector3(0, -0.55, -1)],
+	1: [Vector3(0.4, 1.28, -0.38), Vector3(0.9, -0.1, -0.45)],
+	2: [Vector3(-0.32, 1.28, -0.42), Vector3(-0.9, -0.1, -0.45)],
+	3: [Vector3(0.12, 1.4, -0.72), Vector3(0, 0, -1)],
+}
 const FIX_PATH := [[0.0, "A"], [0.1, "A"], [0.3, "H"], [0.55, "F"], [0.72, "E"], [0.85, "E"], [1.0, "A"]]
 const UNFIX_PATH := [[0.0, "A"], [0.2, "E"], [0.4, "F"], [0.7, "H"], [1.0, "A"]]
 
@@ -72,6 +100,7 @@ func _pose() -> void:
 	rig.ramrod_on = false
 	rig.bayonet_in_hand = false
 	rig.t_lean = 0.0
+	rig.hand_item = player.weapon if player.weapon in ["pistol", "saber"] else ""
 
 	if player.is_throwing():
 		# Musket dropped to the left hand; the right hand winds back over the
@@ -89,6 +118,10 @@ func _pose() -> void:
 		else:
 			rig.t_hand_r = out.lerp(rest, smoothstep(0.7, 1.0, tp))
 		rig.pose_rate = 30.0
+		return
+
+	if player.is_switching() and (player.switch_target in ["pistol", "saber"] or player.switch_from in ["pistol", "saber"]):
+		_draw_pose(player.switch_progress())
 		return
 
 	if player.is_switching():
@@ -128,12 +161,21 @@ func _pose() -> void:
 		if rp < 0.04:
 			# Recoil kick right after the shot.
 			_apply_pose([READY[0] + Vector3(0, 0.04, 0.1), READY[1] + Vector3(0, 0.15, 0)], 30.0)
-		elif rp < 0.9:
+		elif rp < 0.29:
+			_apply_pose(PRIME, 8.0)
+		elif rp < 0.84:
 			_apply_pose(UPRIGHT, 8.0)
 		else:
 			_apply_pose(READY, 8.0)
 		rig.t_hand_r = _follow(RELOAD_PATH, rp)
-		rig.ramrod_on = rp > 0.34 and rp < 0.77
+		rig.ramrod_on = rp > 0.42 and rp < 0.78
+		return
+
+	if player.weapon == "pistol":
+		_pistol_pose()
+		return
+	if player.weapon == "saber":
+		_saber_pose()
 		return
 
 	rig.bayonet_on = true
@@ -150,6 +192,82 @@ func _pose() -> void:
 			_apply_pose(BLOCK if player.blocking else MELEE_IDLE, 20.0 if player.blocking else 14.0)
 
 
+## Drawing or putting away a sidearm: the hand goes to the sash or the
+## scabbard (or over the shoulder for the musket), and comes back with the
+## new weapon. The item swaps hands at the halfway point.
+func _draw_pose(sp: float) -> void:
+	var from: String = player.switch_from
+	var to: String = player.switch_target
+	var first := sp < 0.5
+	var item := from if first else to
+	rig.hand_item = item if item in ["pistol", "saber"] else ""
+	rig.bayonet_on = item == "melee"
+	var stash := func(w: String) -> Vector3:
+		match w:
+			"pistol": return P_HOLSTER
+			"saber": return S_HILT
+		return Vector3(0.22, 1.5, 0.12) # over the shoulder for the musket
+	var ready := func(w: String) -> Array:
+		match w:
+			"pistol": return P_READY
+			"saber": return S_IDLE
+			"melee": return MELEE_IDLE
+		return READY
+	var k: float = smoothstep(0.0, 0.5, sp) if first else smoothstep(0.5, 1.0, sp)
+	if first:
+		var r: Array = ready.call(from)
+		var pos: Vector3 = (r[0] as Vector3).lerp(stash.call(from), k)
+		_apply_pose([pos, (r[1] as Vector3).lerp(Vector3(0, -1, 0.2), k * 0.8)], 30.0)
+	else:
+		var r2: Array = ready.call(to)
+		var pos2: Vector3 = (stash.call(to) as Vector3).lerp(r2[0], k)
+		_apply_pose([pos2, Vector3(0, 1, 0.2).lerp(r2[1], k)], 30.0)
+	rig.t_hand_r = null
+	if rig.hand_item == "":
+		# Musket coming off (or going over) the shoulder: both hands on it.
+		rig.t_hand_l = null
+
+
+func _pistol_pose() -> void:
+	if player.pistol_loaded:
+		var a: float = player.aim_amount
+		var k := a * a * (3.0 - 2.0 * a)
+		_apply_pose([(P_READY[0] as Vector3).lerp(P_AIM[0], k), (P_READY[1] as Vector3).lerp(P_AIM[1], k)], 30.0)
+		return
+	var rp: float = player.pistol_reload_progress()
+	if rp < 0.06:
+		_apply_pose([P_READY[0] + Vector3(0, 0.08, 0.08), P_READY[1] + Vector3(0, 0.6, 0)], 30.0)
+		return
+	if rp > 0.88:
+		_apply_pose(P_READY, 10.0)
+		# Thumb back the hammer.
+		rig.t_hand_l = (P_READY[0] as Vector3) + Vector3(0.02, 0.05, 0.02)
+		return
+	_apply_pose(P_LOAD, 9.0)
+	var muzzle: Vector3 = (P_LOAD[0] as Vector3) + (P_LOAD[1] as Vector3).normalized() * 0.3
+	if rp < 0.3:
+		rig.t_hand_l = Vector3(0.0, 1.46, -0.3) # biting the cartridge
+	elif rp < 0.45:
+		rig.t_hand_l = muzzle + Vector3(0, 0.05, 0) # pouring
+	else:
+		var ram := absf(sin((rp - 0.45) * 30.0))
+		rig.t_hand_l = muzzle + Vector3(0, 0.03 + 0.12 * ram, 0)
+
+
+func _saber_pose() -> void:
+	var dir: int = player.swing_dir
+	match player.swing_phase:
+		"windup":
+			_apply_pose(S_WINDUP[dir if dir >= 0 else 3], 12.0)
+		"strike":
+			_apply_pose(S_STRIKE[dir], 46.0)
+			rig.t_lean = 0.14
+		"recover":
+			_apply_pose(S_STRIKE[dir] if player.phase_time < 0.05 else S_IDLE, 14.0)
+		_:
+			_apply_pose(S_BLOCK if player.blocking else S_IDLE, 22.0 if player.blocking else 14.0)
+
+
 ## Right-hand waypoints relative to the current target pose.
 func _waypoints() -> Dictionary:
 	var grip: Vector3 = rig.t_grip
@@ -163,6 +281,8 @@ func _waypoints() -> Dictionary:
 		"E": muzzle + d * 0.06,
 		"F": muzzle + d * 0.32 + Vector3(0.04, 0, 0),
 		"H": Vector3(0.28, 0.95, 0.05),
+		"M": Vector3(0.03, 1.56, -0.17), # at your mouth: biting the cartridge
+		"L": grip + d * 0.02 + Vector3(0.05, 0.05, 0.0), # at the lock: the pan, the hammer
 	}
 
 

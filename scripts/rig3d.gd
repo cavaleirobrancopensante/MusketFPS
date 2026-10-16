@@ -83,6 +83,11 @@ var aim_pitch := 0.0 # manual only: upper body follows the camera's pitch
 var pitch_pivot := Vector3(0.1, 1.45, 0.0) # what the upper body tilts around
 var pose_rate := 14.0
 var bayonet_on := true
+# The officer's sidearms: "pistol" or "saber" in the right hand (the musket
+# then hangs across the back), "" for the musket.
+var hand_item := ""
+var _pistol: Node3D
+var _saber: Node3D
 var bayonet_in_hand := false
 var ramrod_on := false
 var show_head := true
@@ -326,6 +331,11 @@ func _build_soldier() -> void:
 		_segment(side + "_shin", 0.115, trousers.darkened(0.25) if civ else BLACK, _leg)
 		_leg[side + "_foot"] = _part(body, _box_mesh(Vector3(0.11, 0.07, 0.24)), BLACK, Vector3.ZERO)
 	_build_musket("none" if civ else String(g["primary"]), String(g["secondary"]))
+	if officer:
+		if String(g.get("pistol", "pistol")) != "":
+			_build_pistol()
+		if String(g.get("sword", "saber")) != "":
+			_build_saber(String(g.get("sword", "saber")))
 	if civ:
 		bayonet_on = false
 	elif not officer:
@@ -425,6 +435,38 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 	hand_bayonet.visible = false
 	ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 	_p_vis[ramrod] = false
+
+
+## A flintlock pistol: barrel along -Z from the hand, grip angled down.
+func _build_pistol() -> void:
+	_pistol = Node3D.new()
+	body.add_child(_pistol)
+	_part(_pistol, _box_mesh(Vector3(0.035, 0.11, 0.06)), WOOD.darkened(0.2), Vector3(0, -0.04, 0.03), Vector3(-18, 0, 0)) # grip
+	_part(_pistol, _box_mesh(Vector3(0.038, 0.04, 0.16)), WOOD.darkened(0.2), Vector3(0, 0.015, -0.06)) # stock
+	_part(_pistol, _cyl_mesh(0.011, 0.012, 0.24), STEEL, Vector3(0, 0.03, -0.17), Vector3(90, 0, 0)) # barrel
+	_part(_pistol, _box_mesh(Vector3(0.012, 0.035, 0.05)), STEEL, Vector3(0.022, 0.03, -0.01), Vector3.ZERO, true) # lock
+	_part(_pistol, _box_mesh(Vector3(0.018, 0.02, 0.025)), GOLD, Vector3(0, -0.09, 0.05), Vector3.ZERO, true) # butt cap
+
+
+## A sabre: a hilt with a brass guard and a long blade along -Z, and a
+## scabbard on the left hip it rests in when not drawn.
+func _build_saber(id: String) -> void:
+	_saber = Node3D.new()
+	body.add_child(_saber)
+	var long := 0.78 if id != "cutlass" else 0.62
+	_part(_saber, _box_mesh(Vector3(0.03, 0.03, 0.12)), Color(0.15, 0.1, 0.06), Vector3(0, 0, 0.05)) # grip
+	_part(_saber, _box_mesh(Vector3(0.09, 0.02, 0.02)), GOLD, Vector3(0, 0, -0.02)) # cross-guard
+	_part(_saber, _box_mesh(Vector3(0.012, 0.06, 0.13)), GOLD, Vector3(0, -0.03, 0.04), Vector3(20, 0, 0), true) # knuckle bow
+	_part(_saber, _box_mesh(Vector3(0.008, 0.035, long * 0.6)), Color(0.85, 0.87, 0.9), Vector3(0, 0, -0.03 - long * 0.3))
+	_part(_saber, _box_mesh(Vector3(0.008, 0.03, long * 0.42)), Color(0.85, 0.87, 0.9), Vector3(0, 0.022, -0.03 - long * 0.79), Vector3(-7, 0, 0)) # the curve
+	# The scabbard, on the sash at the left hip.
+	_part(spine, _box_mesh(Vector3(0.035, 0.05, long + 0.04)), LEATHER.darkened(0.2), Vector3(-0.25, -0.18, 0.12), Vector3(-62, 0, -6))
+
+
+func pistol_muzzle_global() -> Vector3:
+	if _pistol == null:
+		return muzzle_global()
+	return _pistol.global_transform * Vector3(0, 0.03, -0.3)
 
 
 func _build_bayonet(parent: Node3D, blade := 0.42) -> void:
@@ -603,11 +645,19 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	if aim_pitch != 0.0:
 		grip = pivot + pitch * (grip - pivot)
 		wdir = pitch * wdir
-	musket.transform = Transform3D(_look_basis(wdir), grip)
-	bayonet.visible = bayonet_on
+	var st := spine.transform
+	if hand_item != "":
+		# Musket slung across the back, muzzle up over the left shoulder.
+		musket.transform = Transform3D(_look_basis(st.basis * Vector3(-0.32, 1.0, 0.1)), st * Vector3(0.16, 0.12, 0.2))
+		bayonet.visible = false
+	else:
+		musket.transform = Transform3D(_look_basis(wdir), grip)
+		bayonet.visible = bayonet_on
 
 	var r_target: Vector3 = grip if t_hand_r == null else _pitched(t_hand_r, pitch, pivot)
 	var l_target: Vector3 = grip + wdir * FORESTOCK if t_hand_l == null else _pitched(t_hand_l, pitch, pivot)
+	if hand_item != "" and t_hand_l == null:
+		l_target = Vector3(-0.27, 0.9, -0.04) # hanging at your side
 	_hand_r = _hand_r.lerp(r_target, kh)
 	_hand_l = _hand_l.lerp(l_target, kh)
 	# First person: anchor the shoulders lower and a touch forward, so the
@@ -616,6 +666,17 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	var fp_drop := Vector3.ZERO if show_head else FP_SHOULDER_DROP * clampf(1.0 + aim_pitch * 1.6, 0.0, 1.0)
 	_place_arm("r", spine.transform * _shoulder_r + fp_drop, _hand_r, Vector3(1.0, -1.0, 0.4))
 	_place_arm("l", spine.transform * _shoulder_l + fp_drop, _hand_l, Vector3(-1.0, -1.0, 0.4))
+	# Sidearms: in the hand when drawn, otherwise in the sash and the scabbard.
+	if _pistol != null:
+		if hand_item == "pistol":
+			_pistol.transform = Transform3D(_look_basis(wdir), _hand_r)
+		else:
+			_pistol.transform = Transform3D(_look_basis(st.basis * Vector3(0.5, -1.0, -0.15)), st * Vector3(0.12, 0.1, -0.16))
+	if _saber != null:
+		if hand_item == "saber":
+			_saber.transform = Transform3D(_look_basis(wdir), _hand_r)
+		else:
+			_saber.transform = Transform3D(_look_basis(st.basis * Vector3(-0.1, -0.88, 0.46)), st * Vector3(-0.25, 0.1, -0.02))
 
 	hand_bayonet.visible = bayonet_in_hand
 	if bayonet_in_hand:
