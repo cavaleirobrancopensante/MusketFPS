@@ -11,6 +11,7 @@ const SoldierScript := preload("res://scripts/soldier.gd")
 const LizardScript := preload("res://scripts/lizardman.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const Look := preload("res://scripts/look.gd")
+const GunCrew := preload("res://scripts/gun_crew.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
@@ -752,6 +753,61 @@ func playground_spawn(n: int, still: bool) -> void:
 	hud.show_message("%d %s" % [n, "targets" if still else "lizards coming!"], 1.2)
 
 
+## The range's gun, a few paces to your right, worked by its crew. The
+## gunner lays it wherever you look; FIRE GUN on the left fires it when it's
+## loaded (or as soon as it's laid).
+var range_gun = null
+var _gun_order := false
+
+
+func _range_gun_process() -> void:
+	if range_gun == null:
+		var f := _player_forward()
+		var right := f.cross(Vector3.UP).normalized()
+		range_gun = GunCrew.make(self, player.global_position + right * 6.0 + f * 1.0, atan2(-f.x, -f.z), 10.0)
+		add_child(range_gun)
+		return
+	var aim := _look_point()
+	range_gun.lay_on(aim)
+	if _gun_order and range_gun.ready() and absf(angle_difference(range_gun.rotation.y, range_gun.want_yaw)) < 0.05:
+		_gun_order = false
+		range_gun.fire_at(aim, CANISTER_RANGE)
+		player.shake(0.3)
+
+
+func fire_range_gun() -> void:
+	if range_gun == null:
+		return
+	if not range_gun.ready():
+		hud.show_message("The crew is still loading", 1.0)
+		return
+	_gun_order = true
+
+
+## Where you're looking: a lizard near your line of sight, or the ground.
+func _look_point() -> Vector3:
+	var cam: Camera3D = player.camera
+	var o := cam.global_position
+	var d := -cam.global_transform.basis.z
+	var best = null
+	var best_off := 3.0
+	for e2 in enemies:
+		var to: Vector3 = e2.global_position + Vector3.UP - o
+		var along := to.dot(d)
+		if along < 5.0:
+			continue
+		var off := (to - d * along).length()
+		if off < best_off:
+			best_off = off
+			best = e2
+	if best != null:
+		return best.global_position + Vector3.UP
+	var dist := 100.0
+	if d.y < -0.01:
+		dist = clampf((o.y - 1.0) / -d.y, 10.0, 120.0)
+	return o + d * dist
+
+
 func playground_clear() -> void:
 	for e2 in enemies.duplicate():
 		e2.take_shot(9999.0, null)
@@ -883,6 +939,7 @@ func _process(delta: float) -> void:
 	if Settings.playground:
 		game_state = "playground"
 		player.hp = player.max_hp # nobody dies on the range
+		_range_gun_process()
 	if prologue:
 		_prologue_process(delta)
 	match game_state:
@@ -968,7 +1025,7 @@ const GUN_RELOAD := 11.0
 const ROUNDSHOT_SPEED := 170.0
 const CANISTER_RANGE := 28.0
 
-var _guns: Array = [] # {"node", "barrel", "cd", "silent"}
+var _guns: Array = [] # {"node": GunCrew, "silent"}
 var _hints := {} # tutorial beats already shown
 
 
@@ -1006,10 +1063,12 @@ func _setup_prologue() -> void:
 	allies.append(captain)
 	add_child(captain)
 	for x in GUN_X:
-		var g := Props.cannon()
-		g.position = Vector3(x, 0, GUN_Z)
-		add_child(g)
-		_guns.append({"node": g, "barrel": g.get_node("barrel"), "cd": randf_range(1.0, 4.0), "silent": false})
+		# Each gun with its crew of four; they start half through the drill,
+		# so the battery doesn't fire as one.
+		var gc = GunCrew.make(self, Vector3(x, 0, GUN_Z), 0.0, GUN_RELOAD)
+		gc.t = randf_range(0.5, 0.9)
+		add_child(gc)
+		_guns.append({"node": gc, "silent": false})
 
 
 ## The beach instead of the open field: sand, the sea behind, the wreck on
@@ -1112,21 +1171,22 @@ func ground_speed(pos: Vector3) -> float:
 	return 1.0
 
 
-## The guns: round shot at range, canister when they come close. A gun with
-## a lizard on it is overrun and falls silent.
-func _update_guns(delta: float) -> void:
+## The guns: each worked by its crew (gun_crew.gd). The gunner lays it on
+## the nearest lizard in front; when it's loaded and laid, the firer puts the
+## match to the vent: round shot at range, canister when they come close.
+## A gun with a lizard on it is overrun: the crew cut down, the gun silent.
+func _update_guns(_delta: float) -> void:
 	for g in _guns:
-		if g["silent"]:
+		var gc = g["node"]
+		if g["silent"] and not gc.silent:
+			gc.silent = true # (the retreat: the crews leave them)
+		if gc.silent:
 			continue
-		var node: Node3D = g["node"]
-		var at := node.global_position
-		var close := nearest_enemy(at, 3.5)
-		if close != null:
+		var at: Vector3 = gc.global_position
+		if nearest_enemy(at, 3.5) != null:
 			g["silent"] = true
+			gc.overrun()
 			hud.show_message("A gun is overrun!", 1.5)
-			continue
-		g["cd"] = float(g["cd"]) - delta
-		if float(g["cd"]) > 0.0:
 			continue
 		var tgt := nearest_enemy(at, 110.0)
 		if tgt == null:
@@ -1134,35 +1194,16 @@ func _update_guns(delta: float) -> void:
 		var to: Vector3 = tgt.global_position - at
 		if to.dot(line_forward) < to.length() * 0.6:
 			continue # only what's in front of the embrasure
-		g["cd"] = GUN_RELOAD * randf_range(0.9, 1.2)
-		_fire_gun(g, tgt)
+		gc.lay_on(tgt.global_position)
+		if gc.ready() and absf(angle_difference(gc.rotation.y, gc.want_yaw)) < 0.06:
+			_fire_gun(g, tgt)
 
 
 func _fire_gun(g: Dictionary, tgt: Node3D) -> void:
-	var barrel: Node3D = g["barrel"]
-	var node: Node3D = g["node"]
+	var gc = g["node"]
 	var aim: Vector3 = tgt.global_position + Vector3.UP * 1.0
-	var flat := aim - node.global_position
-	flat.y = 0.0
-	node.rotation.y = atan2(-flat.x, -flat.z)
-	var muzzle: Vector3 = barrel.global_transform * Vector3(0, 0, -1.85)
-	var d := muzzle.distance_to(aim)
-	if d < CANISTER_RANGE:
-		for i in 12:
-			var v: Vector3 = projectiles.spread_dir(aim - muzzle, 0.1) * 260.0
-			projectiles.fire("canister", muzzle, v, null)
-	else:
-		var tf := d / ROUNDSHOT_SPEED
-		var v2 := (aim - muzzle).normalized() * ROUNDSHOT_SPEED + Vector3.UP * 0.5 * 9.8 * tf
-		projectiles.fire("roundshot", muzzle, v2, null)
-	play_sound("cannon", muzzle, 6.0)
-	spawn_flash(muzzle, 3.0)
-	for i in 3:
-		spawn_smoke(muzzle + Vector3(randf_range(-0.6, 0.6), randf_range(0, 0.6), randf_range(-1.2, 0.2)), 2.4)
-	var tw := barrel.create_tween()
-	tw.tween_property(barrel, "position:z", 0.45, 0.08)
-	tw.tween_property(barrel, "position:z", 0.0, 1.2)
-	if player.alive:
+	if gc.fire_at(aim, CANISTER_RANGE) and player.alive:
+		var muzzle: Vector3 = gc.barrel.global_transform * Vector3(0, 0, -1.85)
 		player.shake(clampf(0.5 - player.global_position.distance_to(muzzle) / 60.0, 0.0, 0.5))
 
 

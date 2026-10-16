@@ -658,6 +658,25 @@ aftermath node.
 | `scripts/sound_factory.gd` | Synthesises the sound effects |
 | `scripts/look.gd` | The look of the land: sky, ground, grass, trees, bushes, far hills, quality levels |
 
+### Gun crews
+
+Every field gun (the four on Wreck Beach, the one on the weapon range) is
+worked by a crew of four, the way a Napoleonic piece was served
+(`gun_crew.gd`):
+
+- the **sponger-rammer**, right of the muzzle, swabs the bore after each
+  shot, then rams the new charge home with the rammer;
+- the **loader**, on the left, runs back to the ammunition box, brings a
+  cartridge (powder bag and shot) and puts it in the muzzle;
+- the **gunner** kneels at the trail and lays the gun, shifting the trail
+  with a handspike until it bears;
+- the **firer** holds the linstock clear, and touches the match to the vent
+  once the gun is loaded and laid.
+
+The gun fires only when the drill is done and it's laid on the target, so
+the battery's shots come raggedly, gun by gun. Lizards that reach a gun cut
+the crew down and it falls silent.
+
 ### Tests (on the main menu)
 
 **Tests** opens a list of fights outside the campaign:
@@ -670,6 +689,10 @@ aftermath node.
   next arrow from the quiver over your shoulder in under two seconds. The
   crossbow: sight along the stock, then nose down and wind the windlass for
   seven seconds.
+- A **field gun** stands a few paces to your right, worked by its crew; the
+  gunner lays it wherever you look, and **FIRE GUN** (it shows LOADING
+  while the crew works) fires it at the lizard nearest your line of sight,
+  or the ground you're looking at. Canister close in, round shot further out.
 - **Skirmish**: the mixed company against three waves.
 - **Stress test**: 50 against 200, with a frame counter.
 
