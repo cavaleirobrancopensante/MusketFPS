@@ -3,9 +3,9 @@ extends Control
 ##   left side  - floating move joystick (appears where your thumb lands)
 ##   right side - drag anywhere to look
 ##   FIRE       - fires your musket; keep dragging from it to aim while firing
-##   BAYONET    - switch to melee; the FIRE button becomes the SWING joystick:
-##                press to wind up, drag up/left/right/down to choose where the
-##                blow comes from, release to strike (hold longer = heavier)
+##   BAYONET    - switch to melee; FIRE becomes four swing buttons (OVER,
+##                LEFT, RIGHT, THRUST): press to wind up, hold to charge,
+##                release to strike; drag from the button to keep aiming
 ##   BLOCK      - hold to parry (melee only)
 ##   VOLLEY!    - the company fires every loaded musket
 ##   top right  - FOLLOW / HOLD / fire mode toggle
@@ -14,8 +14,6 @@ extends Control
 ## Touches are handled by hand (not Buttons) so several fingers work at once.
 
 const JOY_RADIUS := 90.0
-const SWING_RADIUS := 70.0
-const SWING_DEADZONE := 26.0
 
 # Swing directions (same values as player.gd's Swing enum).
 const NONE := -1
@@ -62,9 +60,7 @@ var joy_origin := Vector2.ZERO
 var joy_pos := Vector2.ZERO
 var look_index := -1
 var look_last := Vector2.ZERO
-var swing_index := -1
-var swing_origin := Vector2.ZERO
-var swing_pos := Vector2.ZERO
+var swing_index := -1 # finger holding a swing button
 var block_index := -1
 
 var message := ""
@@ -141,13 +137,21 @@ func _melee() -> bool:
 func _buttons() -> Array:
 	var s := size
 	var list := []
-	var main_label := "SWING" if _melee() else "FIRE"
-	list.append({"id": "fire", "circle": true, "pos": Vector2(s.x - 140, s.y - 150), "r": 80.0, "label": main_label})
-	list.append({"id": "weapon", "circle": true, "pos": Vector2(s.x - 140, s.y - 310), "r": 48.0,
-		"label": "MUSKET" if _melee() else "BAYONET"})
-	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 305, s.y - 105), "r": 58.0, "label": "VOLLEY!"})
+	var c := Vector2(s.x - 150, s.y - 165)
 	if _melee():
-		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 300, s.y - 260), "r": 54.0, "label": "BLOCK"})
+		# Four swing buttons in a diamond where FIRE was: the button you
+		# press is where the blow comes from.
+		var gap := 84.0
+		list.append({"id": "swing0", "circle": true, "pos": c + Vector2(0, -gap), "r": 46.0, "label": "OVER"})
+		list.append({"id": "swing1", "circle": true, "pos": c + Vector2(-gap, 0), "r": 46.0, "label": "LEFT"})
+		list.append({"id": "swing2", "circle": true, "pos": c + Vector2(gap, 0), "r": 46.0, "label": "RIGHT"})
+		list.append({"id": "swing3", "circle": true, "pos": c + Vector2(0, gap), "r": 46.0, "label": "THRUST"})
+		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 310, s.y - 280), "r": 52.0, "label": "BLOCK"})
+	else:
+		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": "FIRE"})
+	list.append({"id": "weapon", "circle": true, "pos": Vector2(s.x - 58, s.y - 330), "r": 46.0,
+		"label": "MUSKET" if _melee() else "BAYONET"})
+	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": "VOLLEY!"})
 	var bw := 160.0
 	var bh := 56.0
 	var y := 18.0
@@ -171,14 +175,6 @@ func _hit(b: Dictionary, p: Vector2) -> bool:
 	return r.grow(10).has_point(p)
 
 
-static func _dir_from_drag(v: Vector2) -> int:
-	if v.length() < SWING_DEADZONE:
-		return NONE
-	if absf(v.x) > absf(v.y):
-		return LEFT if v.x < 0.0 else RIGHT
-	return OVERHEAD if v.y < 0.0 else THRUST
-
-
 # ---------------------------------------------------------------- input
 
 func _input(event: InputEvent) -> void:
@@ -192,11 +188,6 @@ func _input(event: InputEvent) -> void:
 		var d := make_input_local(event) as InputEventScreenDrag
 		if d.index == joy_index:
 			joy_pos = d.position
-		elif d.index == swing_index:
-			swing_pos = d.position
-			var dir := _dir_from_drag(swing_pos - swing_origin)
-			if dir != NONE:
-				player.set_swing_dir(dir)
 		elif d.index == look_index:
 			var drag := d.position - look_last
 			player.add_look(drag)
@@ -236,20 +227,22 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 	pressed_id = id
 	pressed_time = 0.15
 	match id:
-		"fire":
-			if _melee():
-				# The fire button becomes the swing joystick; the stick
-				# centres wherever your thumb lands.
-				if swing_index == -1 and player.begin_swing():
-					swing_index = idx
-					swing_origin = p
-					swing_pos = p
-			else:
-				player.request_fire()
-				# Like CoD Mobile: the fire button also aims if you drag from it.
+		"swing0", "swing1", "swing2", "swing3":
+			# Press to wind up, hold to charge, release to strike.
+			if swing_index == -1 and player.begin_swing():
+				player.set_swing_dir(int(id.substr(5)))
+				swing_index = idx
+				# Dragging from a swing button turns you, so you can track
+				# a target while winding up.
 				if look_index == -1:
 					look_index = idx
 					look_last = p
+		"fire":
+			player.request_fire()
+			# Like CoD Mobile: the fire button also aims if you drag from it.
+			if look_index == -1:
+				look_index = idx
+				look_last = p
 		"weapon":
 			player.toggle_weapon()
 		"block":
@@ -403,10 +396,7 @@ func _draw() -> void:
 		_text_center("MOVE", hint, 18, Color(1, 1, 1, 0.25))
 
 	for b in _buttons():
-		if b["id"] == "fire" and swing_index != -1:
-			_draw_swing_stick()
-		else:
-			_draw_button(b)
+		_draw_button(b)
 
 	# Message banner.
 	if message_time > 0.0 and message != "":
@@ -661,31 +651,6 @@ func _draw_swing_indicator(c: Vector2) -> void:
 			draw_arc(c, 16, 0, TAU, 32, Color(1, 1, 1, 0.3), 2)
 
 
-## The swing joystick: four sectors, the chosen one lit, plus a charge ring.
-func _draw_swing_stick() -> void:
-	var o := swing_origin
-	var r := SWING_RADIUS
-	draw_circle(o, r, Color(0.08, 0.09, 0.12, 0.55))
-	var chosen: int = player.swing_dir
-	var gold := Color(0.95, 0.78, 0.3)
-	# Sector centres: up, left, right, down.
-	var centres := {OVERHEAD: -PI * 0.5, LEFT: PI, RIGHT: 0.0, THRUST: PI * 0.5}
-	for d in centres:
-		var ang: float = centres[d]
-		var col := gold if d == chosen else Color(1, 1, 1, 0.35)
-		draw_arc(o, r - 6, ang - 0.6, ang + 0.6, 16, col, 8 if d == chosen else 3)
-	var labels := {OVERHEAD: "OVER", LEFT: "LEFT", RIGHT: "RIGHT", THRUST: "THRUST"}
-	for d in labels:
-		var ang2: float = centres[d]
-		var lc := gold if d == chosen else Color(1, 1, 1, 0.5)
-		_text_center(labels[d], o + Vector2.from_angle(ang2) * (r * 0.62), 13, lc)
-	var ch: float = player.charge()
-	var ring := Color(1, 1, 1) if ch >= 1.0 else gold
-	draw_arc(o, r + 8, -PI * 0.5, -PI * 0.5 + TAU * ch, 48, ring, 6)
-	var knob := o + (swing_pos - o).limit_length(r - 20)
-	draw_circle(knob, 26, Color(1, 1, 1, 0.5))
-
-
 func _draw_button(b: Dictionary) -> void:
 	var id: String = b["id"]
 	var bg := Color(0.08, 0.09, 0.12, 0.5)
@@ -701,6 +666,12 @@ func _draw_button(b: Dictionary) -> void:
 		bg = Color(1, 1, 1, 0.35)
 	if id == "volley" and battle.loaded_count() == 0:
 		label_col = Color(1, 1, 1, 0.35)
+	var swinging: bool = id.begins_with("swing") and player.swing_phase != "idle" \
+		and int(id.substr(5)) == player.swing_dir
+	if swinging:
+		edge = Color(0.95, 0.78, 0.3)
+		label_col = Color(0.95, 0.78, 0.3)
+		bg = Color(0.95, 0.78, 0.3, 0.25)
 
 	if b["circle"]:
 		var pos: Vector2 = b["pos"]
@@ -713,9 +684,14 @@ func _draw_button(b: Dictionary) -> void:
 			draw_arc(pos, r + 9, -PI * 0.5, -PI * 0.5 + TAU * player.reload_progress(), 48, Color(0.95, 0.78, 0.3), 7)
 			label = "LOADING"
 			label_col = Color(1, 1, 1, 0.5)
+		if swinging and player.swing_phase == "windup":
+			# Charge ring fills while you hold; white when fully charged.
+			var ch: float = player.charge()
+			var ring := Color(1, 1, 1) if ch >= 1.0 else Color(0.95, 0.78, 0.3)
+			draw_arc(pos, r + 8, -PI * 0.5, -PI * 0.5 + TAU * ch, 40, ring, 6)
 		if id == "weapon" and player.is_switching():
 			label_col = Color(1, 1, 1, 0.4)
-		var fsize := 24 if id == "fire" else (16 if id == "weapon" else 20)
+		var fsize := 24 if id == "fire" else (16 if id == "weapon" or id.begins_with("swing") else 20)
 		_text_center(label, pos, fsize, label_col)
 	else:
 		var rect: Rect2 = b["rect"]

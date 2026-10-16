@@ -131,9 +131,9 @@ func _update_camera() -> void:
 		pos.y = maxf(pos.y, 0.35)
 		camera.position = pos
 	else:
-		# Eye sits just behind the head so your hands and musket keep a
-		# comfortable distance from the lens.
-		camera.position = Vector3(0, 1.66, 0.14)
+		# Eye at the head; your own torso is hidden in first person, and the
+		# arms rise from below the screen, so nothing of you blocks the view.
+		camera.position = Vector3(0, 1.64, 0.02)
 	camera.rotation = Vector3(pitch, 0, 0)
 
 

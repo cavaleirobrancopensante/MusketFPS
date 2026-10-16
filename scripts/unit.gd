@@ -27,6 +27,7 @@ var visual: Node3D # whichever of the two is in use
 var facing := Vector3.FORWARD # where the unit's body points (flat)
 var anim := "idle"
 var anim_time := 0.0
+var tempo := 1.0 # personal animation speed (a brisk or a slow man)
 var _base_anim := "idle"
 var _oneshot_left := 0.0
 var _tex_key := ""
@@ -75,14 +76,14 @@ func set_base_anim(name: String) -> void:
 	_base_anim = name
 	if _oneshot_left <= 0.0 and anim != name:
 		anim = name
-		anim_time = 0.0
+		anim_time = randf() * 0.5 # so loops never march in lockstep
 
 
 ## A short animation that plays once (fire, thrust, strike), then returns.
 func play_oneshot(name: String, seconds: float) -> void:
 	anim = name
 	anim_time = 0.0
-	_oneshot_left = seconds
+	_oneshot_left = seconds / tempo
 
 
 func face_toward(dir: Vector3) -> void:
@@ -99,7 +100,7 @@ func set_tint(c: Color) -> void:
 func _process(delta: float) -> void:
 	if not alive:
 		return
-	anim_time += delta
+	anim_time += delta * tempo
 	if _oneshot_left > 0.0:
 		_oneshot_left -= delta
 		if _oneshot_left <= 0.0:
