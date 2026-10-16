@@ -13,6 +13,7 @@ const LizardScript := preload("res://scripts/lizardman.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
+const BatcherScript := preload("res://scripts/batcher.gd")
 const MENU := "res://scenes/menu.tscn"
 const MAX_SOUNDS := 24
 
@@ -20,6 +21,8 @@ enum FireMode { ON_COMMAND, AT_WILL }
 enum Order { FOLLOW, HOLD, CHARGE }
 
 const COMPANY_SIZE := 8
+const STRESS_COMPANY := 50
+const STRESS_WAVES := [200]
 const LINE_SPACING := 1.5 # metres between men in the line
 const LINE_DISTANCE := 0.0 # you stand in the line itself, in the gap at its centre
 const REALIGN_ANGLE := 40.0 # degrees you must turn before a following line wheels
@@ -39,7 +42,8 @@ var wave := 0
 var game_state := "starting" # starting, fighting, between, won, lost
 var state_timer := 5.0
 
-var soldier_frames: Dictionary
+var batcher # draws every unit in a few instanced batches
+var soldier_frames: Dictionary # sprite atlas info (cells, counts)
 var lizard_frames: Dictionary
 var smoke_tex: Texture2D
 var sounds: Dictionary
@@ -52,9 +56,13 @@ var _autotest_timer := 0.0
 func _ready() -> void:
 	_autotest = "--autotest" in OS.get_cmdline_user_args()
 	_setup_input()
-	if not Settings.use_3d:
-		soldier_frames = SpriteFactory.soldier_frames()
-		lizard_frames = SpriteFactory.lizard_frames()
+	# The batcher first: everything that draws a character registers with it.
+	batcher = BatcherScript.new()
+	batcher.add_to_group("batcher")
+	add_child(batcher)
+	# Sprite atlases are built in both modes (in 3D they're far stand-ins).
+	soldier_frames = batcher.add_sprite_kind("soldier", SpriteFactory.soldier_frames())
+	lizard_frames = batcher.add_sprite_kind("lizard", SpriteFactory.lizard_frames())
 	smoke_tex = SpriteFactory.smoke_texture()
 	sounds = SoundFactory.build_all()
 	_build_world()
@@ -67,7 +75,7 @@ func _ready() -> void:
 
 	line_forward = Vector3.FORWARD
 	line_anchor = Vector3(player.position.x, 0, player.position.z) + line_forward * LINE_DISTANCE
-	for i in COMPANY_SIZE:
+	for i in (STRESS_COMPANY if Settings.stress else COMPANY_SIZE):
 		var s = SoldierScript.new()
 		s.battle = self
 		s.frames = soldier_frames
@@ -123,6 +131,10 @@ func order_volley() -> void:
 	hud.show_message("PRESENT... FIRE!", 1.0)
 	for s in soldiers:
 		s.volley()
+
+
+func wave_count() -> int:
+	return (STRESS_WAVES if Settings.stress else WAVES).size()
 
 
 func is_at_will() -> bool:
@@ -228,29 +240,100 @@ func _reassign_slots() -> void:
 		soldiers[i].slot_index = i
 
 
+# ---------------------------------------------------------------- spatial grid
+# Every physics frame the units are sorted into 4 m cells, so "who is near
+# me?" only looks at neighbouring cells instead of every unit on the field.
+# This is what lets the crowd scale to hundreds of units.
+
+const CELL := 4.0
+
+var _grid_e := {} # Vector2i -> Array of [unit, position]
+var _grid_s := {}
+
+
+static func _cell(p: Vector3) -> Vector2i:
+	return Vector2i(floori(p.x / CELL), floori(p.z / CELL))
+
+
+func _rebuild_grid() -> void:
+	_grid_e.clear()
+	_grid_s.clear()
+	for e in enemies:
+		var p: Vector3 = e.global_position
+		var c := _cell(p)
+		if not _grid_e.has(c):
+			_grid_e[c] = []
+		_grid_e[c].append([e, p])
+	for so in soldiers:
+		var p2: Vector3 = so.global_position
+		var c2 := _cell(p2)
+		if not _grid_s.has(c2):
+			_grid_s[c2] = []
+		_grid_s[c2].append([so, p2])
+
+
+func _grid_for(group: Array) -> Dictionary:
+	return _grid_e if group == enemies else _grid_s
+
+
+## Push away from neighbours closer than `radius` (radius <= CELL).
 func separation(unit: Node3D, group: Array, radius: float) -> Vector3:
+	var grid := _grid_for(group)
 	var push := Vector3.ZERO
 	var p := unit.global_position
-	for o in group:
-		if o == unit:
-			continue
-		var d: Vector3 = p - o.global_position
-		d.y = 0.0
-		var l := d.length()
-		if l < radius and l > 0.001:
-			push += d / l * (radius - l) / radius
+	var c := _cell(p)
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			var bucket = grid.get(Vector2i(c.x + dx, c.y + dz))
+			if bucket == null:
+				continue
+			for entry in bucket:
+				if entry[0] == unit:
+					continue
+				var d: Vector3 = p - entry[1]
+				d.y = 0.0
+				var l := d.length()
+				if l < radius and l > 0.001:
+					push += d / l * (radius - l) / radius
 	return push
 
 
-func nearest_enemy(from: Vector3, max_dist: float) -> Node3D:
+## Nearest unit in a grid within max_dist (searches only the cells needed).
+func _nearest_in(grid: Dictionary, from: Vector3, max_dist: float) -> Node3D:
 	var best: Node3D = null
 	var best_d := max_dist
-	for e in enemies:
-		var d: float = from.distance_to(e.global_position)
-		if d < best_d:
-			best_d = d
-			best = e
+	var c := _cell(from)
+	var rings := ceili(max_dist / CELL)
+	for dx in range(-rings, rings + 1):
+		for dz in range(-rings, rings + 1):
+			var bucket = grid.get(Vector2i(c.x + dx, c.y + dz))
+			if bucket == null:
+				continue
+			for entry in bucket:
+				var d: float = from.distance_to(entry[1])
+				if d < best_d:
+					best_d = d
+					best = entry[0]
 	return best
+
+
+## Nearest unit in a grid at any range: check every bucket once.
+func _nearest_any(grid: Dictionary, from: Vector3, max_dist: float) -> Node3D:
+	var best: Node3D = null
+	var best_d := max_dist
+	for bucket in grid.values():
+		for entry in bucket:
+			var d: float = from.distance_to(entry[1])
+			if d < best_d:
+				best_d = d
+				best = entry[0]
+	return best
+
+
+func nearest_enemy(from: Vector3, max_dist: float) -> Node3D:
+	if max_dist <= 16.0:
+		return _nearest_in(_grid_e, from, max_dist)
+	return _nearest_any(_grid_e, from, max_dist)
 
 
 func nearest_friendly(from: Vector3) -> Node3D:
@@ -259,12 +342,14 @@ func nearest_friendly(from: Vector3) -> Node3D:
 	if player.alive:
 		best = player
 		best_d = from.distance_to(player.global_position)
-	for s in soldiers:
-		var d: float = from.distance_to(s.global_position)
-		if d < best_d:
-			best_d = d
-			best = s
-	return best
+	# Look close first; only scan everyone if nobody is within 16 m.
+	var near := _nearest_in(_grid_s, from, minf(best_d, 16.0))
+	if near != null:
+		return near
+	if best_d <= 16.0:
+		return best
+	var far := _nearest_any(_grid_s, from, best_d)
+	return far if far != null else best
 
 
 func on_soldier_died(s) -> void:
@@ -283,6 +368,8 @@ func on_enemy_died(e) -> void:
 # ---------------------------------------------------------------- loop
 
 func _physics_process(_delta: float) -> void:
+	# The battle node runs before its children, so units see a fresh grid.
+	_rebuild_grid()
 	if order != Order.HOLD and player.alive:
 		var p: Vector3 = player.global_position
 		var pf := _player_forward()
@@ -313,7 +400,7 @@ func _process(delta: float) -> void:
 				_start_wave()
 		"fighting":
 			if enemies.is_empty():
-				if wave >= WAVES.size():
+				if wave >= (STRESS_WAVES if Settings.stress else WAVES).size():
 					game_state = "won"
 					hud.show_message("Victory! The line held.", 9999.0)
 					hud.show_restart()
@@ -329,14 +416,15 @@ func _process(delta: float) -> void:
 func _start_wave() -> void:
 	wave += 1
 	game_state = "fighting"
-	var count: int = WAVES[wave - 1]
+	var count: int = (STRESS_WAVES if Settings.stress else WAVES)[wave - 1]
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var centre := line_anchor + line_forward * SPAWN_DISTANCE
 	for i in count:
 		var l = LizardScript.new()
 		l.battle = self
 		l.frames = lizard_frames
-		var pos := centre + right * randf_range(-22.0, 22.0) + line_forward * randf_range(0.0, 15.0)
+		var spread := 45.0 if Settings.stress else 22.0
+		var pos := centre + right * randf_range(-spread, spread) + line_forward * randf_range(0.0, spread * 0.7)
 		l.position = Vector3(pos.x, 0, pos.z)
 		enemies.append(l)
 		add_child(l)

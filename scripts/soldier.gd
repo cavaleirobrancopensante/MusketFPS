@@ -118,7 +118,7 @@ func _physics_process(delta: float) -> void:
 		v = to_slot / gap * minf(spd, gap * 2.5)
 	var push: Vector3 = battle.separation(self, battle.soldiers, 1.0)
 	velocity = v + push * 2.0
-	move_and_slide()
+	_move(delta)
 
 	# Shooting.
 	if shot_timer >= 0.0:
@@ -200,7 +200,7 @@ func _melee(delta: float, e: Node3D) -> void:
 			v = Vector3.ZERO
 	var push: Vector3 = battle.separation(self, battle.soldiers, 1.0)
 	velocity = v + push * 1.5
-	move_and_slide()
+	_move(delta)
 
 
 func _thrust(e: Node3D) -> void:
@@ -234,7 +234,7 @@ func _charge(delta: float) -> bool:
 			velocity = back.normalized() * SPEED * 1.2 * pace
 			face_toward(back)
 			set_base_anim("walk")
-			move_and_slide()
+			_move(delta)
 		else:
 			set_base_anim("guard")
 		return true
@@ -264,7 +264,7 @@ func _charge(delta: float) -> bool:
 	velocity = to_f.normalized() * SPEED * 1.25 * pace + push * 2.0
 	face_toward(to_f)
 	set_base_anim("walk")
-	move_and_slide()
+	_move(delta)
 	return true
 
 

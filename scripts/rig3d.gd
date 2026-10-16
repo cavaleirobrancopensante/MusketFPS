@@ -15,6 +15,16 @@ extends Node3D
 ## and writes the pose targets directly (see player_body.gd).
 ##
 ## Body space: the character faces -Z, +X is its right, feet at y = 0.
+##
+## Drawing: parts are not separate meshes. Each part is a record (unit box,
+## cylinder or sphere + local transform + colour) and after every update the
+## rig writes all its parts into ready-made float buffers (`cache`) that the
+## Batcher draws for every rig at once with three MultiMeshes.
+##
+## Level of detail: bodies within 12 m update every frame, to 25 m every 2nd
+## frame, beyond that every 4th, off-screen every 8th; small details (faces,
+## buttons, teeth) are skipped beyond DETAIL_RANGE. Past 40 m units switch to
+## sprites (see unit.gd).
 
 const COAT := Color(0.16, 0.24, 0.55)
 const COAT_OFFICER := Color(0.1, 0.13, 0.3)
@@ -41,8 +51,13 @@ const BUTT := 0.45
 const FORESTOCK := 0.3 # where the left hand holds it
 const FP_SHOULDER_DROP := Vector3(0.0, -0.22, -0.04)
 
-static var _materials := {}
-static var _meshes := {}
+const DETAIL_RANGE := 16.0 # beyond this, small details are skipped
+const NEAR_RANGE := 12.0 # within this, re-posed every frame
+const MID_RANGE := 25.0 # within this, every 2nd frame; beyond, every 4th
+
+const BOX := 0
+const CYL := 1
+const SPHERE := 2
 
 var kind := "soldier"
 var facing := Vector3.FORWARD
@@ -76,7 +91,6 @@ var _lean := 0.0
 var _jaw := 0.0
 var _walk_phase := 0.0
 var _dead := false
-var _last_tint := Color.WHITE
 
 # --- Parts.
 var body: Node3D
@@ -86,15 +100,30 @@ var jaw: Node3D
 var musket: Node3D
 var bayonet: Node3D
 var hand_bayonet: Node3D
-var ramrod: MeshInstance3D
+var ramrod := -1 # part id
 var cleaver: Node3D
 var shield: Node3D
 var _shield_turn := 0.9 # radians the shield faces off to the left
-var _arm := {} # name -> MeshInstance3D
+var _arm := {} # name -> part id
 var _leg := {}
 var _tail: Array = []
-var _all_meshes: Array = []
-var _overlay: StandardMaterial3D
+
+# --- Part records (parallel arrays, indexed by part id).
+var _nodes: Array = [] # the few Node3Ds parts ride on (body, spine, head...)
+var _p_node: PackedInt32Array = PackedInt32Array() # index into _nodes
+var _p_local: Array = [] # Transform3D in the parent's space (scale included)
+var _p_scale: Array = [] # base scale (segments stretch only their length)
+var _p_shape: PackedInt32Array = PackedInt32Array()
+var _p_color: Array = []
+var _p_vis: Array = [] # per-part visibility (e.g. the ramrod)
+var _p_detail: Array = [] # small detail, skipped far away
+var _detail := true
+## Ready-to-draw buffers per shape: 12 floats transform + 4 colour per part.
+var cache: Array = [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
+var _batcher = null
+var _frame_skip := 0
+var _acc := 0.0
+var _dead_t := 0.0
 
 var _shoulder_r := Vector3(0.23, 0.5, 0.0) # spine space
 var _shoulder_l := Vector3(-0.23, 0.5, 0.0)
@@ -110,79 +139,79 @@ func _ready() -> void:
 	spine = Node3D.new()
 	body.add_child(spine)
 	_walk_phase = randf() * TAU # everyone out of step
-	_overlay = StandardMaterial3D.new()
-	_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	if kind == "lizard":
 		_build_lizard()
 		scale = Vector3.ONE * 1.12
 	else:
 		_build_soldier()
 	_update(0.0, true)
+	_batcher = get_tree().get_first_node_in_group("batcher")
+	if _batcher != null:
+		_batcher.add_rig(self)
+	_emit()
+
+
+func _exit_tree() -> void:
+	if _batcher != null:
+		_batcher.remove_rig(self)
+
+
+func draw_enabled() -> bool:
+	return visible and is_inside_tree()
+
+
+## Re-pose and redraw at once (after being hidden as a far stand-in).
+func refresh() -> void:
+	_frame_skip = 0
+	_acc = 0.0
+	if not _dead:
+		_update(0.0, true)
+	_emit()
 
 
 # ---------------------------------------------------------------- building
 
-static func _mat(c: Color) -> StandardMaterial3D:
-	var key := c.to_html()
-	if not _materials.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_color = c
-		m.roughness = 0.85
-		_materials[key] = m
-	return _materials[key]
+# Shape specs: [shape id, scale]. Unit box = 1 m cube, unit cylinder and
+# sphere = 1 m across, so the scale is simply the part's size.
+static func _box_mesh(size: Vector3) -> Array:
+	return [BOX, size]
 
 
-static func _box_mesh(size: Vector3) -> BoxMesh:
-	var key := "b%s" % size
-	if not _meshes.has(key):
-		var m := BoxMesh.new()
-		m.size = size
-		_meshes[key] = m
-	return _meshes[key]
+static func _sphere_mesh(r: float) -> Array:
+	return [SPHERE, Vector3.ONE * r * 2.0]
 
 
-static func _sphere_mesh(r: float) -> SphereMesh:
-	var key := "s%s" % r
-	if not _meshes.has(key):
-		var m := SphereMesh.new()
-		m.radius = r
-		m.height = r * 2.0
-		m.radial_segments = 10
-		m.rings = 6
-		_meshes[key] = m
-	return _meshes[key]
+static func _cyl_mesh(r_top: float, r_bot: float, h: float) -> Array:
+	return [CYL, Vector3(r_top + r_bot, h, r_top + r_bot)]
 
 
-static func _cyl_mesh(r_top: float, r_bot: float, h: float) -> CylinderMesh:
-	var key := "c%s_%s_%s" % [r_top, r_bot, h]
-	if not _meshes.has(key):
-		var m := CylinderMesh.new()
-		m.top_radius = r_top
-		m.bottom_radius = r_bot
-		m.height = h
-		m.radial_segments = 8
-		m.rings = 1
-		_meshes[key] = m
-	return _meshes[key]
+## Add a part riding on `parent`. Returns its id.
+func _part(parent: Node3D, spec: Array, col: Color, pos: Vector3, rot_deg := Vector3.ZERO, detail := false) -> int:
+	var sc: Vector3 = spec[1]
+	var rot := Basis.from_euler(Vector3(deg_to_rad(rot_deg.x), deg_to_rad(rot_deg.y), deg_to_rad(rot_deg.z)))
+	var ni := _nodes.find(parent)
+	if ni < 0:
+		_nodes.append(parent)
+		ni = _nodes.size() - 1
+	_p_node.append(ni)
+	_p_local.append(Transform3D(rot * Basis.from_scale(sc), pos))
+	_p_scale.append(sc)
+	_p_shape.append(spec[0])
+	_p_color.append(col)
+	_p_vis.append(true)
+	_p_detail.append(detail)
+	return _p_node.size() - 1
 
 
-func _part(parent: Node3D, mesh: Mesh, col: Color, pos: Vector3, rot_deg := Vector3.ZERO) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.material_override = _mat(col)
-	mi.position = pos
-	mi.rotation_degrees = rot_deg
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(mi)
-	_all_meshes.append(mi)
-	return mi
+func _set_pos(id: int, pos: Vector3) -> void:
+	var t: Transform3D = _p_local[id]
+	t.origin = pos
+	_p_local[id] = t
 
 
 ## A limb segment: a unit-length box along -Z, scaled and placed each frame.
 func _segment(name: String, width: float, col: Color, store: Dictionary) -> void:
-	var mi := _part(body, _box_mesh(Vector3(width, width, 1.0)), col, Vector3.ZERO)
-	store[name] = mi
+	store[name] = _part(body, _box_mesh(Vector3(width, width, 1.0)), col, Vector3.ZERO)
 
 
 func _build_soldier() -> void:
@@ -195,7 +224,7 @@ func _build_soldier() -> void:
 	if officer:
 		_part(spine, _box_mesh(Vector3(0.44, 0.04, 0.26)), RED, Vector3(0, 0.02, 0)) # sash
 		_part(spine, _box_mesh(Vector3(0.17, 0.42, 0.02)), WHITE, Vector3(0, 0.32, -0.125)) # lapels
-		_part(spine, _box_mesh(Vector3(0.03, 0.42, 0.025)), GOLD, Vector3(0, 0.32, -0.13)) # buttons
+		_part(spine, _box_mesh(Vector3(0.03, 0.42, 0.025)), GOLD, Vector3(0, 0.32, -0.13), Vector3.ZERO, true) # buttons
 		_part(spine, _cyl_mesh(0.085, 0.09, 0.07), RED, Vector3(0, 0.6, 0)) # high collar
 		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0))
 		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0))
@@ -211,24 +240,24 @@ func _build_soldier() -> void:
 	_part(head, _cyl_mesh(0.06, 0.06, 0.08), SKIN, Vector3(0, -0.02, 0))
 	_part(head, _sphere_mesh(0.11), SKIN, Vector3(0, 0.1, 0))
 	# Face: eyes and nose, hair at the back and sideburns.
-	_part(head, _box_mesh(Vector3(0.025, 0.02, 0.01)), BLACK, Vector3(0.042, 0.125, -0.104))
-	_part(head, _box_mesh(Vector3(0.025, 0.02, 0.01)), BLACK, Vector3(-0.042, 0.125, -0.104))
-	_part(head, _box_mesh(Vector3(0.028, 0.045, 0.035)), SKIN.darkened(0.08), Vector3(0, 0.09, -0.112))
+	_part(head, _box_mesh(Vector3(0.025, 0.02, 0.01)), BLACK, Vector3(0.042, 0.125, -0.104), Vector3.ZERO, true)
+	_part(head, _box_mesh(Vector3(0.025, 0.02, 0.01)), BLACK, Vector3(-0.042, 0.125, -0.104), Vector3.ZERO, true)
+	_part(head, _box_mesh(Vector3(0.028, 0.045, 0.035)), SKIN.darkened(0.08), Vector3(0, 0.09, -0.112), Vector3.ZERO, true)
 	_part(head, _box_mesh(Vector3(0.21, 0.13, 0.09)), HAIR, Vector3(0, 0.12, 0.065))
-	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(0.105, 0.08, -0.01))
-	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(-0.105, 0.08, -0.01))
+	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(0.105, 0.08, -0.01), Vector3.ZERO, true)
+	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(-0.105, 0.08, -0.01), Vector3.ZERO, true)
 	if officer:
 		# Bicorne worn side to side: a crescent, tallest in the middle.
 		_part(head, _cyl_mesh(0.118, 0.118, 0.05), BLACK, Vector3(0, 0.19, 0))
 		_part(head, _box_mesh(Vector3(0.27, 0.15, 0.05)), BLACK, Vector3(-0.115, 0.26, 0), Vector3(0, 0, 20))
 		_part(head, _box_mesh(Vector3(0.27, 0.15, 0.05)), BLACK, Vector3(0.115, 0.26, 0), Vector3(0, 0, -20))
-		_part(head, _box_mesh(Vector3(0.5, 0.012, 0.055)), GOLD, Vector3(0, 0.196, 0)) # gold edging
+		_part(head, _box_mesh(Vector3(0.5, 0.012, 0.055)), GOLD, Vector3(0, 0.196, 0), Vector3.ZERO, true) # gold edging
 		_part(head, _cyl_mesh(0.035, 0.035, 0.012), RED, Vector3(-0.07, 0.28, -0.032), Vector3(90, 0, 0)) # cockade
 		_part(head, _cyl_mesh(0.016, 0.016, 0.014), GOLD, Vector3(-0.07, 0.28, -0.036), Vector3(90, 0, 0))
 	else:
 		_part(head, _cyl_mesh(0.115, 0.105, 0.22), BLACK, Vector3(0, 0.28, 0)) # shako
 		_part(head, _box_mesh(Vector3(0.2, 0.02, 0.08)), BLACK, Vector3(0, 0.18, -0.12))
-		_part(head, _box_mesh(Vector3(0.06, 0.06, 0.02)), GOLD, Vector3(0, 0.3, -0.115))
+		_part(head, _box_mesh(Vector3(0.06, 0.06, 0.02)), GOLD, Vector3(0, 0.3, -0.115), Vector3.ZERO, true)
 	# Arms (placed by IK every frame).
 	_segment("r_upper", 0.11, coat, _arm)
 	_segment("r_fore", 0.095, coat, _arm)
@@ -252,9 +281,9 @@ func _build_musket() -> void:
 	_part(musket, _box_mesh(Vector3(0.045, 0.11, 0.5)), WOOD, Vector3(0, -0.025, 0.2)) # stock
 	_part(musket, _box_mesh(Vector3(0.04, 0.05, 0.75)), WOOD, Vector3(0, -0.01, -0.36)) # forestock
 	_part(musket, _cyl_mesh(0.013, 0.013, MUZZLE), STEEL, Vector3(0, 0.018, -MUZZLE * 0.5), Vector3(90, 0, 0))
-	_part(musket, _box_mesh(Vector3(0.02, 0.05, 0.08)), STEEL, Vector3(0.028, 0.01, -0.02)) # lock
-	_part(musket, _box_mesh(Vector3(0.007, 0.022, 0.02)), BLACK, Vector3(0, 0.038, -MUZZLE + 0.04)) # front sight
-	_part(musket, _box_mesh(Vector3(0.03, 0.012, 0.012)), BLACK, Vector3(0, 0.034, -0.08)) # rear notch
+	_part(musket, _box_mesh(Vector3(0.02, 0.05, 0.08)), STEEL, Vector3(0.028, 0.01, -0.02), Vector3.ZERO, true) # lock
+	_part(musket, _box_mesh(Vector3(0.007, 0.022, 0.02)), BLACK, Vector3(0, 0.038, -MUZZLE + 0.04), Vector3.ZERO, true) # front sight
+	_part(musket, _box_mesh(Vector3(0.03, 0.012, 0.012)), BLACK, Vector3(0, 0.034, -0.08), Vector3.ZERO, true) # rear notch
 	bayonet = Node3D.new()
 	bayonet.position = Vector3(0, 0.018, -MUZZLE)
 	musket.add_child(bayonet)
@@ -264,7 +293,7 @@ func _build_musket() -> void:
 	_build_bayonet(hand_bayonet)
 	hand_bayonet.visible = false
 	ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
-	ramrod.visible = false
+	_p_vis[ramrod] = false
 
 
 func _build_bayonet(parent: Node3D) -> void:
@@ -290,8 +319,8 @@ func _build_lizard() -> void:
 	spine.add_child(head)
 	_part(head, _box_mesh(Vector3(0.28, 0.24, 0.34)), HIDE, Vector3(0, 0.08, -0.08))
 	_part(head, _box_mesh(Vector3(0.2, 0.12, 0.28)), HIDE, Vector3(0, 0.08, -0.36)) # snout
-	_part(head, _box_mesh(Vector3(0.06, 0.04, 0.04)), EYE, Vector3(0.1, 0.16, -0.2))
-	_part(head, _box_mesh(Vector3(0.06, 0.04, 0.04)), EYE, Vector3(-0.1, 0.16, -0.2))
+	_part(head, _box_mesh(Vector3(0.06, 0.04, 0.04)), EYE, Vector3(0.1, 0.16, -0.2), Vector3.ZERO, true)
+	_part(head, _box_mesh(Vector3(0.06, 0.04, 0.04)), EYE, Vector3(-0.1, 0.16, -0.2), Vector3.ZERO, true)
 	for i in 4:
 		_part(head, _box_mesh(Vector3(0.04, 0.12, 0.06)), CREST, Vector3(0, 0.24, 0.05 - i * 0.09), Vector3(-25, 0, 0))
 	jaw = Node3D.new()
@@ -299,7 +328,7 @@ func _build_lizard() -> void:
 	head.add_child(jaw)
 	_part(jaw, _box_mesh(Vector3(0.18, 0.06, 0.4)), HIDE_DARK, Vector3(0, -0.03, -0.2))
 	for i in 4:
-		_part(jaw, _box_mesh(Vector3(0.14, 0.03, 0.015)), BONE, Vector3(0, 0.01, -0.12 - i * 0.08))
+		_part(jaw, _box_mesh(Vector3(0.14, 0.03, 0.015)), BONE, Vector3(0, 0.01, -0.12 - i * 0.08), Vector3.ZERO, true)
 	# Tail: four segments trailing behind the hips.
 	for i in 4:
 		var w := 0.2 - i * 0.04
@@ -331,9 +360,63 @@ func _build_lizard() -> void:
 # ---------------------------------------------------------------- animation
 
 func _process(delta: float) -> void:
-	if _dead:
+	if not visible:
 		return
-	_update(delta, false)
+	if _dead:
+		# Keep drawing while the body falls, then the cache stays as it is.
+		_dead_t += delta
+		if _dead_t < 0.8:
+			_emit()
+		return
+	# Level of detail: how often to re-pose this body.
+	var interval := 1
+	if not manual:
+		var cam := get_viewport().get_camera_3d()
+		if cam != null:
+			var d := cam.global_position.distance_to(global_position)
+			_detail = d < DETAIL_RANGE
+			if not cam.is_position_in_frustum(global_position + Vector3.UP):
+				interval = 8
+			elif d > MID_RANGE:
+				interval = 4
+			elif d > NEAR_RANGE:
+				interval = 2
+	_acc += delta
+	_frame_skip += 1
+	if _frame_skip < interval:
+		return
+	_frame_skip = 0
+	_update(_acc, false)
+	_acc = 0.0
+	_emit()
+
+
+## Write every visible part into the per-shape buffers the Batcher draws.
+func _emit() -> void:
+	for c in cache:
+		c.clear()
+	# World transform and visibility of each carrier node, once per update.
+	var globals: Array = []
+	var vis: Array = []
+	for n in _nodes:
+		globals.append((n as Node3D).global_transform)
+		vis.append((n as Node3D).is_visible_in_tree())
+	var tinted := not tint.is_equal_approx(Color.WHITE)
+	var overlay := Color(tint.r, tint.g * 0.6, tint.b * 0.4)
+	var detail := _detail
+	for i in _p_node.size():
+		var ni: int = _p_node[i]
+		if not vis[ni] or not _p_vis[i] or (not detail and _p_detail[i]):
+			continue
+		var t: Transform3D = globals[ni] * _p_local[i]
+		var col: Color = _p_color[i]
+		if tinted:
+			col = col.lerp(overlay, 0.5)
+		var b := t.basis
+		var o := t.origin
+		var buf: PackedFloat32Array = cache[_p_shape[i]]
+		buf.append_array([b.x.x, b.y.x, b.z.x, o.x, b.x.y, b.y.y, b.z.y, o.y,
+			b.x.z, b.y.z, b.z.z, o.z, col.r, col.g, col.b, 1.0])
 
 
 func _update(delta: float, snap: bool) -> void:
@@ -361,12 +444,11 @@ func _update(delta: float, snap: bool) -> void:
 	else:
 		_update_soldier(delta, k, kh)
 	_update_legs(delta)
-	_apply_tint()
 
 
 func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	_grip = _grip.lerp(t_grip, k)
-	_wdir = _wdir.slerp(t_dir.normalized(), k).normalized()
+	_wdir = _wdir.lerp(t_dir.normalized(), k).normalized()
 	var grip := _grip
 	var wdir := _wdir
 	var pitch := Basis(Vector3.RIGHT, aim_pitch)
@@ -390,13 +472,13 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	hand_bayonet.visible = bayonet_in_hand
 	if bayonet_in_hand:
 		hand_bayonet.transform = Transform3D(_look_basis(wdir), _hand_r)
-	ramrod.visible = ramrod_on
+	_p_vis[ramrod] = ramrod_on
 	if ramrod_on:
 		var muzzle := grip + wdir * MUZZLE
 		if (_hand_r - muzzle).dot(wdir) > 0.02:
 			_place_segment(ramrod, _hand_r, muzzle)
 		else:
-			ramrod.visible = false
+			_p_vis[ramrod] = false
 
 
 func _pitched(v: Vector3, pitch: Basis, pivot: Vector3) -> Vector3:
@@ -453,7 +535,7 @@ func _update_legs(delta: float) -> void:
 			ankle.y = maxf(ankle.y, 0.04 + lift * 0.2)
 			_place_segment(_leg[side + "_thigh"], hip, knee)
 			_place_segment(_leg[side + "_shin"], knee, ankle)
-			_leg[side + "_foot"].transform = Transform3D(Basis(), ankle + Vector3(0, -0.01, -0.12))
+			_set_pos(_leg[side + "_foot"], ankle + Vector3(0, -0.01, -0.12))
 		else:
 			var thigh_dir := Basis(Vector3.RIGHT, swing) * Vector3.DOWN
 			var knee := hip + thigh_dir * 0.44
@@ -461,7 +543,7 @@ func _update_legs(delta: float) -> void:
 			var ankle := knee + shin_dir * 0.44
 			_place_segment(_leg[side + "_thigh"], hip, knee)
 			_place_segment(_leg[side + "_shin"], knee, ankle)
-			_leg[side + "_foot"].transform = Transform3D(Basis(), ankle + Vector3(0, -0.0, -0.05))
+			_set_pos(_leg[side + "_foot"], ankle + Vector3(0, -0.0, -0.05))
 	# A little bob in the stride.
 	spine.position.y = _hip_y + absf(cos(_walk_phase)) * amp * 0.06
 
@@ -552,14 +634,15 @@ static func _look_basis(dir: Vector3) -> Basis:
 	return Basis.looking_at(dir, up)
 
 
-## Stretch a unit-length segment mesh from a to b.
-func _place_segment(mi: MeshInstance3D, a: Vector3, b: Vector3) -> void:
+## Stretch a segment part (a box along -Z) from a to b.
+func _place_segment(id: int, a: Vector3, b: Vector3) -> void:
 	var d := b - a
 	var l := d.length()
 	if l < 0.001:
 		return
-	var basis := _look_basis(d) * Basis.from_scale(Vector3(1, 1, l))
-	mi.transform = Transform3D(basis, (a + b) * 0.5)
+	var sc: Vector3 = _p_scale[id]
+	var basis := _look_basis(d) * Basis.from_scale(Vector3(sc.x, sc.y, l))
+	_p_local[id] = Transform3D(basis, (a + b) * 0.5)
 
 
 ## Two-bone IK: shoulder -> elbow -> hand. The elbow bends toward `pole`.
@@ -581,7 +664,7 @@ func _place_arm(side: String, shoulder: Vector3, hand: Vector3, pole: Vector3) -
 	var hand_pos := shoulder + axis * d
 	_place_segment(_arm[side + "_upper"], shoulder, elbow)
 	_place_segment(_arm[side + "_fore"], elbow, hand_pos)
-	_arm[side + "_hand"].position = hand_pos
+	_set_pos(_arm[side + "_hand"], hand_pos)
 	var cuff_key := side + "_cuff"
 	if _arm.has(cuff_key):
 		var fd := (hand_pos - elbow).normalized()
@@ -590,17 +673,6 @@ func _place_arm(side: String, shoulder: Vector3, hand: Vector3, pole: Vector3) -
 
 
 # ---------------------------------------------------------------- look & death
-
-func _apply_tint() -> void:
-	if tint == _last_tint:
-		return
-	_last_tint = tint
-	var use := not tint.is_equal_approx(Color.WHITE)
-	if use:
-		_overlay.albedo_color = Color(tint.r, tint.g * 0.6, tint.b * 0.4, 0.5)
-	for mi in _all_meshes:
-		mi.material_overlay = _overlay if use else null
-
 
 ## Muzzle position in world space (for smoke and flashes).
 func muzzle_global() -> Vector3:
@@ -612,7 +684,6 @@ func muzzle_global() -> Vector3:
 func die() -> void:
 	_dead = true
 	tint = Color(0.55, 0.55, 0.55)
-	_apply_tint()
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(body, "rotation:x", PI * 0.47, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(body, "position:y", 0.12, 0.6)

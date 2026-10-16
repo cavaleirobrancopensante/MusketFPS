@@ -63,7 +63,7 @@ func _physics_process(delta: float) -> void:
 		velocity = knockback
 		knockback = knockback.move_toward(Vector3.ZERO, 12.0 * delta)
 		set_base_anim("stagger")
-		move_and_slide()
+		_move(delta)
 		return
 
 	if retarget_timer <= 0.0 or not is_valid_target(target):
@@ -80,14 +80,14 @@ func _physics_process(delta: float) -> void:
 		set_base_anim("shield")
 		velocity = push * 2.0
 		velocity.y = 0.0
-		move_and_slide()
+		_move(delta)
 		return
 
 	if not is_valid_target(target):
 		_cancel_windup()
 		velocity = push * 2.0
 		set_base_anim("idle")
-		move_and_slide()
+		_move(delta)
 		return
 
 	var to_t := target.global_position - global_position
@@ -114,7 +114,7 @@ func _physics_process(delta: float) -> void:
 		velocity = to_t / d * speed + push * 3.0
 		set_base_anim("walk")
 	velocity.y = 0.0
-	move_and_slide()
+	_move(delta)
 
 
 func _strike(dist: float) -> void:
@@ -209,7 +209,5 @@ func _on_died() -> void:
 	battle.play_sound("death", global_position + Vector3.UP * 1.4, -4.0)
 	battle.on_enemy_died(self)
 	# Leave the corpse a while, then clean up to keep the phone happy.
-	var tw := create_tween()
-	tw.tween_interval(15.0)
-	tw.tween_property(visual, "scale", Vector3.ONE * 0.01, 1.5)
+	var tw := _fade_corpse(15.0, 1.5)
 	tw.tween_callback(queue_free)

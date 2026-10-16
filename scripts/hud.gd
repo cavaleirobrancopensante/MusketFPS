@@ -407,8 +407,12 @@ func _draw() -> void:
 	draw_rect(Rect2(20, 20, 264, 24), Color(0, 0, 0, 0.5))
 	draw_rect(Rect2(22, 22, 260.0 * player.hp / player.max_hp, 20), Color(0.8, 0.15, 0.1))
 	var status := "Wave %d/%d   Lizardmen %d   Company %d   Loaded %d" % [
-		battle.wave, battle.WAVES.size(), battle.enemies.size(), battle.soldiers.size(), battle.loaded_count()]
+		battle.wave, battle.wave_count(), battle.enemies.size(), battle.soldiers.size(), battle.loaded_count()]
 	_text(status, Vector2(22, 72), 20, Color(1, 1, 1, 0.9))
+	if Settings.stress:
+		var fps := Engine.get_frames_per_second()
+		var fcol := Color(0.4, 1, 0.4) if fps >= 55 else (Color(1, 0.85, 0.3) if fps >= 30 else Color(1, 0.4, 0.3))
+		_text("%d FPS   units %d" % [fps, battle.soldiers.size() + battle.enemies.size()], Vector2(310, 40), 26, fcol)
 
 	# Move joystick.
 	if joy_index != -1:
