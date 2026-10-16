@@ -92,6 +92,9 @@ var _leave_btn: Button
 
 func _ready() -> void:
 	_test = "--towntest" in OS.get_cmdline_user_args()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--gfx="):
+			gfx = a.substr(6)
 	Loading.begin(self)
 	sid = Company.visiting
 	if sid < 0 or sid >= World.gen.settlements.size():
@@ -169,11 +172,64 @@ func _palette() -> Dictionary:
 		"trim": Color(0.38, 0.26, 0.16), "street": Color(0.6, 0.54, 0.42)}
 
 
-func _mat(col: Color, unshaded := false) -> StandardMaterial3D:
+## Graphics experiments (`-- --gfx=lit|toon|tex|dusk`, for comparing looks).
+static var gfx := ""
+static var _toon_shader: Shader
+static var _outline_shader: Shader
+static var _grain: NoiseTexture2D
+
+
+func _mat(col: Color, unshaded := false) -> Material:
+	if gfx == "toon" and not unshaded:
+		if _toon_shader == null:
+			_toon_shader = Shader.new()
+			_toon_shader.code = """shader_type spatial;
+uniform vec4 col : source_color;
+void fragment() { ALBEDO = col.rgb; }
+void light() {
+	float d = dot(NORMAL, LIGHT);
+	float band = d > 0.55 ? 1.0 : (d > 0.0 ? 0.62 : 0.38);
+	DIFFUSE_LIGHT += band * ATTENUATION * LIGHT_COLOR / 3.14159;
+	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
+	DIFFUSE_LIGHT += step(0.5, rim) * 0.12 * LIGHT_COLOR;
+}"""
+			_outline_shader = Shader.new()
+			_outline_shader.code = """shader_type spatial;
+render_mode cull_front, unshaded;
+void vertex() { VERTEX += NORMAL * 0.045; }
+void fragment() { ALBEDO = vec3(0.08, 0.06, 0.05); }"""
+		var sm := ShaderMaterial.new()
+		sm.shader = _toon_shader
+		sm.set_shader_parameter("col", col.lightened(0.05))
+		var ol := ShaderMaterial.new()
+		ol.shader = _outline_shader
+		sm.next_pass = ol
+		return sm
 	var m := StandardMaterial3D.new()
 	m.albedo_color = col
 	if unshaded:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if gfx == "tex" or gfx == "dusk":
+		# Plaster, timber, stone and thatch all get a grain, in world space so
+		# it doesn't stretch on big walls.
+		if _grain == null:
+			_grain = NoiseTexture2D.new()
+			_grain.width = 256
+			_grain.height = 256
+			_grain.seamless = true
+			var n := FastNoiseLite.new()
+			n.frequency = 0.04
+			n.fractal_octaves = 4
+			_grain.noise = n
+			var g := Gradient.new()
+			g.set_color(0, Color(0.72, 0.72, 0.72))
+			g.set_color(1, Color(1.08, 1.08, 1.08))
+			_grain.color_ramp = g
+		m.albedo_texture = _grain
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3(0.35, 0.35, 0.35)
+		m.roughness = 0.9
 	return m
 
 
@@ -249,6 +305,30 @@ func _build_env() -> void:
 	if underground:
 		sun.light_energy = 0.15
 	add_child(sun)
+	if gfx in ["lit", "tex", "dusk", "toon", "noshadow"]:
+		sun.shadow_enabled = gfx == "lit" # (real shadows need a phone test: software renderers get them wrong)
+		sun.directional_shadow_max_distance = 90.0
+		sun.shadow_blur = 1.5
+		# (Glow is left off: the phone's renderer and the compatibility one
+		# disagree badly about it, and it washes these pastel towns out.)
+		env.ambient_light_energy = 0.55
+		sun.light_energy = 0.95
+		env.fog_density = 0.0025
+		sun.rotation_degrees = Vector3(-38, 50, 0)
+	if gfx == "toon":
+		env.adjustment_saturation = 1.3
+		env.ambient_light_energy = 0.45
+	if gfx == "dusk":
+		sun.rotation_degrees = Vector3(-12, 70, 0)
+		sun.light_color = Color(1.0, 0.68, 0.42)
+		sun.light_energy = 1.4
+		var sm2 := (env.sky.sky_material as ProceduralSkyMaterial)
+		sm2.sky_top_color = Color(0.25, 0.3, 0.5)
+		sm2.sky_horizon_color = Color(0.98, 0.62, 0.4)
+		sm2.ground_horizon_color = Color(0.6, 0.45, 0.35)
+		env.fog_light_color = Color(0.9, 0.62, 0.45)
+		env.fog_density = 0.008
+		env.ambient_light_energy = 0.6
 
 
 func _build_ground() -> void:
@@ -1388,6 +1468,11 @@ func _shot(name: String) -> void:
 
 
 func _shots() -> void:
+	if gfx != "":
+		_me.position = Vector3(R * 0.42, 0.05, 1.5)
+		_me.rotation.y = PI * 0.5 + 0.12
+		_pitch = 0.02
+		await get_tree().create_timer(0.4).timeout
 	await _shot("gate")
 	var over := Camera3D.new()
 	add_child(over)
@@ -1395,6 +1480,9 @@ func _shots() -> void:
 	over.look_at(Vector3.ZERO)
 	over.make_current()
 	await _shot("above")
+	if gfx != "":
+		get_tree().quit()
+		return
 	_cam.make_current()
 	# Walk up to someone and talk.
 	var tf = _folk[0]
