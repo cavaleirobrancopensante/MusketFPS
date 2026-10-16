@@ -113,7 +113,12 @@ func _ready() -> void:
 	# Campaign: your actual men (the fit ones) against the warband the scouts
 	# reported. Otherwise a stand-alone battle (stress test, autotest).
 	if Company.active:
-		waves = PROLOGUE_WAVES if prologue else Company.waves_for(Company.next_enemy_count())
+		if prologue:
+			waves = PROLOGUE_WAVES
+		elif not Company.next_battle.is_empty():
+			waves = Company.waves_for(int(Company.next_battle["enemy"])) # the warband you met on the map
+		else:
+			waves = Company.waves_for(Company.next_enemy_count())
 		for rec in Company.fit_men():
 			var s = SoldierScript.new()
 			s.battle = self
@@ -1277,8 +1282,11 @@ func _build_world() -> void:
 	noise_tex.seamless = true
 	noise_tex.noise = noise
 	var ramp := Gradient.new()
-	ramp.set_color(0, Color(0.24, 0.34, 0.15))
-	ramp.set_color(1, Color(0.42, 0.47, 0.24))
+	# The ground matches where on the map the fight is (see _terrain_look).
+	var look := _terrain_look()
+	ramp.set_color(0, look["dark"])
+	ramp.set_color(1, look["light"])
+	env.fog_density = look["fog"]
 	noise_tex.color_ramp = ramp
 	var ground_mat := StandardMaterial3D.new()
 	ground_mat.albedo_texture = noise_tex
@@ -1294,11 +1302,29 @@ func _build_world() -> void:
 		_scatter_trees()
 
 
+## Ground colours, fog and trees for the map terrain the battle is fought on.
+func _terrain_look() -> Dictionary:
+	var tt := -1
+	if Company.active and not Company.next_battle.is_empty():
+		tt = int(Company.next_battle.get("terrain", -1))
+	match tt:
+		3: # forest: trees close all round
+			return {"dark": Color(0.18, 0.28, 0.12), "light": Color(0.32, 0.4, 0.2), "fog": 0.009, "trees": 260, "near": 48.0}
+		4: # hills
+			return {"dark": Color(0.33, 0.35, 0.2), "light": Color(0.5, 0.48, 0.3), "fog": 0.005, "trees": 50, "near": 90.0}
+		6: # swamp: dark mud, mist, dead trees
+			return {"dark": Color(0.2, 0.22, 0.14), "light": Color(0.32, 0.33, 0.2), "fog": 0.014, "trees": 140, "near": 55.0}
+		1: # beach
+			return {"dark": Color(0.6, 0.54, 0.38), "light": Color(0.75, 0.68, 0.5), "fog": 0.006, "trees": 30, "near": 110.0}
+	return {"dark": Color(0.24, 0.34, 0.15), "light": Color(0.42, 0.47, 0.24), "fog": 0.006, "trees": 90, "near": 95.0}
+
+
 ## Pines around the edges of the field, drawn with MultiMesh (2 draw calls total).
 func _scatter_trees() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1725
-	var count := 90
+	var look := _terrain_look()
+	var count: int = look["trees"]
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.15
 	trunk.bottom_radius = 0.25
@@ -1325,7 +1351,7 @@ func _scatter_trees() -> void:
 	crowns.instance_count = count
 	for i in count:
 		var ang := rng.randf() * TAU
-		var dist := rng.randf_range(95.0, 190.0)
+		var dist := rng.randf_range(float(look["near"]), 190.0)
 		var s := rng.randf_range(0.8, 1.6)
 		var pos := Vector3(cos(ang) * dist, 0, sin(ang) * dist)
 		var basis := Basis().scaled(Vector3(s, s, s))

@@ -7,6 +7,7 @@ const BATTLE := "res://scenes/battle.tscn"
 const CAMP := "res://scenes/aftermath.tscn"
 const COMPANY := "res://scenes/company.tscn"
 const INTRO := "res://scenes/intro.tscn"
+const MAP := "res://scenes/map.tscn"
 
 var _tp_check: CheckButton
 var _new_btn: Button
@@ -24,6 +25,13 @@ func _ready() -> void:
 			Engine.time_scale = 4.0
 		Company.new_campaign()
 		get_tree().change_scene_to_file.call_deferred(INTRO)
+		return
+	if "--maptest" in args:
+		# Headless check of the map: a new campaign straight after the beach.
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		World.reset()
+		get_tree().change_scene_to_file.call_deferred(MAP)
 		return
 	if "--company" in args:
 		# Headless check of the Company screen after the prologue.
@@ -102,7 +110,12 @@ func _on_continue() -> void:
 	Settings.stress = false
 	if Company.load_campaign():
 		# Saved before the prologue was fought: back to the beach.
-		get_tree().change_scene_to_file(BATTLE if Company.prologue else CAMP)
+		if Company.prologue:
+			get_tree().change_scene_to_file(BATTLE)
+		elif Company.results_unseen or not World.has_save():
+			get_tree().change_scene_to_file(CAMP)
+		else:
+			get_tree().change_scene_to_file(MAP) # back on the road
 
 
 func _on_new() -> void:
@@ -114,6 +127,7 @@ func _on_new() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	Company.new_campaign()
+	World.reset() # a new land for a new campaign
 	get_tree().change_scene_to_file(INTRO) # the shipwreck, then the beach
 
 

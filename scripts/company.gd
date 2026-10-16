@@ -118,6 +118,8 @@ var prologue := false # the opening battle is still to be fought
 ## The ship's stores the lizards carried off (muskets, cartridges, guns,
 ## rum): recovering them is the first great objective. Empty once recovered.
 var stash := {}
+## A fight the map has started: {"enemy": int, "terrain": int, "party": id}.
+var next_battle := {}
 var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
@@ -154,6 +156,7 @@ func new_campaign() -> void:
 		roster.append(m)
 	prologue = true
 	stash = {}
+	next_battle = {}
 	march_note = ""
 	save()
 
@@ -480,12 +483,16 @@ func buy(key: String) -> void:
 ## tot of rum each). Going without costs morale at once, then attributes and
 ## health (see men.gd); men who eat while their comrades starve breed
 ## resentment. Fed men heal and recover. Returns the day's notes.
-func _road_day() -> Dictionary:
+## `water`: "random" (the old march), or what the map found today:
+## "clean", "foul", or "" (a dry day).
+func _road_day(water := "random") -> Dictionary:
 	var day_notes := {"thirsty": 0, "hungry": 0, "sick": 0, "died": [], "unfair": false, "grog": 0, "dry": 0}
 	# Water on the road today? Refill the barrels (and maybe they're foul).
-	if randf() < WATER_DAY_CHANCE:
+	if water == "random":
+		water = ("foul" if randf() < FOUL_WATER_CHANCE else "clean") if randf() < WATER_DAY_CHANCE else ""
+	if water != "":
 		stores["water"] = maxi(int(stores["water"]), WATER_CART)
-		stores["foul"] = randf() < FOUL_WATER_CHANCE
+		stores["foul"] = water == "foul"
 	else:
 		day_notes["dry"] = 1
 	var ate: Array = []
@@ -630,6 +637,48 @@ func march_days() -> int:
 	return maxi(2, days)
 
 
+## A day passing on the campaign map (the map's clock calls this at
+## midnight). `water` is what the party passed today: "clean", "foul" or "".
+## Returns notes worth showing the player.
+func pass_day(water: String) -> PackedStringArray:
+	day += 1
+	var notes: PackedStringArray = []
+	var dn := _road_day(water)
+	if int(dn["thirsty"]) > 0:
+		notes.append("%d men went thirsty." % int(dn["thirsty"]))
+	if int(dn["hungry"]) > 0:
+		notes.append("%d men went hungry." % int(dn["hungry"]))
+	if int(dn["sick"]) > 0:
+		notes.append("%d fell sick from foul water." % int(dn["sick"]))
+	if bool(dn["unfair"]):
+		notes.append("Some ate while others starved; there is muttering in the ranks.")
+	if dn["died"].size() > 0:
+		notes.append("Died: %s." % ", ".join(dn["died"]))
+	if day - last_pay_day >= 7 and roster.size() > 0:
+		last_pay_day += 7
+		var wages := weekly_wages()
+		if money >= wages:
+			money -= wages
+			notes.append("Wages paid: %d crowns." % wages)
+			for m in roster:
+				Men.add_morale(m, 3)
+		else:
+			money = 0
+			notes.append("No pay! The men are angry.")
+			for m in roster:
+				Men.add_morale(m, -20)
+	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12)
+	for g in gone:
+		roster.erase(g)
+	if gone.size() > 0:
+		notes.append("%d deserted in the night." % gone.size())
+	var cm := company_morale()
+	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015:
+		notes.append(_mutiny())
+	save()
+	return notes
+
+
 ## March to the next fight: days pass on the road (see _road_day), wages
 ## fall due, and a company with low morale may desert or mutiny.
 func march_on() -> String:
@@ -731,7 +780,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
@@ -760,6 +809,7 @@ func load_campaign() -> bool:
 		officer["rank"] = "Captain"
 	prologue = bool(data.get("prologue", false))
 	stash = data.get("stash", {})
+	next_battle = data.get("next_battle", {})
 	stores = data.get("stores", {"items": {"musket": 1, "bayonet": 1}, "water": WATER_CART, "rations": 40, "ammo": 120})
 	last_result = data.get("last_result", {})
 	march_note = String(data.get("march_note", ""))
