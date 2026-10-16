@@ -60,6 +60,17 @@ var story_text := ""
 var story_time := 0.0
 
 
+var hint_text := ""
+var hint_time := 0.0
+
+
+## A tutorial hint: a gold-edged box on the left, between the banner and
+## the move stick.
+func show_hint(text: String, seconds: float) -> void:
+	hint_text = text
+	hint_time = seconds
+
+
 ## A line of dialogue, shown as a subtitle in the lower middle of the screen.
 func show_story(speaker: String, text: String, seconds: float) -> void:
 	story_speaker = speaker
@@ -260,6 +271,7 @@ func _process(delta: float) -> void:
 		player.move_input = v
 	message_time -= delta
 	story_time -= delta
+	hint_time -= delta
 	pressed_time -= delta
 	hurt_flash = move_toward(hurt_flash, 0.0, delta * 2.5)
 	hit_marker = move_toward(hit_marker, 0.0, delta)
@@ -321,6 +333,7 @@ func _draw() -> void:
 		_draw_button(b)
 
 	_draw_story()
+	_draw_hint()
 
 	# Message banner.
 	if message_time > 0.0 and message != "":
@@ -358,6 +371,21 @@ func _draw_objective() -> void:
 	var p2 := Vector2(x, size.y - 40.0)
 	draw_colored_polygon(PackedVector2Array([p2 + Vector2(-16, -10), p2 + Vector2(16, -10), p2 + Vector2(0, 10)]), gold)
 	_text_center(label + "  (behind you)", p2 + Vector2(0, -30), 20, gold)
+
+
+func _draw_hint() -> void:
+	if hint_time <= 0.0 or hint_text == "":
+		return
+	var alpha := clampf(hint_time / 0.5, 0.0, 1.0)
+	var w := 430.0
+	var fsize := 18
+	var tsize := font.get_multiline_string_size(hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 24.0, fsize)
+	var r := Rect2(20, 262, w, tsize.y + 40.0)
+	draw_rect(r, Color(0.05, 0.06, 0.1, 0.72 * alpha))
+	draw_rect(r, Color(0.95, 0.78, 0.3, 0.8 * alpha), false, 2)
+	_text("HOW TO", Vector2(32, 284), 15, Color(0.95, 0.78, 0.3, alpha))
+	draw_multiline_string(font, Vector2(32, 308), hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 24.0, fsize, -1,
+		Color(1, 1, 1, alpha))
 
 
 ## Dialogue subtitle: who's speaking in gold, the line in white, on a band.

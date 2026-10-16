@@ -1,128 +1,138 @@
 # MusketFPS roadmap
 
-A Mount & Blade: Warband-style sandbox in a fantasy world with gunpowder.
-You lead a company of musketeers across a frontier overrun by lizardmen
-hordes: march on a campaign map, fight the battles yourself in first or third
-person, and keep your men alive, paid and fed between fights.
+A Mount & Blade: Warband-style sandbox about castaways with muskets. A
+troopship of the Kingdom of Calder (names are placeholders, see
+`scripts/lore.gd`) is wrecked on an unknown coast. The regiment entrenches
+on the beach, is overrun by a lizard horde, and the survivors flee inland
+with their Major's last order and almost nothing else. You are the young
+officer he gave the company to.
+
+The land is huge, unmapped and a little behind you in technology. Your
+muskets, powder and cannon are the best weapons on the continent, and
+every one you lose is hard to replace. That makes you weak in numbers, and
+valuable to everyone who learns what you carry.
 
 **Decisions so far**
 
-- Sandbox, Warband-like: no fixed story; you make your own career.
+- Sandbox, Warband-like: one opening story, then you make your own way.
 - 3D only. Sprites stay only as far-distance stand-ins for performance.
-- You choose your background when starting a new game (see M6). Now that
-  every campaign opens as Harrow's Ensign at Cinder Ford, the background
-  becomes who you were before the battle (and what that gives you).
+- Every campaign opens with the shipwreck and the battle on the beach (also
+  the tutorial). Who you were before the voyage is your background (M7).
+- Your own nation is far away and absent. The land's powers are the lizard
+  hordes, two human nations at war with each other, and the dwarves. You
+  can side with any of them, or none.
 
 ## The core loop
 
-1. **Campaign map:** march your company across the region; find towns,
-   villages, roads, lizard warbands and nests. Days pass, food runs down,
-   wages come due.
-2. **Battle:** the existing battle, using the real numbers on both sides and
-   ground that matches where on the map the fight happens.
-3. **Aftermath:** casualties, wounded, loot and pay. Survivors gain
-   experience.
-4. **Company:** recruit, resupply, equip, promote veterans. Back to the map.
+1. **The map:** march across a huge land hidden by fog of war; scout it,
+   find villages, towns, dwarf holds, warbands and nests.
+2. **Battle:** the existing battle, with the real numbers on both sides and
+   ground that matches the map.
+3. **Aftermath:** casualties, wounded, loot, muskets recovered (or lost).
+4. **Company:** recruit, feed, equip, level up, keep morale above mutiny.
+
+## The arc of a campaign
+
+- **Act 1, castaways:** low morale, little food, few cartridges, the ship's
+  stores carried off by the lizards. Survive, find friends, recruit natives
+  with spears and bows, and gather a force big enough to storm the nest
+  and **recover the stash** (muskets, powder, the ship's guns).
+- **Act 2, the newcomers:** with the stash back, the factions take notice.
+  Hire out as mercenaries, pick a side in the human war (or not), and trade
+  your secret: **teaching a faction to make gunpowder and firearms** buys
+  its friendship, but arms it, perhaps against you later.
+- **Act 3, a power in the land:** smiths (dwarves first) make muskets for
+  you; your trained natives become musketeers; you hold ground of your own.
 
 ## Milestones
 
 Each milestone ends with something playable.
 
-### M0: Clean-up for 3D only ✅ done
+### Done
 
-- Remove the 2D game mode and its viewmodel/arms code from the HUD.
-- Keep the sprite atlas only as the far stand-in for 3D units.
-- Menu: New Game / Continue / Stress test.
+- **M0 3D only** and **M1 a company that remembers** (names, ranks, wounds,
+  death, saves).
+- **Projectiles:** real musket balls, grenades, javelins; friendly fire.
+- **Kit and logistics:** per-man kit and pack from the wagon, the Company
+  screen, levels and attribute points, morale, hunger, thirst, foul water,
+  grog, sickness, desertion and mutiny.
+- **The shipwreck prologue:** storm cutscene, the entrenched beach with
+  cannons, a tutorial woven into the waves, the Major's fall, the rout
+  inland. You start with low morale and supplies, and the stash is lost.
 
-### M1: A company that remembers ✅ done
+### M2: The map
 
-The battle becomes a chain of linked fights before the map exists.
+- **Warband-style:** your party is a figure walking on the map. Tap where to
+  go and it marches there; time (the clock, the calendar, food and water,
+  wages, healing) runs only while you move and stops when you stop. Other
+  parties (warbands, caravans, armies) move in the same time.
+- A tilted 3D tabletop map built from **regions**, so the land can be very
+  large and still run on a phone. Each region has terrain (coast, forest,
+  hills, marsh, plains, mountains), and battles there use matching ground.
+- **Fog of war:** everything starts black except the beach. Regions are
+  revealed by marching and scouting; scouts and high ground see further.
+- Time in days, food and water by region (rivers, wells, dry country),
+  foul water and grog as now.
+- Lizard warbands roam out from the nest that holds the stash.
 
-- Every soldier is a named person with his traits (reaction, pace,
-  steadiness), experience and rank: recruit, musketeer, veteran, sergeant.
-- Experience makes men steadier, quicker to reload, better with the bayonet.
-- Wounds keep a man out for some days; deaths are permanent.
-- Aftermath screen: who fell, who's wounded, who was promoted, pay and loot.
-- Save and load (JSON in `user://`), autosave after every battle.
+### M3: Natives and primitive arms
 
-### Projectiles ✅ done
+- Recruit in villages: **spearmen, archers, crossbowmen**, cheap and
+  numerous, worse than your musketeers. Bows and crossbows are new
+  projectile kinds (the table is ready for them).
+- Kit becomes scarce: muskets lost in battle are gone unless recovered from
+  the field. Cartridges are made from powder and lead, not bought.
+- Mixed lines in battle: pikes in front, muskets behind, archers on the
+  flanks.
 
-- Real ballistic musket balls (gravity, drag) that hit whoever is in the way,
-  with friendly fire both ways and men holding fire when the line is blocked.
-- Hand grenades: thrown, bouncing, fused, with blast and knockback.
-- A kinds table ready for javelins, arrows and round shot (M5).
+### M4: The stash
 
-### Prologue, kit and logistics ✅ done
+- Find the nest (scouting, rumours from villages).
+- The assault: a set-piece battle against a fortified lizard nest.
+- Recovering the stash: muskets, powder, the ship's guns, which become
+  usable in battle (we already have cannons on the beach).
 
-- Cinder Ford: you start as the Ensign, the captain falls and gives you the
-  company, you lead the survivors out.
-- Kit per man (head, torso, primary, secondary, pack) handed out from the
-  wagon on the Company screen, and visible on the 3D models.
-- Levels with attribute points (aim, strength, constitution, fitness),
-  morale, health, hunger, thirst, foul water, sickness, grog, fair shares,
-  desertion and mutiny. The Logistics window on the wagon.
+### M5: The land's powers
 
-### M2: Campaign map
+- **Two human nations** at war (names to come), each with towns, lords,
+  armies and a war front that moves.
+- **Dwarves:** holds in the mountains; the best smiths in the land.
+- Relations and reputation; contracts; joining a side, or playing both.
+- **Teaching gunpowder:** a deal with real consequences. A faction you teach
+  fields musketeers of its own, and may later turn them on you.
 
-- A small region: a tilted 3D tabletop map, tap to march.
-- Two or three towns, a handful of villages, one lizard nest.
-- Lizard warbands spawn from the nest, roam, raid villages and grow.
-- Time in days: food is eaten every day, wages are due every week.
-- Meeting a warband: attack or try to slip away. Battles use the real
-  roster of both parties.
+### M6: Production
 
-### M3: Towns
+- Hire smiths (dwarves are the best) to make muskets, bayonets and powder.
+- Saltpetre, sulphur and charcoal as resources found on the map.
+- Training natives into musketeers.
 
-- Recruit (raw recruits are cheap and shaky), buy food, sell loot.
-- Rest to heal the wounded.
-- Contracts board: clear a road, defend a village, hunt a war leader.
-- Tavern rumours point at warbands and nests.
+### M7: Backgrounds and the officer
 
-### M4: Battle variety
+Who you were before the wreck, chosen at a new game: a gentleman's son who
+bought his commission, a sergeant promoted from the ranks, a ship's officer,
+an engineer... Each starts with different skills and men.
 
-- Terrain sets chosen from the map: open field, forest edge, river ford,
-  village, fort walls.
-- Objectives: defend a village until relief arrives, storm a nest, escort a
-  wagon.
-- Morale and rout on both sides: units break and flee when it goes badly.
-- Retreat: pull out of a lost fight at a cost.
-- Deployment: choose where the line forms before contact.
+Officer skills that grow with use: Leadership, Tactics, Marksmanship,
+Bladework, Surgery, Logistics, Diplomacy, Engineering (gunpowder and
+fortification).
 
-### M5: Enemy and troop variety
+### M8: Battle variety
 
-- Lizard skirmishers with javelins, armoured shield-wall brutes, raptor
-  riders (fast flankers), war leaders and shamans who stiffen a warband.
-- Your side: grenadiers (bigger, steadier, hand grenades), riflemen (slow to
-  load, very accurate), a drummer whose presence steadies the line.
+- Terrain sets from the map; objectives (defend a village, storm a nest,
+  escort a wagon); morale and rout on both sides; retreat; deployment.
+- Enemy variety: lizard skirmishers (javelins), shield brutes, raptor riders,
+  shamans; human pikes, archers, knights; dwarf crossbows and axes.
 
-### M6: Backgrounds and the officer
+### M9: Polish and release
 
-New-game screen with three backgrounds:
-
-| Background | Starts with | Trade-off |
-|---|---|---|
-| Mercenary captain | Veteran musketeers, more money | No friends; lives on contracts |
-| Colonial officer | Regulars, steady wages from the crown | Must follow orders; obligations to a faction |
-| Monster hunter | A small band of riflemen | Little money; earns bounties on nests and leaders |
-
-Officer skills that grow with use: Leadership (company size, morale), Tactics
-(volley speed, line discipline), Marksmanship, Bladework, Surgery (fewer
-deaths), Logistics (march speed, food). Renown unlocks a bigger company.
-
-### M7: Living world
-
-- Colonies and the lizard hordes as forces on the map: villages burn and are
-  rebuilt, warbands grow into hordes if left alone, forts can fall.
-- Relations with colonies, towns and factions; reputation follows your deeds.
-
-### M8: Polish and release
-
-- Tutorial battle, music, UI and touch polish, balance pass, Android export.
+- Music, UI and touch polish, balance, Android export.
 
 ## Open questions
 
-- The world's name, its colonies, and whether rival human factions exist
-  (deserters, bandits, a rival crown) as enemies too.
-- What happens when you fall in battle: knocked out and captured, Warband
-  style, or game over.
-- How big a company can get on a phone (the stress test gives the ceiling).
+- The real names: our nation, the ship, the land, the two human nations,
+  the dwarves (placeholders live in `scripts/lore.gd`).
+- What happens when you fall in battle: captured, Warband style, or game
+  over.
+- How far the tech gap goes: do the human nations have crossbows and
+  armour, cannon of their own, or nothing like them?

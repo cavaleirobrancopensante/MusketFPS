@@ -21,6 +21,11 @@ static func build_all() -> Dictionary:
 		"bayonet": bayonet_fix(),
 		"boom": boom(),
 		"thud": thud(),
+		"cannon": cannon(),
+		"thunder": thunder(),
+		"storm": storm(),
+		"surf": surf(),
+		"crack": crack(),
 	}
 
 
@@ -87,6 +92,88 @@ static func boom() -> AudioStreamWAV:
 		var blast := lp2 * 9.0 * exp(-t / 0.6)
 		var thump := sin(TAU * (42.0 - 15.0 * t) * t) * exp(-t / 0.25)
 		b[i] = crack * 0.8 + blast + thump
+	return _to_wav(b)
+
+
+## A field gun: a deep, long boom with a hard crack on top.
+static func cannon() -> AudioStreamWAV:
+	var b := _buf(2.8)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var n := _noise()
+		lp += 0.04 * (n - lp)
+		lp2 += 0.02 * (lp - lp2)
+		var crack := n * exp(-t / 0.02)
+		var blast := lp2 * 12.0 * exp(-t / 0.8)
+		var thump := sin(TAU * (34.0 - 10.0 * t) * t) * exp(-t / 0.35)
+		b[i] = crack * 0.6 + blast + thump * 1.2
+	return _to_wav(b)
+
+
+## Thunder: a crack, then a long rolling rumble that swells and fades.
+static func thunder() -> AudioStreamWAV:
+	var b := _buf(4.0)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var n := _noise()
+		lp += 0.03 * (n - lp)
+		lp2 += 0.015 * (lp - lp2)
+		var roll := lp2 * 14.0 * (0.6 + 0.4 * sin(t * 7.0) * sin(t * 2.3)) * exp(-t / 1.4)
+		b[i] = n * exp(-t / 0.05) * 0.5 + roll
+	return _to_wav(b)
+
+
+## Wind and rain: a loopable roar of filtered noise.
+static func storm() -> AudioStreamWAV:
+	var b := _buf(4.0)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var n := _noise()
+		lp += 0.06 * (n - lp)
+		lp2 += 0.3 * (n - lp2)
+		var gust := 0.6 + 0.4 * sin(TAU * t / 4.0) # one full gust per loop
+		b[i] = lp * 3.0 * gust + (n - lp2) * 0.25
+	var w := _to_wav(b)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_end = b.size()
+	return w
+
+
+## Waves on a beach: slow swells of soft noise. Loops.
+static func surf() -> AudioStreamWAV:
+	var b := _buf(6.0)
+	var lp := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		lp += 0.08 * (_noise() - lp)
+		var swell := pow(0.5 + 0.5 * sin(TAU * t / 3.0 - 1.5), 2.0)
+		b[i] = lp * (0.2 + swell)
+	var w := _to_wav(b)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_end = b.size()
+	return w
+
+
+## Timber splitting: a run of sharp cracks over a groan.
+static func crack() -> AudioStreamWAV:
+	var b := _buf(1.6)
+	var phase := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		phase += (70.0 + 30.0 * sin(t * 9.0)) / RATE
+		var groan := (2.0 * (phase - floorf(phase)) - 1.0) * 0.3 * exp(-t / 0.8)
+		var snaps := 0.0
+		for k in 5:
+			var ct := t - k * 0.13
+			if ct > 0.0:
+				snaps += _noise() * exp(-ct / 0.012)
+		b[i] = groan + snaps
 	return _to_wav(b)
 
 

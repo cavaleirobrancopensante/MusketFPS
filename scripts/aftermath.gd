@@ -149,7 +149,7 @@ func _refresh() -> void:
 		_header.text = "THE COMPANY IS NO MORE"
 		_header.add_theme_color_override("font_color", RED)
 	elif fresh and r.get("prologue", false):
-		_header.text = "THE RETREAT"
+		_header.text = "CASTAWAYS"
 		_header.add_theme_color_override("font_color", RED)
 	elif fresh:
 		_header.text = "VICTORY" if r["won"] else "DEFEAT"
@@ -163,13 +163,16 @@ func _refresh() -> void:
 
 	var t := ""
 	if fresh and r.get("prologue", false):
-		t += "[color=#%s]Cinder Ford is lost. %s fell at the head of his company and gave it to you as he died. You brought what was left of it out through the woods.[/color]\n\n" % [_hex(DIM), r.get("captain", "The captain")]
-		t += "You are its captain now.\n"
+		t += "[color=#%s]The beach is lost. %s fell at the earthworks and gave you the company as he died. You led what was left of it up the cliff path into an unknown land, with no ship, no allies and no word from home.[/color]\n\n" % [_hex(DIM), r.get("captain", "The Major")]
+		t += "You are its captain now. The men are shaken (morale %d).\n" % Company.company_morale()
 		t += "Lizardmen slain on the field: [b]%d[/b]\n" % int(r["slain"])
 		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
 		t += _section("Levelled up (points to spend)", r.get("levelled", []), GOLD, "")
-		t += "\n[color=#%s]%d pieces of kit were dropped in the rout. The wagon saved the captain's rifle, a little food and powder. See to your men on the COMPANY & KIT screen.[/color]\n" % [_hex(GOLD), int(r.get("lost_gear", 0))]
+		var st: Dictionary = Company.stash
+		t += "\n[color=#%s]The lizards carried off the ship's stores: %d muskets, powder and ball for %d shots, %d guns, %d tots of rum. Getting them back is the first task.[/color]\n" % [
+			_hex(RED), int(st.get("muskets", 0)), int(st.get("ammo", 0)), int(st.get("cannons", 0)), int(st.get("rum", 0))]
+		t += "\n[color=#%s]%d pieces of kit were dropped in the rout. The little wagon you saved holds the Major's rifle and a few days' food. See to your men on the COMPANY & KIT screen.[/color]\n" % [_hex(GOLD), int(r.get("lost_gear", 0))]
 	elif fresh:
 		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
 		var pay := int(r["pay"])

@@ -14,6 +14,8 @@ const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 const ProjectilesScript := preload("res://scripts/projectiles.gd")
+const Props := preload("res://scripts/props.gd")
+const Lore := preload("res://scripts/lore.gd")
 const MENU := "res://scenes/menu.tscn"
 const AFTERMATH := "res://scenes/aftermath.tscn"
 const MAX_SOUNDS := 24
@@ -33,7 +35,7 @@ const SPAWN_DISTANCE := 65.0
 # ---- the prologue: a big battle that goes wrong (see _prologue_process)
 const PROLOGUE_WAVES := [26, 34]
 const ALLY_COMPANY := 12 # men in each of the two companies beside yours
-const RETREAT_POINT := Vector3(0, 0, 78) # the edge of the woods behind the line
+const RETREAT_POINT := Vector3(95, 0, 14) # the cliff path at the right end of the beach
 const RETREAT_WAVE := 8
 const RETREAT_EVERY := 9.0
 const MAX_ENEMIES := 50
@@ -84,6 +86,7 @@ var _line_t := 0.0
 
 func _ready() -> void:
 	_autotest = "--autotest" in OS.get_cmdline_user_args()
+	prologue = Company.active and Company.prologue
 	_setup_input()
 	# The batcher first: everything that draws a character registers with it.
 	batcher = BatcherScript.new()
@@ -109,7 +112,6 @@ func _ready() -> void:
 	line_anchor = Vector3(player.position.x, 0, player.position.z) + line_forward * LINE_DISTANCE
 	# Campaign: your actual men (the fit ones) against the warband the scouts
 	# reported. Otherwise a stand-alone battle (stress test, autotest).
-	prologue = Company.active and Company.prologue
 	if Company.active:
 		waves = PROLOGUE_WAVES if prologue else Company.waves_for(Company.next_enemy_count())
 		for rec in Company.fit_men():
@@ -141,8 +143,8 @@ func _ready() -> void:
 	layer.add_child(hud)
 	if prologue:
 		state_timer = 11.0
-		say("", "Cinder Ford. The regiment holds the plain against the greatest horde in living memory.", 5.5)
-		say(Company.CAPTAIN, "Stay by me, Ensign, and keep your musket loaded. I give the orders today.", 5.5)
+		say("", "%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs." % [Lore.BEACH, Lore.SHIP], 5.5)
+		say(Lore.COMMANDER, "Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today.", 5.5)
 	elif Company.active and Company.march_note != "":
 		hud.show_message(Company.march_note, 6.0)
 		state_timer = maxf(state_timer, 6.0)
@@ -160,7 +162,7 @@ func can_command() -> bool:
 func _not_yours() -> bool:
 	if _commanding:
 		return false
-	hud.show_message("Captain Harrow has the command.", 1.5)
+	hud.show_message("%s has the command." % Lore.COMMANDER_SHORT, 1.5)
 	return true
 
 
@@ -223,7 +225,7 @@ func wave_count() -> int:
 func status_line() -> String:
 	var tail := "Company %d   Loaded %d" % [soldiers.size(), loaded_count()]
 	if prologue:
-		var what := "RETREAT" if story_phase == "retreat" else "Cinder Ford"
+		var what := "RETREAT" if story_phase == "retreat" else Lore.BEACH
 		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
 	return "Wave %d/%d   Lizardmen %d   %s" % [wave, wave_count(), enemies.size(), tail]
 
@@ -600,11 +602,25 @@ func _start_wave() -> void:
 
 
 # ---------------------------------------------------------------- prologue
-# You are Captain Harrow's Ensign. Two more companies stand either side of
-# yours. The captain gives the orders (volleys when the men are loaded and
-# the enemy is close). In the second wave a javelin brings him down; you go
-# to him, he hands you the company and dies, the left breaks, and you must
-# lead what's left of your men back to the woods.
+# Wreck Beach (names in lore.gd). The regiment is entrenched on the beach
+# where the ship broke up: your company in the centre behind the earthworks,
+# a company either side, four guns in the embrasures, the sea at your backs.
+# The Major gives the orders. The waves double as the tutorial: each beat
+# shows a hint for the controls it needs (see _tutorial). In the second wave
+# a javelin brings the Major down; you go to him, he hands you the company
+# and dies, the left breaks, the guns are overrun, and you lead what's left
+# along the beach to the cliff path and into the unknown land.
+
+const GUN_X := [-37.0, -15.5, 15.5, 37.0]
+const GUN_Z := 6.8
+const WORKS_Z := 5.0 # the earthworks' crest
+const GUN_RELOAD := 11.0
+const ROUNDSHOT_SPEED := 170.0
+const CANISTER_RANGE := 28.0
+
+var _guns: Array = [] # {"node", "barrel", "cd", "silent"}
+var _hints := {} # tutorial beats already shown
+
 
 func _setup_prologue() -> void:
 	_commanding = false
@@ -630,7 +646,7 @@ func _setup_prologue() -> void:
 	captain.frames = soldier_frames
 	captain.ally = true
 	captain.rig_look = "officer"
-	captain.display_name = Company.CAPTAIN
+	captain.display_name = Lore.COMMANDER
 	captain.ammo = 0
 	captain.loaded = false
 	captain.invulnerable = true
@@ -639,7 +655,188 @@ func _setup_prologue() -> void:
 	captain.position = captain.ally_slot
 	allies.append(captain)
 	add_child(captain)
-	_plant_woods()
+	for x in GUN_X:
+		var g := Props.cannon()
+		g.position = Vector3(x, 0, GUN_Z)
+		add_child(g)
+		_guns.append({"node": g, "barrel": g.get_node("barrel"), "cd": randf_range(1.0, 4.0), "silent": false})
+
+
+## The beach instead of the open field: sand, the sea behind, the wreck on
+## its rocks, the earthworks, the forest ahead and the cliff path to the
+## right, where the retreat goes.
+func _build_beach() -> void:
+	var sand := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(500, 80)
+	pm.material = Props._mat(Props.SAND)
+	sand.mesh = pm
+	sand.position = Vector3(0, 0.01, 0)
+	add_child(sand)
+	var sea := Props.sea(520.0, 0.12, 0.6)
+	sea.position = Vector3(0, -0.25, 300)
+	add_child(sea)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var wreck := Props.ship()
+	wreck.position = Vector3(-25, -1.2, 130)
+	wreck.rotation = Vector3(-0.1, 0.5, 0.38)
+	(wreck.get_node("main_mast") as Node3D).rotation.x = 1.25
+	(wreck.get_node("fore_mast") as Node3D).rotation.z = -0.5
+	add_child(wreck)
+	add_child(Props.rocks(Vector3(-19, -1.5, 116), 7, 3.5, rng))
+	var works := Props.earthwork(80.0, GUN_X)
+	works.position = Vector3(0, 0, WORKS_Z)
+	add_child(works)
+	# Cliffs along the right end of the beach, with the path between them.
+	for i in 14:
+		var z := -60.0 + i * 7.0
+		if absf(z - RETREAT_POINT.z) < 9.0:
+			continue
+		add_child(Props.rocks(Vector3(RETREAT_POINT.x + rng.randf_range(2, 8), 0, z), 4, 4.0, rng))
+	# The forest: tall, dark, unfamiliar. Ahead of the line and past the cliffs.
+	var spots: Array = []
+	for i in 160:
+		spots.append(Vector3(rng.randf_range(-200, 200), 0, rng.randf_range(-75, -150)))
+	for i in 70:
+		spots.append(Vector3(rng.randf_range(RETREAT_POINT.x + 10, RETREAT_POINT.x + 90), 0, rng.randf_range(-60, 45)))
+	_forest(spots, rng)
+	# The path's marker: the regiment's colour, planted where the path begins.
+	var pole := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.04
+	cm.bottom_radius = 0.05
+	cm.height = 4.5
+	pole.mesh = cm
+	pole.position = RETREAT_POINT + Vector3(0, 2.25, 0)
+	add_child(pole)
+	var flag := MeshInstance3D.new()
+	var fm := BoxMesh.new()
+	fm.size = Vector3(0.03, 1.3, 2.0)
+	fm.material = Props._mat(Color(0.7, 0.1, 0.08))
+	flag.mesh = fm
+	flag.position = RETREAT_POINT + Vector3(0, 3.85, 1.02)
+	add_child(flag)
+
+
+## Strange trees: tall bare trunks and wide teal crowns (MultiMesh: 2 draws).
+func _forest(spots: Array, rng: RandomNumberGenerator) -> void:
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.2
+	trunk.bottom_radius = 0.4
+	trunk.height = 1.0
+	trunk.material = Props._mat(Color(0.26, 0.2, 0.18))
+	var crown := SphereMesh.new()
+	crown.radius = 1.0
+	crown.height = 1.0
+	crown.radial_segments = 8
+	crown.rings = 4
+	crown.material = Props._mat(Color(0.1, 0.25, 0.22))
+	var mt := MultiMesh.new()
+	mt.transform_format = MultiMesh.TRANSFORM_3D
+	mt.mesh = trunk
+	mt.instance_count = spots.size()
+	var mc := MultiMesh.new()
+	mc.transform_format = MultiMesh.TRANSFORM_3D
+	mc.mesh = crown
+	mc.instance_count = spots.size()
+	for i in spots.size():
+		var p: Vector3 = spots[i]
+		var h := rng.randf_range(8.0, 16.0)
+		var w := rng.randf_range(2.5, 4.5)
+		mt.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(1, h, 1)), p + Vector3(0, h * 0.5, 0)))
+		mc.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(w, w * 0.45, w)), p + Vector3(0, h, 0)))
+	for mm in [mt, mc]:
+		var inst := MultiMeshInstance3D.new()
+		inst.multimesh = mm
+		add_child(inst)
+
+
+## Lizards wading over the earthworks are slowed (unit.gd asks).
+func ground_speed(pos: Vector3) -> float:
+	if prologue and absf(pos.z - WORKS_Z) < 1.6 and absf(pos.x) < 40.0:
+		for gx in GUN_X:
+			if absf(pos.x - gx) < 1.4:
+				return 1.0 # the embrasures are open
+		return 0.4
+	return 1.0
+
+
+## The guns: round shot at range, canister when they come close. A gun with
+## a lizard on it is overrun and falls silent.
+func _update_guns(delta: float) -> void:
+	for g in _guns:
+		if g["silent"]:
+			continue
+		var node: Node3D = g["node"]
+		var at := node.global_position
+		var close := nearest_enemy(at, 3.5)
+		if close != null:
+			g["silent"] = true
+			hud.show_message("A gun is overrun!", 1.5)
+			continue
+		g["cd"] = float(g["cd"]) - delta
+		if float(g["cd"]) > 0.0:
+			continue
+		var tgt := nearest_enemy(at, 110.0)
+		if tgt == null:
+			continue
+		var to: Vector3 = tgt.global_position - at
+		if to.dot(line_forward) < to.length() * 0.6:
+			continue # only what's in front of the embrasure
+		g["cd"] = GUN_RELOAD * randf_range(0.9, 1.2)
+		_fire_gun(g, tgt)
+
+
+func _fire_gun(g: Dictionary, tgt: Node3D) -> void:
+	var barrel: Node3D = g["barrel"]
+	var node: Node3D = g["node"]
+	var aim: Vector3 = tgt.global_position + Vector3.UP * 1.0
+	var flat := aim - node.global_position
+	flat.y = 0.0
+	node.rotation.y = atan2(-flat.x, -flat.z)
+	var muzzle: Vector3 = barrel.global_transform * Vector3(0, 0, -1.85)
+	var d := muzzle.distance_to(aim)
+	if d < CANISTER_RANGE:
+		for i in 12:
+			var v: Vector3 = projectiles.spread_dir(aim - muzzle, 0.1) * 260.0
+			projectiles.fire("canister", muzzle, v, null)
+	else:
+		var tf := d / ROUNDSHOT_SPEED
+		var v2 := (aim - muzzle).normalized() * ROUNDSHOT_SPEED + Vector3.UP * 0.5 * 9.8 * tf
+		projectiles.fire("roundshot", muzzle, v2, null)
+	play_sound("cannon", muzzle, 6.0)
+	spawn_flash(muzzle, 3.0)
+	for i in 3:
+		spawn_smoke(muzzle + Vector3(randf_range(-0.6, 0.6), randf_range(0, 0.6), randf_range(-1.2, 0.2)), 2.4)
+	var tw := barrel.create_tween()
+	tw.tween_property(barrel, "position:z", 0.45, 0.08)
+	tw.tween_property(barrel, "position:z", 0.0, 1.2)
+	if player.alive:
+		player.shake(clampf(0.5 - player.global_position.distance_to(muzzle) / 60.0, 0.0, 0.5))
+
+
+## The tutorial: each beat of the battle shows the controls it needs, once.
+func _tutorial() -> void:
+	if story_phase == "line" and wave == 0:
+		_hint("move", "MOVE: drag on the left of the screen.  LOOK: drag on the right.  Walk the earthworks while the guns are readied.", 11.0)
+	if wave >= 1 and story_phase == "line":
+		_hint("fire", "FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys.", 12.0)
+	if not _hints.has("melee") and player.alive and nearest_enemy(player.global_position, 14.0) != null:
+		_hint("melee", "BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing.", 12.0)
+	if wave >= 2 and story_phase == "line":
+		_hint("grenade", "GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men.", 8.0)
+	if story_phase == "captain_down":
+		_hint("major", "Go to the Major: follow the gold marker.", 8.0)
+	if story_phase == "retreat":
+		_hint("orders", "You command now.  FOLLOW: the line moves with you.  HOLD: it stands where you look.  CHARGE: every man picks his fight.  VOLLEY!: every loaded musket fires.  Lead them to the cliff path.", 14.0)
+
+
+func _hint(id: String, text: String, seconds: float) -> void:
+	if _hints.has(id):
+		return
+	_hints[id] = true
+	hud.show_hint(text, seconds)
 
 
 ## Queue a line of dialogue (shown as a subtitle); `then` runs when it ends.
@@ -664,10 +861,13 @@ func _update_lines(delta: float) -> void:
 func _prologue_process(delta: float) -> void:
 	_phase_t += delta
 	_volley_cd -= delta
+	_tutorial()
+	if story_phase in ["line", "captain_down"]:
+		_update_guns(delta)
 	match story_phase:
 		"line":
-			# The captain's fire discipline: volley when most are loaded and
-			# the enemy is close enough to hit.
+			# The Major's fire discipline: volley when most are loaded and the
+			# enemy is close enough to hit.
 			var near := nearest_enemy(line_anchor, 42.0)
 			if near != null and _volley_cd <= 0.0 and loaded_count() >= ceili(soldiers.size() * 0.6):
 				_volley_cd = 3.5
@@ -681,7 +881,7 @@ func _prologue_process(delta: float) -> void:
 					_throw_at_captain(close)
 		"captain_down":
 			if captain != null and not _heard_captain:
-				objective = {"label": "CAPTAIN", "pos": captain.global_position}
+				objective = {"label": "THE MAJOR", "pos": captain.global_position}
 			if not _heard_captain and player.alive:
 				var d: float = player.global_position.distance_to(captain.global_position)
 				if d < 2.6:
@@ -689,30 +889,30 @@ func _prologue_process(delta: float) -> void:
 					objective = {}
 					_lines.clear()
 					_line_t = 0.0
-					say(Company.CAPTAIN, "Ensign... the left's gone. This field is lost.", 4.0)
-					say(Company.CAPTAIN, "The company is yours now. Get them out, to the woods behind us.", 5.0,
+					say(Lore.COMMANDER, "Ensign... the left's gone. The beach is lost.", 4.0)
+					say(Lore.COMMANDER, "The company is yours, Captain. Take them up the cliff path, inland. Keep them alive.", 5.5,
 						func(): _commanding = true)
-					say(Company.CAPTAIN, "Bring them home, lad...", 3.5)
-					say("", "Captain Harrow is dead. You command the company.", 3.5, _begin_retreat)
+					say(Lore.COMMANDER, "Find the stores... they'll have taken the stores...", 4.0)
+					say("", "%s is dead. You command the company." % Lore.COMMANDER_SHORT, 3.5, _begin_retreat)
 				elif _phase_t > 22.0:
 					_heard_captain = true
 					objective = {}
-					say(_sergeant_name(), "He's gone, sir! The captain's dead! You're in command. Get us out of here!",
+					say(_sergeant_name(), "He's gone, sir! The Major's dead! You're in command. Get us out of here!",
 						4.5, _begin_retreat)
 		"retreat":
-			objective = {"label": "THE WOODS", "pos": RETREAT_POINT, "height": 5.4}
+			objective = {"label": "THE CLIFF PATH", "pos": RETREAT_POINT, "height": 5.4}
 			_wave_t -= delta
 			if _wave_t <= 0.0:
 				_wave_t = RETREAT_EVERY
 				_spawn_pursuit(RETREAT_WAVE)
-			if player.alive and player.global_position.z >= RETREAT_POINT.z - 4.0:
+			if player.alive and player.global_position.distance_to(RETREAT_POINT) < 8.0:
 				story_phase = "escaped"
 				objective = {}
-				hud.show_message("The woods close around you. They don't follow.", 9999.0)
+				hud.show_message("Up the cliff path and into the fog. They don't follow.", 9999.0)
 				_end_battle(true)
 
 
-## A lizard skirmisher's javelin, aimed to land on the captain. It flies over
+## A lizard skirmisher's javelin, aimed to land on the Major. It flies over
 ## the line (it can only strike him) and he goes down.
 func _throw_at_captain(thrower: Node3D) -> void:
 	_javelin_done = true
@@ -736,17 +936,17 @@ func _throw_at_captain(thrower: Node3D) -> void:
 func _captain_down() -> void:
 	story_phase = "captain_down"
 	_phase_t = 0.0
-	hud.show_message("Captain Harrow is down!", 3.0)
-	say(_sergeant_name(), "The captain's hit! Ensign, to the captain!", 4.0)
-	# The company on the left breaks and runs for the woods.
+	hud.show_message("%s is down!" % Lore.COMMANDER_SHORT, 3.0)
+	say(_sergeant_name(), "The Major's hit! Ensign, to the Major!", 4.0)
+	# The company on the left breaks and runs for the path.
 	var right := line_forward.cross(Vector3.UP).normalized()
 	for s in allies:
 		if s.alive and (s.global_position - line_anchor).dot(right) < 0.0:
 			s.routing = true
-			s.rout_to = RETREAT_POINT + right * -30.0 + Vector3(0, 0, 30)
+			s.rout_to = RETREAT_POINT + Vector3(20, 0, randf_range(-3, 3))
 	get_tree().create_timer(3.5).timeout.connect(func():
 		if story_phase == "captain_down":
-			hud.show_message("The left is breaking! They're coming round the flank!", 3.0)
+			hud.show_message("The left is breaking! They're over the earthworks!", 3.0)
 			_spawn_flank(6))
 
 
@@ -756,14 +956,15 @@ func _begin_retreat() -> void:
 	order = Order.FOLLOW
 	_snap_line_to_player()
 	_wave_t = 2.0
-	hud.show_message("Fall back to the woods! The company follows you.", 4.0)
+	for g in _guns:
+		g["silent"] = true
+	hud.show_message("Leave the guns! Along the beach to the cliff path!", 4.0)
 	# The right-hand company goes too.
-	var right := line_forward.cross(Vector3.UP).normalized()
 	for s in allies:
 		if s.alive and not s.routing:
 			s.routing = true
-			s.rout_to = RETREAT_POINT + right * 30.0 + Vector3(0, 0, 30)
-	# The horde pours through the gap on the left.
+			s.rout_to = RETREAT_POINT + Vector3(20, 0, randf_range(-3, 3))
+	# The horde pours over the works on the left.
 	_spawn_pursuit(10)
 
 
@@ -774,7 +975,7 @@ func _spawn_pursuit(count: int) -> void:
 		if i % 3 == 2:
 			_spawn_lizard(Vector3(p.x - randf_range(35.0, 45.0), 0, p.z + randf_range(-15.0, 10.0)))
 		else:
-			# The enemy came from -Z; the pursuit comes from there too.
+			# The enemy came from the forest (-Z); the pursuit comes from there too.
 			_spawn_lizard(Vector3(p.x + randf_range(-30.0, 30.0), 0, p.z - randf_range(38.0, 50.0)))
 
 
@@ -805,67 +1006,9 @@ func _sergeant_name() -> String:
 	return best.display_name if best != null else "A sergeant"
 
 
-## The woods behind the field, and the rally flag at their edge.
-func _plant_woods() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 404
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.18
-	trunk.bottom_radius = 0.3
-	trunk.height = 2.0
-	var trunk_mat := StandardMaterial3D.new()
-	trunk_mat.albedo_color = Color(0.3, 0.2, 0.12)
-	trunk.material = trunk_mat
-	var crown := CylinderMesh.new()
-	crown.top_radius = 0.0
-	crown.bottom_radius = 2.0
-	crown.height = 6.0
-	crown.radial_segments = 8
-	var crown_mat := StandardMaterial3D.new()
-	crown_mat.albedo_color = Color(0.11, 0.24, 0.13)
-	crown.material = crown_mat
-	var count := 140
-	var trunks := MultiMesh.new()
-	trunks.transform_format = MultiMesh.TRANSFORM_3D
-	trunks.mesh = trunk
-	trunks.instance_count = count
-	var crowns := MultiMesh.new()
-	crowns.transform_format = MultiMesh.TRANSFORM_3D
-	crowns.mesh = crown
-	crowns.instance_count = count
-	for i in count:
-		var pos := Vector3(rng.randf_range(-90.0, 90.0), 0, RETREAT_POINT.z + 6.0 + rng.randf_range(0.0, 45.0))
-		var sc := rng.randf_range(0.9, 1.5)
-		var basis := Basis().scaled(Vector3(sc, sc, sc))
-		trunks.set_instance_transform(i, Transform3D(basis, pos + Vector3(0, 1.0 * sc, 0)))
-		crowns.set_instance_transform(i, Transform3D(basis, pos + Vector3(0, 4.6 * sc, 0)))
-	for mm in [trunks, crowns]:
-		var inst := MultiMeshInstance3D.new()
-		inst.multimesh = mm
-		add_child(inst)
-	# The rally flag: a pole with the regiment's red colour.
-	var pole := MeshInstance3D.new()
-	var pm := CylinderMesh.new()
-	pm.top_radius = 0.04
-	pm.bottom_radius = 0.05
-	pm.height = 4.5
-	pole.mesh = pm
-	pole.position = RETREAT_POINT + Vector3(0, 2.25, 0)
-	add_child(pole)
-	var flag := MeshInstance3D.new()
-	var fm := BoxMesh.new()
-	fm.size = Vector3(2.0, 1.3, 0.03)
-	var fmat := StandardMaterial3D.new()
-	fmat.albedo_color = Color(0.7, 0.1, 0.08)
-	fm.material = fmat
-	flag.mesh = fm
-	flag.position = RETREAT_POINT + Vector3(1.02, 3.85, 0)
-	add_child(flag)
-
-
 func _on_player_died() -> void:
 	if _autotest:
-		print("  player fell: phase %s, %.0f m from the woods" % [story_phase, player.global_position.distance_to(RETREAT_POINT)])
+		print("  player fell: phase %s, %.0f m from the path" % [story_phase, player.global_position.distance_to(RETREAT_POINT)])
 	objective = {}
 	if Company.active:
 		hud.show_message("You fall. Your men carry you from the field.", 9999.0)
@@ -1143,7 +1286,12 @@ func _build_world() -> void:
 	mesh.material_override = ground_mat
 	ground.add_child(mesh)
 
-	_scatter_trees()
+	if prologue:
+		env.fog_density = 0.009
+		env.fog_light_color = Color(0.78, 0.8, 0.78)
+		_build_beach()
+	else:
+		_scatter_trees()
 
 
 ## Pines around the edges of the field, drawn with MultiMesh (2 draw calls total).

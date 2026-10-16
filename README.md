@@ -1,8 +1,9 @@
 # MusketFPS
 
-A first-person musket game for phones, made in Godot: you are an officer in a
-fantasy world with gunpowder, leading a company of musketeers against hordes
-of lizardmen. Think Mount & Blade: Warband's Napoleonic Wars mod, with the
+A first-person musket game for phones, made in Godot: shipwrecked on an
+unknown coast, you lead what's left of a company of musketeers through a
+land of lizard hordes, warring kingdoms and dwarves, where your muskets are
+the best weapons anyone has seen. Think Mount & Blade: Warband's Napoleonic Wars mod, with the
 mass musket battles of the *Destroyermen* books.
 
 It's growing into a Warband-style sandbox: see [ROADMAP.md](ROADMAP.md).
@@ -12,21 +13,31 @@ sprite, animation and sound is generated in code.
 
 ## The campaign
 
-### Prologue: Cinder Ford
+### Prologue: the wreck and the beach (also the tutorial)
 
-**NEW CAMPAIGN** opens on the battle of Cinder Ford. You are the **Ensign**
-of Captain Aldous Harrow's company: eighteen men in the centre of the line,
-another company on either flank, and the greatest lizard horde in living
-memory coming across the plain. The captain gives the orders (FOLLOW, HOLD,
-CHARGE and VOLLEY are locked while he lives; he calls the volleys himself).
+**NEW CAMPAIGN** opens with a cutscene played in the engine: the troopship
+*Steadfast* in a night storm, the strike on uncharted rocks, the survivors
+rowing ashore at dawn, and the regiment digging in on the beach (SKIP jumps
+ahead). All names are placeholders in `scripts/lore.gd`.
 
-In the second wave a lizard javelin brings him down. Go to him (a gold
-marker shows where): he gives you the company with his last words. The left
-flank breaks, the horde pours round it, and the order buttons are yours:
-lead what's left of your men back to **the woods** behind the field (follow
-the marker to the red flag). The company that walks out of the trees,
-bloodied and short of everything, is the one you campaign with, and you are
-its captain now.
+Then **Wreck Beach**. You are the **Ensign** of Major Harrow's company,
+behind earthworks with the sea at your back, a company on either side and
+four guns in the embrasures. The guns fire round shot at range (it ploughs
+through ranks and skips on) and canister close in. Lizards wading over the
+earthworks are slowed. The Major gives the orders: FOLLOW, HOLD, CHARGE and
+VOLLEY are locked while he lives, and he calls the volleys.
+
+The battle is the tutorial: each beat shows a **HOW TO** box for the
+controls it needs (moving and looking, firing and aiming, the bayonet and
+blocking, grenades, going to the Major, and the orders once they're yours).
+
+In the second wave a lizard javelin brings the Major down. Go to him (follow
+the gold marker): he makes you captain with his last words. The left breaks,
+the guns are overrun, and you lead what's left along the beach to **the
+cliff path** (the red colour marks it) and inland. You start the campaign
+as castaways: low morale, a few days' food, and the ship's stores (muskets,
+powder, two guns, rum) in the lizards' hands. Getting them back is the
+first great objective.
 
 ### Between battles
 
@@ -221,13 +232,16 @@ aftermath node.
 | File | Purpose |
 |---|---|
 | `scripts/menu.gd` | Main menu: continue, new campaign, stress test |
+| `scripts/lore.gd` | Placeholder names: nation, regiment, ship, land, beach, commander, the lost stash |
+| `scripts/intro.gd` | The shipwreck cutscene |
+| `scripts/props.gd` | Scenery from primitives: ship, longboats, cannon, earthworks, rocks, the sea |
 | `scripts/settings.gd` | `Settings` autoload: camera mode, stress test |
 | `scripts/company.gd` | `Company` autoload: the men, kit, the wagon, the march, money, results, saving |
 | `scripts/men.gd` | A soldier's attributes, levels, morale, health and conditions, and what they do in battle |
 | `scripts/aftermath.gd` | Between battles: results, the company, hiring, marching on |
 | `scripts/company_screen.gd` | The Company screen: portrait, kit, pack, attributes, the men |
 | `scripts/logistics_popup.gd` | The wagon: stocks, days left, sharing out, sutler, grog |
-| `scripts/battle.gd` | The battle: world, waves, the company's line and orders, the Cinder Ford prologue, smoke, sound |
+| `scripts/battle.gd` | The battle: world, waves, the company's line and orders, the beach prologue (guns, tutorial), smoke, sound |
 | `scripts/projectiles.gd` | Musket balls, grenades and future arrows/javelins: flight, hits, tracers |
 | `scripts/player.gd` | Movement, looking, camera, musket, melee and blocking |
 | `scripts/player_body.gd` | Poses your own officer's body from your actions |
@@ -281,15 +295,16 @@ First-person 3D poses are the tables at the top of `player_body.gd`.
 
 `godot --headless --path . --fixed-fps 60 -- --autotest` plays a stand-alone
 battle with automatic volleys, bayonet fighting and blocking, and prints the
-result. Add `--campaign` to play the Cinder Ford prologue and then four
+result. Add `--campaign` to play the beach prologue and then four
 linked campaign battles (buying, sharing out and marching in between), `--stress` for the 50 vs 200 battle, or `--tp` for
 third person. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a
-phone.
+phone. `-- --intro` plays the cutscene at 4x speed.
 
 ## What's next
 
-See [ROADMAP.md](ROADMAP.md). Done: M0 (3D only), M1 (a company that
-remembers), projectiles, the prologue, kit and logistics. Next: M2, the
-campaign map.
+See [ROADMAP.md](ROADMAP.md): castaways in a huge unknown land, a
+Warband-style map under fog of war, lizards, two human nations at war,
+dwarves, and the edge your muskets give you. Done: M0, M1, projectiles, kit
+and logistics, and the shipwreck prologue. Next: M2, the map.

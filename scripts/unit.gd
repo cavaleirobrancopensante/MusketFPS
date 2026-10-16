@@ -92,7 +92,10 @@ func _exit_tree() -> void:
 ## Units never collide with anything (they steer around each other), so
 ## skip the physics engine and just move: much cheaper with hundreds of them.
 func _move(delta: float) -> void:
-	position += Vector3(velocity.x, 0.0, velocity.z) * delta
+	var f := 1.0
+	if rig_kind == "lizard" and battle.prologue:
+		f = battle.ground_speed(position) # wading over earthworks
+	position += Vector3(velocity.x, 0.0, velocity.z) * delta * f
 
 
 func is_valid_target(t) -> bool:
