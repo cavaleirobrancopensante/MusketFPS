@@ -144,9 +144,40 @@ node.
 | `scripts/soldier.gd` | A musketeer: hold slot, load, fire, bayonet |
 | `scripts/lizardman.gd` | A lizardman: charge, telegraphed hack, stagger |
 | `scripts/rig3d.gd` | 3D bodies (soldier, officer, lizardman) and their animation |
+| `scripts/batcher.gd` | Draws every unit in a few instanced batches (3D parts, sprite atlases) |
 | `scripts/hud.gd` | Multi-touch controls, swing joystick, 2D viewmodel and arms, status |
 | `scripts/sprite_factory.gd` | Generates the pixel-art sprite frames |
 | `scripts/sound_factory.gd` | Synthesises the sound effects |
+
+### Performance: big battles on a phone
+
+The menu's **STRESS TEST 2D / 3D** buttons start 50 musketeers against 200
+lizardmen with an FPS counter, so you can see what your own phone handles.
+
+What makes large battles affordable:
+
+- **Spatial grid** (`battle.gd`): units are sorted into 4 m cells every
+  physics frame, so crowd spacing and "who's nearest" look only at
+  neighbouring cells instead of every unit on the field.
+- **Instanced drawing** (`batcher.gd`): every 3D body part is a unit box,
+  cylinder or sphere stretched by its transform, so all bodies in the battle
+  are three MultiMeshes. Every sprite lives in one atlas texture per kind,
+  drawn as one MultiMesh with a billboard shader.
+- **Level of detail** (`rig3d.gd`): bodies within 12 m re-pose every frame,
+  to 25 m every 2nd frame, beyond that every 4th, off-screen every 8th; small
+  details (faces, buttons, teeth) are skipped beyond 16 m.
+- **Far stand-ins** (`unit.gd`): in 3D, units beyond 40 m are drawn as their
+  sprite and switch back to the full model as you approach.
+
+Measured on the 50 vs 200 stress test (game logic per frame on a desktop
+CPU; a phone is roughly 2–3× slower; draw calls with real rendering):
+
+| | Logic before | Logic after | Draw calls before | Draw calls after |
+|---|---|---|---|---|
+| 2D | 17.7 ms | 6.2 ms | 233 | 78 |
+| 3D | 33.9 ms | 12.7 ms | 5,739 | 42 |
+
+Most remaining 2D draw calls are musket smoke puffs.
 
 ### Tuning knobs
 
