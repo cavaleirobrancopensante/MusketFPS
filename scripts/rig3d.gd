@@ -349,6 +349,20 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 	elif primary == "rifle":
 		wood = Color(0.3, 0.16, 0.08)
 		barrel = BROWNED
+	if primary == "pike" or primary == "spear":
+		# A pole arm: an ash shaft, butt behind the right hand, head far forward.
+		var long := 3.0 if primary == "pike" else 2.2
+		_part(musket, _cyl_mesh(0.022, 0.026, long), Color(0.55, 0.42, 0.26), Vector3(0, 0, -long * 0.5 + 0.45), Vector3(90, 0, 0))
+		var head := STEEL if primary == "pike" else Color(0.45, 0.42, 0.38)
+		_part(musket, _cyl_mesh(0.0, 0.035, 0.28), head, Vector3(0, 0, -long + 0.31), Vector3(-90, 0, 0))
+		bayonet = Node3D.new()
+		musket.add_child(bayonet)
+		hand_bayonet = Node3D.new()
+		body.add_child(hand_bayonet)
+		hand_bayonet.visible = false
+		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
+		_p_vis[ramrod] = false
+		return
 	_part(musket, _box_mesh(Vector3(0.045, 0.11, 0.5)), wood, Vector3(0, -0.025, 0.2)) # stock
 	_part(musket, _box_mesh(Vector3(0.04, 0.05, 0.75)), wood, Vector3(0, -0.01, -0.36)) # forestock
 	_part(musket, _cyl_mesh(0.013, 0.013, MUZZLE), barrel, Vector3(0, 0.018, -MUZZLE * 0.5), Vector3(90, 0, 0))

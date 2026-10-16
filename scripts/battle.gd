@@ -15,6 +15,7 @@ const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 const ProjectilesScript := preload("res://scripts/projectiles.gd")
 const Props := preload("res://scripts/props.gd")
+const Rig3D := preload("res://scripts/rig3d.gd")
 const Lore := preload("res://scripts/lore.gd")
 const MENU := "res://scenes/menu.tscn"
 const AFTERMATH := "res://scenes/aftermath.tscn"
@@ -53,6 +54,12 @@ var wave := 0
 var waves: Array = [] # how many lizardmen arrive in each wave
 var slain := 0
 var _all_men: Array = [] # every soldier who took the field, fallen or not
+var _unplanned := 0 # men without a place in the battle plan (they form the line)
+var ambush := false
+var wagon: Node3D # the baggage wagon (campaign battles)
+var wagon_looted := 0.0 # share of its stores the lizards have carried off (0..0.8)
+var _porters: Array = []
+var _loot_told := false
 var _reported := false
 var game_state := "starting" # starting, fighting, between, won, lost
 var state_timer := 5.0
@@ -134,10 +141,21 @@ func _ready() -> void:
 			s.frames = soldier_frames
 			soldiers.append(s)
 	_all_men = soldiers.duplicate()
+	ambush = Company.active and not prologue and bool(Company.next_battle.get("ambush", false))
+	if Company.active and not prologue:
+		for s in soldiers:
+			var pl = s.record.get("plan")
+			if pl is Array and pl.size() == 2:
+				s.plan_pos = Vector2(float(pl[0]), float(pl[1]))
 	_reassign_slots()
 	for s in soldiers:
-		s.position = get_slot_position(s.slot_index)
+		s.position = slot_of(s)
+		if ambush:
+			# Caught off guard: men all over the place, they'll form up as they can.
+			s.position = player.position + Vector3(randf_range(-9, 9), -0.1, randf_range(-6, 10))
 		add_child(s)
+	if Company.active and not prologue:
+		_build_wagon()
 	if prologue:
 		_setup_prologue()
 
@@ -151,6 +169,8 @@ func _ready() -> void:
 		state_timer = 11.0
 		say("", "%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs." % [Lore.BEACH, Lore.SHIP], 5.5)
 		say(Lore.COMMANDER, "Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today.", 5.5)
+	elif ambush:
+		hud.show_message("AMBUSH! Form on me!", 4.0)
 	elif Company.active and Company.march_note != "":
 		hud.show_message(Company.march_note, 6.0)
 		state_timer = maxf(state_timer, 6.0)
@@ -233,6 +253,8 @@ func status_line() -> String:
 	if prologue:
 		var what := "RETREAT" if story_phase == "retreat" else Lore.BEACH
 		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
+	if wagon_looted > 0.005:
+		tail += "   Wagon looted %d%%" % int(wagon_looted * 100)
 	return "Wave %d/%d   Lizardmen %d   %s" % [wave, wave_count(), enemies.size(), tail]
 
 
@@ -307,8 +329,18 @@ func _play_and_free(p: Node) -> void:
 
 # ---------------------------------------------------------------- formation
 
+## Where a man should stand: his place from the battle plan (metres right of
+## and ahead of the officer, turned with the line), or a slot in the line.
+func slot_of(s) -> Vector3:
+	if s.plan_pos != null:
+		var right := line_forward.cross(Vector3.UP).normalized()
+		var pp: Vector2 = s.plan_pos
+		return line_anchor + right * pp.x + line_forward * pp.y
+	return get_slot_position(s.slot_index)
+
+
 func get_slot_position(index: int) -> Vector3:
-	var n := soldiers.size()
+	var n := _unplanned
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var offset := (float(index) - (n - 1) * 0.5) * LINE_SPACING
 	# Leave a gap at the centre of the line for you, the officer.
@@ -335,8 +367,85 @@ func _reassign_slots() -> void:
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var anchor := line_anchor
 	soldiers.sort_custom(func(a, b): return (a.position - anchor).dot(right) < (b.position - anchor).dot(right))
-	for i in soldiers.size():
-		soldiers[i].slot_index = i
+	var i := 0
+	for so in soldiers:
+		if so.plan_pos == null:
+			so.slot_index = i
+			i += 1
+	_unplanned = i
+
+
+# ---------------------------------------------------------------- the wagon
+# The baggage wagon stands where the battle plan puts it (usually behind the
+# line) and the porters drag it after the company. Lizards love loot: some
+# break off to plunder it, and while they rummage they don't fight, which
+# makes the wagon bait as much as a burden.
+
+const WAGON_SPEED := 1.8
+const LOOT_RATE := 0.009 # share of the wagon carried off per lizard per second
+const LOOT_MAX := 0.8
+
+
+func _build_wagon() -> void:
+	wagon = Props.wagon()
+	add_child(wagon)
+	wagon.position = _wagon_target()
+	if ambush:
+		wagon.position = player.position + Vector3(randf_range(-4, 4), 0, randf_range(2, 6))
+	for side in [-1.0, 1.0]:
+		var r := Rig3D.new()
+		r.kind = "soldier"
+		r.gear = {"head": "cap", "torso": "shirt", "primary": "musket", "secondary": ""}
+		r.pack = {"water": 0, "rations": 0, "ammo": 0}
+		r.position = Vector3(side * 0.45, 0, -3.3)
+		r.facing = Vector3.FORWARD
+		wagon.add_child(r)
+		_porters.append(r)
+
+
+func _wagon_target() -> Vector3:
+	var right := line_forward.cross(Vector3.UP).normalized()
+	var wp: Array = Company.wagon_plan
+	return line_anchor + right * float(wp[0]) + line_forward * float(wp[1])
+
+
+func _update_wagon(delta: float) -> void:
+	if wagon == null:
+		return
+	var to := _wagon_target() - wagon.position
+	to.y = 0.0
+	var looted_now := looters() > 0
+	var moving := to.length() > 0.6 and not looted_now
+	if moving:
+		var step := minf(to.length(), WAGON_SPEED * delta)
+		wagon.position += to.normalized() * step
+		var want := atan2(-to.x, -to.z)
+		wagon.rotation.y = lerp_angle(wagon.rotation.y, want, 1.0 - exp(-3.0 * delta))
+	for r in _porters:
+		r.anim = "block" if looted_now else ("walk" if moving else "idle")
+		r.move_speed = WAGON_SPEED if moving else 0.0
+		r.facing = -wagon.global_transform.basis.z
+
+
+func wagon_open() -> bool:
+	return wagon != null and wagon_looted < LOOT_MAX
+
+
+var _looting_now := 0
+var _looting_prev := 0
+
+
+func looters() -> int:
+	return _looting_prev
+
+
+## A lizard rummaging in the wagon (called every physics frame per looter).
+func loot_tick(delta: float) -> void:
+	_looting_now += 1
+	wagon_looted = minf(LOOT_MAX, wagon_looted + LOOT_RATE * delta)
+	if not _loot_told:
+		_loot_told = true
+		hud.show_message("They're at the wagon! Lizards are looting the stores!", 2.5)
 
 
 # ---------------------------------------------------------------- spatial grid
@@ -514,7 +623,7 @@ func _end_battle(won: bool) -> void:
 			men[int(s.record["id"])] = {"kills": s.kills, "ammo_used": s.ammo_used,
 				"status": "fit" if s.alive else s.down_status}
 		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men,
-			"prologue": prologue})
+			"prologue": prologue, "wagon_looted": wagon_looted, "enemy": "lizards"})
 	hud.show_restart()
 
 
@@ -531,6 +640,8 @@ func finish() -> void:
 func _physics_process(_delta: float) -> void:
 	# The battle node runs before its children, so units see a fresh grid.
 	_rebuild_grid()
+	_looting_prev = _looting_now
+	_looting_now = 0
 	if order != Order.HOLD and player.alive:
 		var p: Vector3 = player.global_position
 		var pf := _player_forward()
@@ -540,6 +651,7 @@ func _physics_process(_delta: float) -> void:
 			_reassign_slots()
 		else:
 			line_anchor = Vector3(p.x, 0, p.z) + line_forward * LINE_DISTANCE
+	_update_wagon(_delta)
 
 
 func _process(delta: float) -> void:
@@ -1096,7 +1208,7 @@ func _run_autotest(delta: float) -> void:
 			Engine.get_physics_frames() / 60, story_phase, wave, soldiers.size(), allies.size(), enemies.size(), int(player.hp)])
 	if game_state == "won" or game_state == "lost":
 		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size(), " melee ", _at_stats)
-		print("  shots: ", projectiles.stats, " slain ", slain)
+		print("  shots: ", projectiles.stats, " slain ", slain, " wagon looted ", snappedf(wagon_looted, 0.01), " looters ", _looting_prev)
 		if Company.active and Company.battles < 4:
 			# Campaign test: show the result, hire, march on, fight again.
 			var r: Dictionary = Company.last_result
@@ -1110,6 +1222,8 @@ func _run_autotest(delta: float) -> void:
 			while Company.can_buy("rations") and int(Company.stores["rations"]) < 40:
 				Company.buy("rations")
 			Company.resupply_all()
+			# Every other battle the wagon goes out in front as bait.
+			Company.wagon_plan = [0.0, 14.0] if Company.battles % 2 == 1 else [0.0, -12.0]
 			print("  stores: ", Company.stores, " money ", Company.money)
 			print("  march: ", Company.march_on())
 			get_tree().change_scene_to_file("res://scenes/battle.tscn")

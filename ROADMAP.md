@@ -60,6 +60,12 @@ Each milestone ends with something playable.
   cannons, a tutorial woven into the waves, the Major's fall, the rout
   inland. You start with low morale and supplies, and the stash is lost.
 
+### Battle plan, pikemen, the wagon in battle, loot, music ✅
+
+- Battle plan with tags, lines and individual places; pikemen; the wagon
+  (looters, bait) in every map battle; loot screen with weight and space;
+  selling goods; an original soundtrack and music player.
+
 ### M2: The map (first playable ✅)
 
 Done: a seeded 512 × 512 land in 3D with coast, plains, forest, swamp, hills,

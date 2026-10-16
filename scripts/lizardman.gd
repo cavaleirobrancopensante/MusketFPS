@@ -33,6 +33,8 @@ var knockback := Vector3.ZERO
 var _roar_t := 0.0
 var shield_up := 0.0 # seconds the shield stays raised
 var _read_windup := false # already reacted to the player's current wind-up
+var looter := false # would rather plunder the wagon than fight
+var looting := false
 
 
 func _ready() -> void:
@@ -43,6 +45,7 @@ func _ready() -> void:
 	speed = randf_range(4.0, 5.2)
 	retarget_timer = randf() * 0.5
 	attack_timer = randf() * 0.4
+	looter = randf() < 0.35
 	_roar_t = randf_range(1.0, 8.0)
 
 
@@ -65,6 +68,9 @@ func _physics_process(delta: float) -> void:
 		knockback = knockback.move_toward(Vector3.ZERO, 12.0 * delta)
 		set_base_anim("stagger")
 		_move(delta)
+		return
+
+	if looter and _go_loot(delta):
 		return
 
 	if retarget_timer <= 0.0 or not is_valid_target(target):
@@ -116,6 +122,38 @@ func _physics_process(delta: float) -> void:
 		set_base_anim("walk")
 	velocity.y = 0.0
 	_move(delta)
+
+
+## Looters make for the wagon when it's nearer than a fight, and rummage
+## in it until it's empty or someone hurts them.
+func _go_loot(delta: float) -> bool:
+	if not battle.wagon_open():
+		looting = false
+		return false
+	var w: Vector3 = battle.wagon.global_position
+	var to_w := w - global_position
+	to_w.y = 0.0
+	var dw := to_w.length()
+	var dt := INF
+	if is_valid_target(target):
+		dt = global_position.distance_to(target.global_position)
+	if not looting and (dw > 30.0 or dw > dt + 8.0):
+		return false
+	_cancel_windup()
+	face_toward(to_w)
+	if dw < 2.6:
+		looting = true
+		velocity = battle.separation(self, battle.enemies, 1.1) * 2.0
+		set_base_anim("idle")
+		battle.loot_tick(delta)
+		if randf() < delta * 0.3:
+			battle.play_sound("hiss", global_position + Vector3.UP * 1.4, -10.0)
+	else:
+		velocity = to_w / dw * speed + battle.separation(self, battle.enemies, 1.1) * 3.0
+		set_base_anim("walk")
+	velocity.y = 0.0
+	_move(delta)
+	return true
 
 
 func _strike(dist: float) -> void:
@@ -207,6 +245,11 @@ func stagger(push: Vector3, seconds: float) -> void:
 
 
 func take_damage(amount: float, from: Node3D = null) -> void:
+	if from != null and (looter or looting):
+		# Hurt while plundering: drop the loot and go for whoever did it.
+		looter = false
+		looting = false
+		target = from
 	super.take_damage(amount, from)
 	if alive and amount < 100.0:
 		battle.play_sound("hiss", global_position + Vector3.UP * 1.6, -4.0)

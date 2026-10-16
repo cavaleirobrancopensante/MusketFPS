@@ -735,6 +735,8 @@ func _spawn_tick(initial: bool) -> void:
 
 
 func _party_tick(p: Dictionary, dh: float) -> void:
+	if can_see(p):
+		p["seen_at"] = hours # you knew they were there (no ambush)
 	if float(p["wait"]) > 0.0:
 		p["wait"] = float(p["wait"]) - dh
 		return

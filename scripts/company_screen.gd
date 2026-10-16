@@ -642,10 +642,13 @@ func _refresh_wagon() -> void:
 	for id in s["items"]:
 		spare += int(s["items"][id])
 		names.append("%s ×%d" % [Company.item_name(id), int(s["items"][id])])
-	_wagon.text = "[color=#%s][b]THE WAGON[/b][/color]  %d cr · tap for logistics\nWater [b]%d[/b]%s · Food [b]%d[/b] · Shot [b]%d[/b] · Rum [b]%d[/b]\n[color=#%s]%s[/color]" % [
-		GOLD.to_html(false), Company.money, int(s["water"]), " (foul)" if bool(s["foul"]) else "",
-		int(s["rations"]), int(s["ammo"]), int(s["rum"]),
-		DIM.to_html(false), ", ".join(names) if spare > 0 else "No spare kit."]
+	var load := Company.wagon_load()
+	var t := "[color=#%s][b]THE WAGON[/b][/color]  %d cr · %d/%d kg · tap for logistics\n" % [
+		GOLD.to_html(false), Company.money, int(load[0]), int(Company.WAGON_KG)]
+	t += "Water [b]%d[/b]%s · Food [b]%d[/b] · Shot [b]%d[/b] · Rum [b]%d[/b]\n" % [
+		int(s["water"]), " (foul)" if bool(s["foul"]) else "", int(s["rations"]), int(s["ammo"]), int(s["rum"])]
+	t += "[color=#%s]%s[/color]" % [DIM.to_html(false), ", ".join(names) if spare > 0 else "No spare kit."]
+	_wagon.text = t
 
 
 func _select(m: Dictionary) -> void:

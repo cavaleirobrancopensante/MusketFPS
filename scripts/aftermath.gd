@@ -12,6 +12,7 @@ const BATTLE := "res://scenes/battle.tscn"
 const MENU := "res://scenes/menu.tscn"
 const COMPANY := "res://scenes/company.tscn"
 const MAP := "res://scenes/map.tscn"
+const LOOT := "res://scenes/loot.tscn"
 const Men := preload("res://scripts/men.gd")
 const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
 
@@ -73,6 +74,12 @@ func _ready() -> void:
 	_march = _button("TO THE MAP", _on_march)
 	_hire = _button("", _on_hire)
 	_honour = _button("ROLL OF HONOUR", _on_honour)
+	if not Company.loot.is_empty():
+		var lb := _button("LOOT THE FIELD (%d)" % Company.loot.size(), func():
+			Company.results_unseen = false
+			get_tree().change_scene_to_file(LOOT))
+		lb.add_theme_color_override("font_color", GOLD)
+		buttons.add_child(lb)
 	buttons.add_child(_button("COMPANY & KIT", _on_company))
 	buttons.add_child(_button("WAGON", func(): _logistics.open()))
 	buttons.add_child(_march)
@@ -181,8 +188,12 @@ func _refresh() -> void:
 	elif fresh:
 		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
 		var pay := int(r["pay"])
+		if int(r.get("wagon_looted", 0)) > 0:
+			t += "[color=#%s]Lizards plundered the wagon: %d%% of its stores are gone.[/color]\n" % [_hex(RED), int(r["wagon_looted"])]
 		if pay >= 0:
 			t += "Bounty: [color=#%s]+%d crowns[/color]\n" % [_hex(GOLD), pay]
+			if int(r.get("loot", 0)) > 0:
+				t += "[color=#%s]There's loot on the field: LOOT THE FIELD to pick through it.[/color]\n" % _hex(GOLD)
 		else:
 			t += "Baggage plundered: [color=#%s]%d crowns[/color], half the wagon's stores and %d pieces of kit\n" % [_hex(RED), pay, int(r.get("lost_gear", 0))]
 		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")

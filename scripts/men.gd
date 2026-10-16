@@ -142,3 +142,5 @@ static func migrate(m: Dictionary) -> void:
 	m["hunger"] = int(m.get("hunger", m.get("hungry", 0)))
 	m["sick"] = int(m.get("sick", 0))
 	m.erase("hungry")
+	if not m.has("tag"):
+		m["tag"] = "Pikes" if String(m.get("gear", {}).get("primary", "")) in ["pike", "spear"] else "Musketeers"
