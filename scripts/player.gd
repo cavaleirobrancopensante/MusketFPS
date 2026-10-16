@@ -238,9 +238,11 @@ func _update_throw(delta: float) -> void:
 
 func _update_camera() -> void:
 	if third_person and rig != null:
-		# Over the right shoulder; the orbit follows your pitch.
-		var pivot := Vector3(0.45, 1.65, 0.0)
-		var offset := Basis(Vector3.RIGHT, pitch) * Vector3(0.0, 0.2, 2.6)
+		# Over the right shoulder; the orbit follows your pitch. Aiming pulls
+		# the camera in tight over the shoulder (the HUD keeps a small sight).
+		var k := aim_amount * aim_amount * (3.0 - 2.0 * aim_amount)
+		var pivot := Vector3(lerpf(0.45, 0.72, k), lerpf(1.65, 1.74, k), 0.0)
+		var offset := Basis(Vector3.RIGHT, pitch) * Vector3(0.0, lerpf(0.2, 0.06, k), lerpf(2.6, 1.6, k))
 		var pos := pivot + offset
 		pos.y = maxf(pos.y, 0.35)
 		camera.position = pos
@@ -248,6 +250,10 @@ func _update_camera() -> void:
 		# Eye at the head; your own torso is hidden in first person, and the
 		# arms rise from below the screen, so nothing of you blocks the view.
 		camera.position = Vector3(0, 1.64, 0.02)
+		# Looking down at yourself, the eye leans out over your chest so you
+		# see your coat, belt and boots rather than the inside of your collar.
+		var down := clampf((-pitch - 0.25) / 0.8, 0.0, 1.0)
+		camera.position += Vector3(0, -0.04, -0.17) * down
 	camera.rotation = Vector3(pitch, 0, 0)
 	if asleep_left > 0.0 or wake_left > 0.0:
 		# On your back by the fire, looking at the stars, then up on your feet.
