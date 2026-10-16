@@ -154,6 +154,11 @@ func _men() -> Array:
 	return Company.fit_men()
 
 
+## Men placed on the field (the wagon crew goes with the wagon).
+func _placed() -> Array:
+	return _men().filter(func(m): return m["tag"] != "Wagon")
+
+
 func _tag_color(tag: String) -> Color:
 	var i := Company.tags.find(tag)
 	return TAG_COLORS[maxi(i, 0) % TAG_COLORS.size()]
@@ -250,7 +255,7 @@ func _set_mode(m: String) -> void:
 		"man":
 			_hint.text = "MAN: tap the field to put %s there. Pick another man from the list." % (Company.surname_title(_sel) if _sel != null else "the picked man")
 		"wagon":
-			_hint.text = "WAGON: tap to place the wagon. At the rear it's safe; out front, looting lizards stop to plunder it."
+			_hint.text = "WAGON: tap to place the wagon. The men in the Wagon tag haul it (two at the shafts) and guard it. When looters come, each does what his nerve allows: runs, stands and shoots, or fights."
 	_refresh()
 
 
@@ -300,7 +305,7 @@ func _hit(px: Vector2):
 		return "wagon"
 	var best = null
 	var bd := 18.0
-	for m in _men():
+	for m in _placed():
 		var d := _to_px(_pos_of(m)).distance_to(px)
 		if d < bd:
 			bd = d
@@ -339,6 +344,9 @@ func _release(px: Vector2) -> void:
 ## The men of `tag` spread evenly along a..b (left to right as they stand
 ## now, so nobody crosses), in as many ranks as it takes.
 func _form_line(tag: String, a: Vector2, b: Vector2) -> void:
+	if tag == "Wagon":
+		_hint.text = "The Wagon tag hauls and guards the wagon: move the wagon (WAGON) and they go with it."
+		return
 	var men := _men().filter(func(m): return m["tag"] == tag)
 	if men.is_empty():
 		return
@@ -370,7 +378,7 @@ func _form_line(tag: String, a: Vector2, b: Vector2) -> void:
 
 func _preset_line() -> void:
 	# Everyone in one line through you, pikes in the middle; the wagon behind.
-	var men := _men()
+	var men := _placed()
 	men.sort_custom(func(m1, m2): return int(m1["tag"] == "Pikes") > int(m2["tag"] == "Pikes"))
 	var order: Array = []
 	for i in men.size():
@@ -388,8 +396,8 @@ func _preset_line() -> void:
 
 func _preset_pikes() -> void:
 	# Pikes a few paces ahead in the centre, muskets on the wings and behind.
-	var pikes := _men().filter(func(m): return String(m["gear"]["primary"]) in ["pike", "spear"])
-	var muskets := _men().filter(func(m): return not String(m["gear"]["primary"]) in ["pike", "spear"])
+	var pikes := _placed().filter(func(m): return String(m["gear"]["primary"]) in ["pike", "spear"])
+	var muskets := _placed().filter(func(m): return not String(m["gear"]["primary"]) in ["pike", "spear"])
 	for i in pikes.size():
 		pikes[i]["plan"] = [(i - (pikes.size() - 1) * 0.5) * 1.3, 3.0]
 	var half := muskets.size() / 2
@@ -427,10 +435,16 @@ func _draw_field() -> void:
 	# You.
 	var me := _to_px(Vector2.ZERO)
 	f.draw_colored_polygon(_star(me, 11.0), GOLD)
-	# The men.
+	# The men (the wagon crew at the shafts and beside the wagon).
 	var r := maxf(0.45 * k, 6.0)
+	var crew := 0
 	for m in _men():
 		var p := _to_px(_pos_of(m))
+		if m["tag"] == "Wagon":
+			var wpos := Vector2(Company.wagon_plan[0], Company.wagon_plan[1])
+			var off: Vector2 = [Vector2(-0.5, 2.6), Vector2(0.5, 2.6)][crew] if crew < 2 else Vector2(-1.8 if crew % 2 == 0 else 1.8, 0.5 - 1.6 * ((crew - 2) / 2))
+			p = _to_px(wpos + off)
+			crew += 1
 		var col := _tag_color(m["tag"])
 		if String(m["gear"]["primary"]) in ["pike", "spear"]:
 			f.draw_line(p, p + Vector2(0, -r * 2.4), Color(0.85, 0.85, 0.9), 2)
@@ -472,7 +486,7 @@ func _self_test() -> void:
 	_refresh()
 	var out: Array = []
 	for m in men:
-		out.append("%s:%s@%s" % [Company.surname_title(m), m["tag"], m["plan"]])
+		out.append("%s:%s@%s" % [Company.surname_title(m), m["tag"], m.get("plan", "wagon")])
 	print("PLANTEST tags ", Company.tags, " wagon ", Company.wagon_plan)
 	print("  ", ", ".join(out))
 	await get_tree().create_timer(0.3).timeout

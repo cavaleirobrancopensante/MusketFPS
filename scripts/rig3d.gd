@@ -764,6 +764,13 @@ func _npc_pose() -> void:
 			t_dir = Vector3(0, 0.05, -1)
 			t_lean = 0.25
 			pose_rate = 30.0
+		"haul":
+			# Musket slung on his back, both hands on a shaft, leaning into it.
+			t_grip = Vector3(0.12, 1.15, 0.24)
+			t_dir = Vector3(0.35, 1, 0.12)
+			t_hand_r = Vector3(0.12, 0.78, -0.4)
+			t_hand_l = Vector3(-0.05, 0.8, -0.45)
+			t_lean = 0.22
 		"cheer":
 			# Musket held high over his head, shaken at the sky.
 			var b := sin(anim_time * 6.0)

@@ -200,6 +200,7 @@ func _refresh() -> void:
 			t += "Baggage plundered: [color=#%s]%d crowns[/color], half the wagon's stores and %d pieces of kit\n" % [_hex(RED), pay, int(r.get("lost_gear", 0))]
 		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
+		t += _section("At the wagon", r.get("conduct", []), DIM, "")
 		t += _section("Promoted", r["promoted"], GOLD, "")
 		t += _section("Levelled up (points to spend)", r.get("levelled", []), GOLD, "")
 	else:
