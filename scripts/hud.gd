@@ -55,6 +55,18 @@ func _ready() -> void:
 	player.friendly_fire.connect(_on_friendly_fire)
 
 
+var story_speaker := ""
+var story_text := ""
+var story_time := 0.0
+
+
+## A line of dialogue, shown as a subtitle in the lower middle of the screen.
+func show_story(speaker: String, text: String, seconds: float) -> void:
+	story_speaker = speaker
+	story_text = text
+	story_time = seconds
+
+
 func show_message(text: String, seconds: float) -> void:
 	message = text
 	message_time = seconds
@@ -247,6 +259,7 @@ func _process(delta: float) -> void:
 			v = v.normalized()
 		player.move_input = v
 	message_time -= delta
+	story_time -= delta
 	pressed_time -= delta
 	hurt_flash = move_toward(hurt_flash, 0.0, delta * 2.5)
 	hit_marker = move_toward(hit_marker, 0.0, delta)
@@ -285,9 +298,7 @@ func _draw() -> void:
 	# Health bar and status.
 	draw_rect(Rect2(20, 20, 264, 24), Color(0, 0, 0, 0.5))
 	draw_rect(Rect2(22, 22, 260.0 * player.hp / player.max_hp, 20), Color(0.8, 0.15, 0.1))
-	var status := "Wave %d/%d   Lizardmen %d   Company %d   Loaded %d" % [
-		battle.wave, battle.wave_count(), battle.enemies.size(), battle.soldiers.size(), battle.loaded_count()]
-	_text(status, Vector2(22, 72), 20, Color(1, 1, 1, 0.9))
+	_text(battle.status_line(), Vector2(22, 72), 20, Color(1, 1, 1, 0.9))
 	if Settings.stress:
 		var fps := Engine.get_frames_per_second()
 		var fcol := Color(0.4, 1, 0.4) if fps >= 55 else (Color(1, 0.85, 0.3) if fps >= 30 else Color(1, 0.4, 0.3))
@@ -304,8 +315,12 @@ func _draw() -> void:
 		draw_arc(hint, JOY_RADIUS, 0, TAU, 48, Color(1, 1, 1, 0.15), 2)
 		_text_center("MOVE", hint, 18, Color(1, 1, 1, 0.25))
 
+	_draw_objective()
+
 	for b in _buttons():
 		_draw_button(b)
+
+	_draw_story()
 
 	# Message banner.
 	if message_time > 0.0 and message != "":
@@ -313,6 +328,56 @@ func _draw() -> void:
 		var mc := Vector2(s.x * 0.5, s.y * 0.3)
 		_text_center(message, mc + Vector2(2, 2), 40, Color(0, 0, 0, 0.6 * alpha))
 		_text_center(message, mc, 40, Color(1, 0.93, 0.75, alpha))
+
+
+## A gold marker over where you need to go (or an arrow at the edge of the
+## screen if it's behind you), with its name and distance.
+func _draw_objective() -> void:
+	var obj: Dictionary = battle.objective
+	if obj.is_empty():
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var world: Vector3 = obj["pos"] + Vector3.UP * float(obj.get("height", 2.4))
+	var dist: float = player.global_position.distance_to(obj["pos"])
+	var label := "%s  %d m" % [obj["label"], int(dist)]
+	var gold := Color(0.95, 0.78, 0.3, 0.95)
+	var margin := 70.0
+	if not cam.is_position_behind(world):
+		var p := cam.unproject_position(world)
+		p.x = clampf(p.x, margin, size.x - margin)
+		p.y = clampf(p.y, margin + 60.0, size.y - margin)
+		draw_colored_polygon(PackedVector2Array([p + Vector2(0, -14), p + Vector2(11, 0), p + Vector2(0, 14), p + Vector2(-11, 0)]), gold)
+		_text_center(label, p + Vector2(2, -30), 20, Color(0, 0, 0, 0.6))
+		_text_center(label, p + Vector2(0, -32), 20, gold)
+		return
+	# Behind you: an arrow at the bottom of the screen, toward the side it's on.
+	var local: Vector3 = cam.global_transform.affine_inverse() * world
+	var x := size.x * 0.5 + clampf(local.x * 8.0, -size.x * 0.3, size.x * 0.3)
+	var p2 := Vector2(x, size.y - 40.0)
+	draw_colored_polygon(PackedVector2Array([p2 + Vector2(-16, -10), p2 + Vector2(16, -10), p2 + Vector2(0, 10)]), gold)
+	_text_center(label + "  (behind you)", p2 + Vector2(0, -30), 20, gold)
+
+
+## Dialogue subtitle: who's speaking in gold, the line in white, on a band.
+func _draw_story() -> void:
+	if story_time <= 0.0 or story_text == "":
+		return
+	var alpha := clampf(story_time / 0.4, 0.0, 1.0)
+	var w := minf(760.0, size.x - 80.0)
+	var x := (size.x - w) * 0.5
+	var y := size.y * 0.56
+	var fsize := 24
+	var lines := font.get_multiline_string_size(story_text, HORIZONTAL_ALIGNMENT_CENTER, w - 32.0, fsize)
+	var h := lines.y + (34.0 if story_speaker != "" else 0.0) + 24.0
+	draw_rect(Rect2(x, y, w, h), Color(0.04, 0.05, 0.08, 0.62 * alpha))
+	var ty := y + 12.0
+	if story_speaker != "":
+		_text_center(story_speaker.to_upper(), Vector2(size.x * 0.5, ty + 12.0), 20, Color(0.95, 0.78, 0.3, alpha))
+		ty += 34.0
+	draw_multiline_string(font, Vector2(x + 16.0, ty + fsize * 0.8), story_text, HORIZONTAL_ALIGNMENT_CENTER,
+		w - 32.0, fsize, -1, Color(1, 1, 1, alpha))
 
 
 ## Gold marker by the crosshair on the side the blow will come from.
@@ -350,6 +415,9 @@ func _draw_button(b: Dictionary) -> void:
 		bg = Color(1, 1, 1, 0.35)
 	if id == "volley" and battle.loaded_count() == 0:
 		label_col = Color(1, 1, 1, 0.35)
+	if id in ["volley", "follow", "hold", "charge", "mode"] and not battle.can_command():
+		label_col = Color(1, 1, 1, 0.3)
+		edge = Color(1, 1, 1, 0.25)
 	if id == "grenade" and (player.grenades == 0 or player.is_throwing()):
 		label_col = Color(1, 1, 1, 0.35)
 	var swinging: bool = id.begins_with("swing") and player.swing_phase != "idle" \

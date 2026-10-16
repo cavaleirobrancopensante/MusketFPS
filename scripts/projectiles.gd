@@ -29,6 +29,7 @@ var _list: Array = [] # Dictionaries: kind, pos, vel, shooter, age, + per-kind s
 var _tracers: MultiMesh
 var _grenade_mesh: SphereMesh
 var _grenade_mat: StandardMaterial3D
+var _javelin_mesh: BoxMesh
 
 
 func _ready() -> void:
@@ -54,14 +55,28 @@ func _ready() -> void:
 	_grenade_mat = StandardMaterial3D.new()
 	_grenade_mat.albedo_color = Color(0.12, 0.12, 0.13)
 	_grenade_mat.metallic = 0.4
+	_javelin_mesh = BoxMesh.new()
+	_javelin_mesh.size = Vector3(0.035, 0.035, 1.7)
+	var jm := StandardMaterial3D.new()
+	jm.albedo_color = Color(0.45, 0.32, 0.18)
+	_javelin_mesh.material = jm
 
 
 # ---------------------------------------------------------------- spawning
 
 ## Fire a projectile. `shooter` is never hit by its own shot and gets the
-## credit (and on_projectile_hit()) when it lands.
-func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D) -> Dictionary:
+## credit (and on_projectile_hit()) when it lands. `only` (scripted shots)
+## makes it pass through everyone but that one unit.
+func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D, only: Node3D = null) -> Dictionary:
 	var p := {"kind": kind, "pos": from, "prev": from, "vel": velocity, "shooter": shooter, "age": 0.0}
+	if only != null:
+		p["only"] = only
+	if kind == "javelin":
+		var mj := MeshInstance3D.new()
+		mj.mesh = _javelin_mesh
+		mj.position = from
+		add_child(mj)
+		p["node"] = mj
 	if kind == "grenade":
 		var mi := MeshInstance3D.new()
 		mi.mesh = _grenade_mesh
@@ -118,15 +133,46 @@ func _step(p: Dictionary, delta: float) -> bool:
 
 	p["vel"] = vel
 	p["pos"] = pos
-	var hit := _sweep(prev, pos, p["shooter"], 0.0)
+	if p.has("node"):
+		var nd: Node3D = p["node"]
+		nd.position = pos
+		if vel.length_squared() > 0.01:
+			nd.basis = Basis.looking_at(vel.normalized(), Vector3.UP if absf(vel.normalized().y) < 0.97 else Vector3.BACK)
+	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0)
 	if not hit.is_empty():
 		_impact_unit(p, k, hit["unit"], prev.lerp(pos, float(hit["t"])))
+		_spent(p, false)
 		return false
 	if pos.y <= 0.02:
 		stats["ground"] += 1
 		battle.spawn_puff(Vector3(pos.x, 0.05, pos.z), Color(0.45, 0.38, 0.28), 0.35)
+		_spent(p, true)
 		return false
-	return float(p["age"]) < float(k["life"])
+	if float(p["age"]) >= float(k["life"]):
+		_spent(p, false)
+		return false
+	return true
+
+
+## Done flying. A javelin that lands stays stuck in the ground a while.
+func _spent(p: Dictionary, grounded: bool) -> void:
+	if not p.has("node"):
+		return
+	var nd: Node3D = p["node"]
+	if grounded:
+		nd.position = Vector3(nd.position.x, 0.5, nd.position.z)
+		var tw := nd.create_tween()
+		tw.tween_interval(12.0)
+		tw.tween_callback(nd.queue_free)
+	else:
+		nd.queue_free()
+
+
+func _sweep_only(a: Vector3, b: Vector3, u: Node3D) -> Dictionary:
+	if u == null or not is_instance_valid(u) or not u.alive:
+		return {}
+	var t := _cylinder_hit(a, b, u.global_position, float(u.hit_radius), float(u.hit_height))
+	return {} if t < 0.0 else {"unit": u, "t": t}
 
 
 func _step_grenade(p: Dictionary, k: Dictionary, prev: Vector3, pos: Vector3, vel: Vector3, delta: float) -> bool:

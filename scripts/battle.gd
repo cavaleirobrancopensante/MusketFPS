@@ -30,6 +30,14 @@ const REALIGN_ANGLE := 40.0 # degrees you must turn before a following line whee
 const WAVES := [8, 14, 20]
 const SPAWN_DISTANCE := 65.0
 
+# ---- the prologue: a big battle that goes wrong (see _prologue_process)
+const PROLOGUE_WAVES := [26, 34]
+const ALLY_COMPANY := 12 # men in each of the two companies beside yours
+const RETREAT_POINT := Vector3(0, 0, 78) # the edge of the woods behind the line
+const RETREAT_WAVE := 8
+const RETREAT_EVERY := 9.0
+const MAX_ENEMIES := 50
+
 var fire_mode: int = FireMode.ON_COMMAND
 var order: int = Order.FOLLOW
 var player
@@ -57,6 +65,21 @@ var _active_sounds := 0
 
 var _autotest := false
 var _autotest_timer := 0.0
+
+# Prologue state.
+var prologue := false
+var allies: Array = [] # the other companies' men (not yours)
+var captain = null
+var story_phase := "" # line -> captain_down -> retreat -> escaped
+var objective := {} # {"label": String, "pos": Vector3} for the HUD marker
+var _commanding := true # you give the orders (in the prologue, not at first)
+var _phase_t := 0.0
+var _volley_cd := 0.0
+var _javelin_done := false
+var _wave_t := 0.0
+var _heard_captain := false
+var _lines: Array = [] # [speaker, text, seconds, Callable or null]
+var _line_t := 0.0
 
 
 func _ready() -> void:
@@ -86,8 +109,9 @@ func _ready() -> void:
 	line_anchor = Vector3(player.position.x, 0, player.position.z) + line_forward * LINE_DISTANCE
 	# Campaign: your actual men (the fit ones) against the warband the scouts
 	# reported. Otherwise a stand-alone battle (stress test, autotest).
+	prologue = Company.active and Company.prologue
 	if Company.active:
-		waves = Company.waves_for(Company.next_enemy_count())
+		waves = PROLOGUE_WAVES if prologue else Company.waves_for(Company.next_enemy_count())
 		for rec in Company.fit_men():
 			var s = SoldierScript.new()
 			s.battle = self
@@ -106,6 +130,8 @@ func _ready() -> void:
 	for s in soldiers:
 		s.position = get_slot_position(s.slot_index)
 		add_child(s)
+	if prologue:
+		_setup_prologue()
 
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -113,7 +139,11 @@ func _ready() -> void:
 	hud.battle = self
 	hud.player = player
 	layer.add_child(hud)
-	if Company.active and Company.march_note != "":
+	if prologue:
+		state_timer = 11.0
+		say("", "Cinder Ford. The regiment holds the plain against the greatest horde in living memory.", 5.5)
+		say(Company.CAPTAIN, "Stay by me, Ensign, and keep your musket loaded. I give the orders today.", 5.5)
+	elif Company.active and Company.march_note != "":
 		hud.show_message(Company.march_note, 6.0)
 		state_timer = maxf(state_timer, 6.0)
 	else:
@@ -122,7 +152,21 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- orders
 
+## In the prologue the captain commands until he falls.
+func can_command() -> bool:
+	return _commanding
+
+
+func _not_yours() -> bool:
+	if _commanding:
+		return false
+	hud.show_message("Captain Harrow has the command.", 1.5)
+	return true
+
+
 func order_follow() -> void:
+	if _not_yours():
+		return
 	order = Order.FOLLOW
 	_snap_line_to_player()
 	hud.show_message("Company — follow me!", 1.5)
@@ -131,17 +175,23 @@ func order_follow() -> void:
 ## Break ranks: every man picks his own fight (see soldier.gd). With no
 ## enemies left they regroup on you as if following.
 func order_charge() -> void:
+	if _not_yours():
+		return
 	order = Order.CHARGE
 	hud.show_message("CHARGE! At them, lads!", 1.5)
 
 
 func order_hold() -> void:
+	if _not_yours():
+		return
 	order = Order.HOLD
 	_snap_line_to_player() # the line forms where you're looking, then stays
 	hud.show_message("Company — halt! Hold here!", 1.5)
 
 
 func toggle_fire_mode() -> void:
+	if _not_yours():
+		return
 	if fire_mode == FireMode.ON_COMMAND:
 		fire_mode = FireMode.AT_WILL
 		hud.show_message("Fire at will!", 1.5)
@@ -151,6 +201,12 @@ func toggle_fire_mode() -> void:
 
 
 func order_volley() -> void:
+	if _not_yours():
+		return
+	_volley()
+
+
+func _volley() -> void:
 	if loaded_count() == 0:
 		hud.show_message("Nobody's loaded!", 1.0)
 		return
@@ -161,6 +217,15 @@ func order_volley() -> void:
 
 func wave_count() -> int:
 	return waves.size()
+
+
+## The HUD's status line.
+func status_line() -> String:
+	var tail := "Company %d   Loaded %d" % [soldiers.size(), loaded_count()]
+	if prologue:
+		var what := "RETREAT" if story_phase == "retreat" else "Cinder Ford"
+		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
+	return "Wave %d/%d   Lizardmen %d   %s" % [wave, wave_count(), enemies.size(), tail]
 
 
 func is_at_will() -> bool:
@@ -290,12 +355,13 @@ func _rebuild_grid() -> void:
 		if not _grid_e.has(c):
 			_grid_e[c] = []
 		_grid_e[c].append([e, p])
-	for so in soldiers:
-		var p2: Vector3 = so.global_position
-		var c2 := _cell(p2)
-		if not _grid_s.has(c2):
-			_grid_s[c2] = []
-		_grid_s[c2].append([so, p2])
+	for group in [soldiers, allies]:
+		for so in group:
+			var p2: Vector3 = so.global_position
+			var c2 := _cell(p2)
+			if not _grid_s.has(c2):
+				_grid_s[c2] = []
+			_grid_s[c2].append([so, p2])
 
 
 func _grid_for(group: Array) -> Dictionary:
@@ -397,6 +463,11 @@ func nearest_friendly(from: Vector3) -> Node3D:
 
 
 func on_soldier_died(s) -> void:
+	if s.ally:
+		allies.erase(s)
+		if s == captain:
+			_captain_down()
+		return
 	soldiers.erase(s)
 	_reassign_slots()
 	if soldiers.size() == 0:
@@ -405,6 +476,17 @@ func on_soldier_died(s) -> void:
 		hud.show_message("%s is down! Close ranks!" % s.display_name, 1.8)
 	else:
 		hud.show_message("Man down! Close ranks!", 1.5)
+
+
+## An allied man made it off the field.
+func on_ally_escaped(s) -> void:
+	allies.erase(s)
+	s.queue_free()
+
+
+func on_out_of_ammo(s) -> void:
+	if s.record != null:
+		hud.show_message("%s is out of cartridges!" % s.display_name, 1.8)
 
 
 func on_enemy_died(e) -> void:
@@ -421,9 +503,10 @@ func _end_battle(won: bool) -> void:
 		for s in _all_men:
 			if s.record == null:
 				continue
-			men[int(s.record["id"])] = {"kills": s.kills,
+			men[int(s.record["id"])] = {"kills": s.kills, "ammo_used": s.ammo_used,
 				"status": "fit" if s.alive else s.down_status}
-		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men})
+		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men,
+			"prologue": prologue})
 	hud.show_restart()
 
 
@@ -463,13 +546,21 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("toggle_fire_mode"):
 		toggle_fire_mode()
 
+	_update_lines(delta)
+	if prologue:
+		_prologue_process(delta)
 	match game_state:
 		"starting", "between":
 			state_timer -= delta
 			if state_timer <= 0.0:
 				_start_wave()
 		"fighting":
-			if enemies.is_empty():
+			if prologue:
+				# The story decides how this ends; waves just keep it coming.
+				if enemies.is_empty() and story_phase == "line" and wave < waves.size():
+					game_state = "between"
+					state_timer = 5.0
+			elif enemies.is_empty():
 				if wave >= waves.size():
 					hud.show_message("Victory! The field is ours.", 9999.0)
 					_end_battle(true)
@@ -485,6 +576,7 @@ func _process(delta: float) -> void:
 func _start_wave() -> void:
 	wave += 1
 	game_state = "fighting"
+	_phase_t = 0.0
 	var count: int = waves[wave - 1]
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var centre := line_anchor + line_forward * SPAWN_DISTANCE
@@ -492,12 +584,14 @@ func _start_wave() -> void:
 		var l = LizardScript.new()
 		l.battle = self
 		l.frames = lizard_frames
-		var spread := 45.0 if Settings.stress else 22.0
+		var spread := 45.0 if Settings.stress else (40.0 if prologue else 22.0)
 		var pos := centre + right * randf_range(-spread, spread) + line_forward * randf_range(0.0, spread * 0.7)
 		l.position = Vector3(pos.x, 0, pos.z)
 		enemies.append(l)
 		add_child(l)
-	if wave == 1:
+	if prologue:
+		hud.show_message("Here they come!" if wave == 1 else "The second wave! Hold the line!", 2.5)
+	elif wave == 1:
 		hud.show_message("Here they come: %d lizardmen!" % count, 2.5)
 	else:
 		hud.show_message("Another %d coming!" % count, 2.5)
@@ -505,7 +599,274 @@ func _start_wave() -> void:
 		print("wave ", wave, " start: soldiers ", soldiers.size(), " player hp ", player.hp)
 
 
+# ---------------------------------------------------------------- prologue
+# You are Captain Harrow's Ensign. Two more companies stand either side of
+# yours. The captain gives the orders (volleys when the men are loaded and
+# the enemy is close). In the second wave a javelin brings him down; you go
+# to him, he hands you the company and dies, the left breaks, and you must
+# lead what's left of your men back to the woods.
+
+func _setup_prologue() -> void:
+	_commanding = false
+	story_phase = "line"
+	order = Order.HOLD
+	var right := line_forward.cross(Vector3.UP).normalized()
+	var half := (soldiers.size() * 0.5 + 0.5) * LINE_SPACING
+	var ally_half := (ALLY_COMPANY - 1) * 0.5 * LINE_SPACING
+	for side in [-1.0, 1.0]:
+		var centre: Vector3 = line_anchor + right * side * (half + 4.0 + ally_half)
+		for i in ALLY_COMPANY:
+			var s = SoldierScript.new()
+			s.battle = self
+			s.frames = soldier_frames
+			s.ally = true
+			s.ally_forward = line_forward
+			s.ally_slot = centre + right * (i - (ALLY_COMPANY - 1) * 0.5) * LINE_SPACING
+			s.position = s.ally_slot
+			allies.append(s)
+			add_child(s)
+	captain = SoldierScript.new()
+	captain.battle = self
+	captain.frames = soldier_frames
+	captain.ally = true
+	captain.rig_look = "officer"
+	captain.display_name = Company.CAPTAIN
+	captain.ammo = 0
+	captain.loaded = false
+	captain.invulnerable = true
+	captain.ally_forward = line_forward
+	captain.ally_slot = line_anchor - line_forward * 2.6 + right * 0.8
+	captain.position = captain.ally_slot
+	allies.append(captain)
+	add_child(captain)
+	_plant_woods()
+
+
+## Queue a line of dialogue (shown as a subtitle); `then` runs when it ends.
+func say(speaker: String, text: String, seconds: float, then = null) -> void:
+	_lines.append([speaker, text, seconds, then])
+
+
+func _update_lines(delta: float) -> void:
+	if _line_t > 0.0:
+		_line_t -= delta
+		if _line_t > 0.0:
+			return
+		var done: Array = _lines.pop_front()
+		if done[3] != null:
+			(done[3] as Callable).call()
+	if not _lines.is_empty() and _line_t <= 0.0:
+		var l: Array = _lines[0]
+		_line_t = float(l[2])
+		hud.show_story(l[0], l[1], l[2])
+
+
+func _prologue_process(delta: float) -> void:
+	_phase_t += delta
+	_volley_cd -= delta
+	match story_phase:
+		"line":
+			# The captain's fire discipline: volley when most are loaded and
+			# the enemy is close enough to hit.
+			var near := nearest_enemy(line_anchor, 42.0)
+			if near != null and _volley_cd <= 0.0 and loaded_count() >= ceili(soldiers.size() * 0.6):
+				_volley_cd = 3.5
+				hud.show_message("Harrow: Present... FIRE!", 1.2)
+				_volley()
+			if wave == 1 and game_state == "fighting" and _phase_t > 40.0:
+				_start_wave() # the second wave won't wait for the first to die
+			if wave == 2 and not _javelin_done:
+				var close := nearest_enemy(captain.global_position, 30.0)
+				if close != null or _phase_t > 16.0:
+					_throw_at_captain(close)
+		"captain_down":
+			if captain != null and not _heard_captain:
+				objective = {"label": "CAPTAIN", "pos": captain.global_position}
+			if not _heard_captain and player.alive:
+				var d: float = player.global_position.distance_to(captain.global_position)
+				if d < 2.6:
+					_heard_captain = true
+					objective = {}
+					_lines.clear()
+					_line_t = 0.0
+					say(Company.CAPTAIN, "Ensign... the left's gone. This field is lost.", 4.0)
+					say(Company.CAPTAIN, "The company is yours now. Get them out, to the woods behind us.", 5.0,
+						func(): _commanding = true)
+					say(Company.CAPTAIN, "Bring them home, lad...", 3.5)
+					say("", "Captain Harrow is dead. You command the company.", 3.5, _begin_retreat)
+				elif _phase_t > 22.0:
+					_heard_captain = true
+					objective = {}
+					say(_sergeant_name(), "He's gone, sir! The captain's dead! You're in command. Get us out of here!",
+						4.5, _begin_retreat)
+		"retreat":
+			objective = {"label": "THE WOODS", "pos": RETREAT_POINT, "height": 5.4}
+			_wave_t -= delta
+			if _wave_t <= 0.0:
+				_wave_t = RETREAT_EVERY
+				_spawn_pursuit(RETREAT_WAVE)
+			if player.alive and player.global_position.z >= RETREAT_POINT.z - 4.0:
+				story_phase = "escaped"
+				objective = {}
+				hud.show_message("The woods close around you. They don't follow.", 9999.0)
+				_end_battle(true)
+
+
+## A lizard skirmisher's javelin, aimed to land on the captain. It flies over
+## the line (it can only strike him) and he goes down.
+func _throw_at_captain(thrower: Node3D) -> void:
+	_javelin_done = true
+	var from: Vector3
+	if thrower != null:
+		from = thrower.global_position + Vector3.UP * 1.9
+	else:
+		from = captain.global_position + line_forward * 32.0 + Vector3.UP * 1.6
+	var to: Vector3 = captain.global_position + Vector3.UP * 1.3
+	var flight := clampf(from.distance_to(to) / 17.0, 0.9, 2.2)
+	var v := (to - from) / flight + Vector3.UP * 0.5 * 9.8 * flight
+	captain.invulnerable = false
+	captain.hp = 1.0
+	projectiles.fire("javelin", from, v, thrower, captain)
+	# Should the javelin somehow miss, he falls all the same.
+	get_tree().create_timer(flight + 0.3).timeout.connect(func():
+		if captain.alive:
+			captain.take_shot(999.0, thrower))
+
+
+func _captain_down() -> void:
+	story_phase = "captain_down"
+	_phase_t = 0.0
+	hud.show_message("Captain Harrow is down!", 3.0)
+	say(_sergeant_name(), "The captain's hit! Ensign, to the captain!", 4.0)
+	# The company on the left breaks and runs for the woods.
+	var right := line_forward.cross(Vector3.UP).normalized()
+	for s in allies:
+		if s.alive and (s.global_position - line_anchor).dot(right) < 0.0:
+			s.routing = true
+			s.rout_to = RETREAT_POINT + right * -30.0 + Vector3(0, 0, 30)
+	get_tree().create_timer(3.5).timeout.connect(func():
+		if story_phase == "captain_down":
+			hud.show_message("The left is breaking! They're coming round the flank!", 3.0)
+			_spawn_flank(6))
+
+
+func _begin_retreat() -> void:
+	story_phase = "retreat"
+	_commanding = true
+	order = Order.FOLLOW
+	_snap_line_to_player()
+	_wave_t = 2.0
+	hud.show_message("Fall back to the woods! The company follows you.", 4.0)
+	# The right-hand company goes too.
+	var right := line_forward.cross(Vector3.UP).normalized()
+	for s in allies:
+		if s.alive and not s.routing:
+			s.routing = true
+			s.rout_to = RETREAT_POINT + right * 30.0 + Vector3(0, 0, 30)
+	# The horde pours through the gap on the left.
+	_spawn_pursuit(10)
+
+
+## More of the horde, close on your heels and through the broken left.
+func _spawn_pursuit(count: int) -> void:
+	var p: Vector3 = player.global_position
+	for i in count:
+		if i % 3 == 2:
+			_spawn_lizard(Vector3(p.x - randf_range(35.0, 45.0), 0, p.z + randf_range(-15.0, 10.0)))
+		else:
+			# The enemy came from -Z; the pursuit comes from there too.
+			_spawn_lizard(Vector3(p.x + randf_range(-30.0, 30.0), 0, p.z - randf_range(38.0, 50.0)))
+
+
+## Lizardmen pouring round the left end of your line.
+func _spawn_flank(count: int) -> void:
+	var right := line_forward.cross(Vector3.UP).normalized()
+	var left_end := line_anchor - right * ((soldiers.size() * 0.5 + 0.5) * LINE_SPACING + 6.0)
+	for i in count:
+		_spawn_lizard(left_end - right * randf_range(4.0, 16.0) + line_forward * randf_range(4.0, 22.0))
+
+
+func _spawn_lizard(pos: Vector3) -> void:
+	if enemies.size() >= MAX_ENEMIES:
+		return
+	var l = LizardScript.new()
+	l.battle = self
+	l.frames = lizard_frames
+	l.position = Vector3(pos.x, 0, pos.z)
+	enemies.append(l)
+	add_child(l)
+
+
+func _sergeant_name() -> String:
+	var best = null
+	for s in soldiers:
+		if s.record != null and (best == null or int(s.record["xp"]) > int(best.record["xp"])):
+			best = s
+	return best.display_name if best != null else "A sergeant"
+
+
+## The woods behind the field, and the rally flag at their edge.
+func _plant_woods() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 404
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.18
+	trunk.bottom_radius = 0.3
+	trunk.height = 2.0
+	var trunk_mat := StandardMaterial3D.new()
+	trunk_mat.albedo_color = Color(0.3, 0.2, 0.12)
+	trunk.material = trunk_mat
+	var crown := CylinderMesh.new()
+	crown.top_radius = 0.0
+	crown.bottom_radius = 2.0
+	crown.height = 6.0
+	crown.radial_segments = 8
+	var crown_mat := StandardMaterial3D.new()
+	crown_mat.albedo_color = Color(0.11, 0.24, 0.13)
+	crown.material = crown_mat
+	var count := 140
+	var trunks := MultiMesh.new()
+	trunks.transform_format = MultiMesh.TRANSFORM_3D
+	trunks.mesh = trunk
+	trunks.instance_count = count
+	var crowns := MultiMesh.new()
+	crowns.transform_format = MultiMesh.TRANSFORM_3D
+	crowns.mesh = crown
+	crowns.instance_count = count
+	for i in count:
+		var pos := Vector3(rng.randf_range(-90.0, 90.0), 0, RETREAT_POINT.z + 6.0 + rng.randf_range(0.0, 45.0))
+		var sc := rng.randf_range(0.9, 1.5)
+		var basis := Basis().scaled(Vector3(sc, sc, sc))
+		trunks.set_instance_transform(i, Transform3D(basis, pos + Vector3(0, 1.0 * sc, 0)))
+		crowns.set_instance_transform(i, Transform3D(basis, pos + Vector3(0, 4.6 * sc, 0)))
+	for mm in [trunks, crowns]:
+		var inst := MultiMeshInstance3D.new()
+		inst.multimesh = mm
+		add_child(inst)
+	# The rally flag: a pole with the regiment's red colour.
+	var pole := MeshInstance3D.new()
+	var pm := CylinderMesh.new()
+	pm.top_radius = 0.04
+	pm.bottom_radius = 0.05
+	pm.height = 4.5
+	pole.mesh = pm
+	pole.position = RETREAT_POINT + Vector3(0, 2.25, 0)
+	add_child(pole)
+	var flag := MeshInstance3D.new()
+	var fm := BoxMesh.new()
+	fm.size = Vector3(2.0, 1.3, 0.03)
+	var fmat := StandardMaterial3D.new()
+	fmat.albedo_color = Color(0.7, 0.1, 0.08)
+	fm.material = fmat
+	flag.mesh = fm
+	flag.position = RETREAT_POINT + Vector3(1.02, 3.85, 0)
+	add_child(flag)
+
+
 func _on_player_died() -> void:
+	if _autotest:
+		print("  player fell: phase %s, %.0f m from the woods" % [story_phase, player.global_position.distance_to(RETREAT_POINT)])
+	objective = {}
 	if Company.active:
 		hud.show_message("You fall. Your men carry you from the field.", 9999.0)
 	else:
@@ -545,6 +906,18 @@ func _run_autotest(delta: float) -> void:
 		player.throw_grenade()
 		_at_stats["grenades"] += 1
 
+	# Prologue: walk to the fallen captain, then lead the retreat.
+	player.move_input = Vector2.ZERO
+	var goal = null
+	if story_phase == "captain_down" and not _heard_captain and captain != null:
+		goal = captain.global_position
+	elif story_phase == "retreat":
+		goal = RETREAT_POINT
+	if goal != null and player.alive and nearest_enemy(player.global_position, 3.0) == null:
+		var tg: Vector3 = goal - player.global_position
+		player.rotation.y = atan2(-tg.x, -tg.z)
+		player.move_input = Vector2(0, -1)
+
 	# Melee: face the nearest lizardman, bayonet when close, cycle all four blows.
 	var near := nearest_enemy(player.global_position, 6.0)
 	if near != null and player.alive:
@@ -569,6 +942,9 @@ func _run_autotest(delta: float) -> void:
 		player.set_block(false)
 		player.toggle_weapon()
 
+	if prologue and int(_autotest_timer * 0) == 0 and Engine.get_physics_frames() % 600 == 0:
+		print("  t=%ds phase %s wave %d men %d allies %d enemies %d hp %d" % [
+			Engine.get_physics_frames() / 60, story_phase, wave, soldiers.size(), allies.size(), enemies.size(), int(player.hp)])
 	if game_state == "won" or game_state == "lost":
 		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size(), " melee ", _at_stats)
 		print("  shots: ", projectiles.stats, " slain ", slain)
@@ -580,6 +956,12 @@ func _run_autotest(delta: float) -> void:
 				r["slain"], r["pay"], r["fallen"], r["wounded"], r["promoted"]])
 			while Company.can_hire() and Company.roster.size() < 8:
 				Company.hire_recruit()
+			while Company.can_buy("ammo") and int(Company.stores["ammo"]) < 100:
+				Company.buy("ammo")
+			while Company.can_buy("rations") and int(Company.stores["rations"]) < 40:
+				Company.buy("rations")
+			Company.resupply_all()
+			print("  stores: ", Company.stores, " money ", Company.money)
 			print("  march: ", Company.march_on())
 			get_tree().change_scene_to_file("res://scenes/battle.tscn")
 			return
@@ -634,6 +1016,7 @@ func explode(pos: Vector3, radius: float, kill_radius: float, shooter: Node3D) -
 	var victims: Array = []
 	victims.append_array(enemies)
 	victims.append_array(soldiers)
+	victims.append_array(allies)
 	if player.alive:
 		victims.append(player)
 	for u in victims:

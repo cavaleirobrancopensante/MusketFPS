@@ -5,6 +5,7 @@ extends Control
 
 const BATTLE := "res://scenes/battle.tscn"
 const CAMP := "res://scenes/aftermath.tscn"
+const COMPANY := "res://scenes/company.tscn"
 
 var _tp_check: CheckButton
 var _new_btn: Button
@@ -17,6 +18,12 @@ func _ready() -> void:
 	#   -- --autotest [--stress] [--tp]   a stand-alone battle
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	var args := OS.get_cmdline_user_args()
+	if "--company" in args:
+		# Headless check of the Company screen after the prologue.
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		get_tree().change_scene_to_file.call_deferred(COMPANY)
+		return
 	if "--autotest" in args or "--shots" in args:
 		Settings.third_person = "--tp" in args
 		Settings.stress = "--stress" in args
@@ -87,7 +94,8 @@ func _on_continue() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	if Company.load_campaign():
-		get_tree().change_scene_to_file(CAMP)
+		# Saved before the prologue was fought: back to Cinder Ford.
+		get_tree().change_scene_to_file(BATTLE if Company.prologue else CAMP)
 
 
 func _on_new() -> void:
@@ -99,7 +107,7 @@ func _on_new() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	Company.new_campaign()
-	get_tree().change_scene_to_file(CAMP)
+	get_tree().change_scene_to_file(BATTLE) # the prologue: Cinder Ford
 
 
 func _on_stress() -> void:

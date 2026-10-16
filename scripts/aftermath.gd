@@ -8,6 +8,9 @@ extends Control
 
 const BATTLE := "res://scenes/battle.tscn"
 const MENU := "res://scenes/menu.tscn"
+const COMPANY := "res://scenes/company.tscn"
+const Men := preload("res://scripts/men.gd")
+const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
 
 const GOLD := Color(0.95, 0.8, 0.45)
 const RED := Color(0.95, 0.42, 0.35)
@@ -25,6 +28,7 @@ var _hire: Button
 var _march: Button
 var _honour: Button
 var _showing_honour := false
+var _logistics
 
 
 func _ready() -> void:
@@ -66,6 +70,8 @@ func _ready() -> void:
 	_march = _button("MARCH ON", _on_march)
 	_hire = _button("", _on_hire)
 	_honour = _button("ROLL OF HONOUR", _on_honour)
+	buttons.add_child(_button("COMPANY & KIT", _on_company))
+	buttons.add_child(_button("WAGON", func(): _logistics.open()))
 	buttons.add_child(_march)
 	buttons.add_child(_hire)
 	buttons.add_child(_honour)
@@ -97,6 +103,9 @@ func _ready() -> void:
 	_list.add_theme_constant_override("separation", 6)
 	scroll.add_child(_list)
 
+	_logistics = LogisticsPopup.new()
+	add_child(_logistics)
+	_logistics.changed.connect(_refresh)
 	_refresh()
 
 
@@ -139,29 +148,46 @@ func _refresh() -> void:
 	if men == 0 and not Company.can_hire():
 		_header.text = "THE COMPANY IS NO MORE"
 		_header.add_theme_color_override("font_color", RED)
+	elif fresh and r.get("prologue", false):
+		_header.text = "THE RETREAT"
+		_header.add_theme_color_override("font_color", RED)
 	elif fresh:
 		_header.text = "VICTORY" if r["won"] else "DEFEAT"
 		_header.add_theme_color_override("font_color", GOLD if r["won"] else RED)
 	else:
 		_header.text = "IN CAMP"
 		_header.add_theme_color_override("font_color", GOLD)
-	_sub.text = "Day %d  ·  %s, %d won  ·  %d crowns  ·  wages %d/wk" % [
-		Company.day, _n(Company.battles, "battle"), Company.victories, Company.money, Company.weekly_wages()]
+	_sub.text = "%s  ·  Day %d  ·  %s, %d won  ·  %d crowns  ·  wages %d/wk" % [
+		Company.officer.get("rank", "Captain"), Company.day, _n(Company.battles, "battle"), Company.victories,
+		Company.money, Company.weekly_wages()]
 
 	var t := ""
-	if fresh:
+	if fresh and r.get("prologue", false):
+		t += "[color=#%s]Cinder Ford is lost. %s fell at the head of his company and gave it to you as he died. You brought what was left of it out through the woods.[/color]\n\n" % [_hex(DIM), r.get("captain", "The captain")]
+		t += "You are its captain now.\n"
+		t += "Lizardmen slain on the field: [b]%d[/b]\n" % int(r["slain"])
+		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
+		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
+		t += _section("Levelled up (points to spend)", r.get("levelled", []), GOLD, "")
+		t += "\n[color=#%s]%d pieces of kit were dropped in the rout. The wagon saved the captain's rifle, a little food and powder. See to your men on the COMPANY & KIT screen.[/color]\n" % [_hex(GOLD), int(r.get("lost_gear", 0))]
+	elif fresh:
 		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
 		var pay := int(r["pay"])
 		if pay >= 0:
 			t += "Bounty: [color=#%s]+%d crowns[/color]\n" % [_hex(GOLD), pay]
 		else:
-			t += "Baggage plundered: [color=#%s]%d crowns[/color]\n" % [_hex(RED), pay]
+			t += "Baggage plundered: [color=#%s]%d crowns[/color], half the wagon's stores and %d pieces of kit\n" % [_hex(RED), pay, int(r.get("lost_gear", 0))]
 		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
 		t += _section("Promoted", r["promoted"], GOLD, "")
+		t += _section("Levelled up (points to spend)", r.get("levelled", []), GOLD, "")
 	else:
 		t += "[color=#%s]%s[/color]\n\n" % [_hex(DIM), Company.march_note]
-		t += "%d men, %d fit to fight.\n" % [men, fit]
+		t += "%d men, %d fit to fight. Morale %d (%s).\n" % [men, fit, Company.company_morale(),
+			Men.morale_word(Company.company_morale())]
+		var no_shot := Company.roster.filter(func(m): return int(m["pack"]["ammo"]) == 0).size()
+		if no_shot > 0:
+			t += "[color=#%s]%d men have no cartridges.[/color]\n" % [_hex(RED), no_shot]
 		t += "Scouts report about %d lizardmen ahead.\n" % Company.next_enemy_count()
 	if men > 0 and fit == 0:
 		t += "\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]" % _hex(RED)
@@ -255,7 +281,7 @@ func _fill_honour() -> void:
 func _on_hire() -> void:
 	var m := Company.hire_recruit()
 	if not m.is_empty():
-		Company.march_note = "%s joins the company." % Company.title(m)
+		Company.march_note = "%s joins the company with a worn musket and no cartridges. Kit him out on the COMPANY & KIT screen." % Company.title(m)
 		Company.results_unseen = false
 		_refresh()
 
@@ -264,6 +290,12 @@ func _on_march() -> void:
 	Company.results_unseen = false
 	Company.march_on()
 	get_tree().change_scene_to_file(BATTLE)
+
+
+func _on_company() -> void:
+	Company.results_unseen = false
+	Company.save()
+	get_tree().change_scene_to_file(COMPANY)
 
 
 func _on_honour() -> void:

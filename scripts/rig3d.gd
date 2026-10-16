@@ -44,6 +44,11 @@ const BELLY := Color(0.62, 0.66, 0.38)
 const EYE := Color(1.0, 0.85, 0.1)
 const BONE := Color(0.88, 0.83, 0.7)
 const CREST := Color(0.62, 0.16, 0.1)
+const SHIRT := Color(0.86, 0.83, 0.74)
+const BUFF := Color(0.66, 0.5, 0.3)
+const LEATHER := Color(0.36, 0.24, 0.14)
+const RUST := Color(0.47, 0.36, 0.28)
+const BROWNED := Color(0.3, 0.31, 0.33)
 
 ## Musket geometry (musket space: grip at origin, muzzle toward -Z).
 const MUZZLE := 1.05
@@ -81,6 +86,10 @@ var bayonet_on := true
 var bayonet_in_hand := false
 var ramrod_on := false
 var show_head := true
+## A soldier's kit (Company gear ids: head, torso, primary, secondary) and
+## pack ({water, rations, ammo}); empty means the regulation kit, full pack.
+var gear := {}
+var pack := {}
 
 # --- Smoothed state.
 var _grip := Vector3(0.22, 1.12, 0.02)
@@ -216,11 +225,27 @@ func _segment(name: String, width: float, col: Color, store: Dictionary) -> void
 
 func _build_soldier() -> void:
 	var officer := kind == "officer"
+	var g := {"head": "shako", "torso": "coat", "primary": "musket", "secondary": "bayonet"}
+	g.merge(gear, true)
+	var torso := String(g["torso"])
 	var coat := COAT_OFFICER if officer else COAT
+	var cuff := RED if officer else WHITE
+	var belt := WHITE
+	if not officer and torso == "shirt":
+		coat = SHIRT
+		cuff = SHIRT.darkened(0.08)
+		belt = LEATHER
+	elif not officer and torso == "buffcoat":
+		coat = BUFF
+		cuff = BUFF.darkened(0.15)
+		belt = LEATHER
 	spine.position = Vector3(0, _hip_y, 0)
-	# Torso, coat tails, crossbelts, pack.
+	# Torso, coat tails (not on a bare shirt), crossbelts, pack.
 	_part(spine, _box_mesh(Vector3(0.42, 0.56, 0.24)), coat, Vector3(0, 0.28, 0))
-	_part(spine, _box_mesh(Vector3(0.4, 0.3, 0.22)), coat, Vector3(0, -0.08, 0.02))
+	if officer or torso != "shirt":
+		_part(spine, _box_mesh(Vector3(0.4, 0.3, 0.22)), coat, Vector3(0, -0.08, 0.02))
+	else:
+		_part(spine, _box_mesh(Vector3(0.4, 0.12, 0.22)), coat, Vector3(0, -0.01, 0.0)) # shirt tail
 	if officer:
 		_part(spine, _box_mesh(Vector3(0.44, 0.04, 0.26)), RED, Vector3(0, 0.02, 0)) # sash
 		_part(spine, _box_mesh(Vector3(0.17, 0.42, 0.02)), WHITE, Vector3(0, 0.32, -0.125)) # lapels
@@ -229,10 +254,9 @@ func _build_soldier() -> void:
 		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0))
 		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0))
 	else:
-		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), WHITE, Vector3(0, 0.28, -0.125), Vector3(0, 0, 38))
-		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), WHITE, Vector3(0, 0.28, -0.125), Vector3(0, 0, -38))
-		_part(spine, _box_mesh(Vector3(0.36, 0.34, 0.14)), PACK, Vector3(0, 0.3, 0.19))
-		_part(spine, _box_mesh(Vector3(0.42, 0.09, 0.1)), ROLL, Vector3(0, 0.51, 0.19))
+		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, 38))
+		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, -38))
+		_build_pack(belt)
 	# Head and hat.
 	head = Node3D.new()
 	head.position = Vector3(0, 0.62, 0)
@@ -255,9 +279,7 @@ func _build_soldier() -> void:
 		_part(head, _cyl_mesh(0.035, 0.035, 0.012), RED, Vector3(-0.07, 0.28, -0.032), Vector3(90, 0, 0)) # cockade
 		_part(head, _cyl_mesh(0.016, 0.016, 0.014), GOLD, Vector3(-0.07, 0.28, -0.036), Vector3(90, 0, 0))
 	else:
-		_part(head, _cyl_mesh(0.115, 0.105, 0.22), BLACK, Vector3(0, 0.28, 0)) # shako
-		_part(head, _box_mesh(Vector3(0.2, 0.02, 0.08)), BLACK, Vector3(0, 0.18, -0.12))
-		_part(head, _box_mesh(Vector3(0.06, 0.06, 0.02)), GOLD, Vector3(0, 0.3, -0.115), Vector3.ZERO, true)
+		_build_hat(String(g["head"]))
 	# Arms (placed by IK every frame).
 	_segment("r_upper", 0.11, coat, _arm)
 	_segment("r_fore", 0.095, coat, _arm)
@@ -265,40 +287,92 @@ func _build_soldier() -> void:
 	_segment("l_fore", 0.095, coat, _arm)
 	_arm["r_hand"] = _part(body, _sphere_mesh(0.05), SKIN, Vector3.ZERO)
 	_arm["l_hand"] = _part(body, _sphere_mesh(0.05), SKIN, Vector3.ZERO)
-	_segment("r_cuff", 0.112, RED if officer else WHITE, _arm)
-	_segment("l_cuff", 0.112, RED if officer else WHITE, _arm)
+	_segment("r_cuff", 0.112, cuff, _arm)
+	_segment("l_cuff", 0.112, cuff, _arm)
 	# Legs.
 	for side in ["l", "r"]:
 		_segment(side + "_thigh", 0.13, WHITE, _leg)
 		_segment(side + "_shin", 0.115, BLACK, _leg)
 		_leg[side + "_foot"] = _part(body, _box_mesh(Vector3(0.11, 0.07, 0.24)), BLACK, Vector3.ZERO)
-	_build_musket()
+	_build_musket(String(g["primary"]), String(g["secondary"]))
+	if not officer:
+		bayonet_on = String(g["secondary"]) != ""
 
 
-func _build_musket() -> void:
+func _build_hat(hat: String) -> void:
+	match hat:
+		"shako":
+			_part(head, _cyl_mesh(0.115, 0.105, 0.22), BLACK, Vector3(0, 0.28, 0))
+			_part(head, _box_mesh(Vector3(0.2, 0.02, 0.08)), BLACK, Vector3(0, 0.18, -0.12))
+			_part(head, _box_mesh(Vector3(0.06, 0.06, 0.02)), GOLD, Vector3(0, 0.3, -0.115), Vector3.ZERO, true)
+		"tricorne":
+			# Crown, and a brim turned up on three sides into a triangle.
+			_part(head, _cyl_mesh(0.1, 0.112, 0.09), BLACK, Vector3(0, 0.22, 0))
+			for i in 3:
+				var a := deg_to_rad(120.0 * i)
+				var at := Vector3(sin(a), 0, -cos(a)) * -0.1
+				_part(head, _box_mesh(Vector3(0.27, 0.08, 0.025)), BLACK, at + Vector3(0, 0.22, 0),
+					Vector3(25, rad_to_deg(-a), 0))
+		"cap":
+			_part(head, _cyl_mesh(0.125, 0.115, 0.075), COAT, Vector3(0, 0.215, 0.01))
+			_part(head, _cyl_mesh(0.117, 0.117, 0.025), RED, Vector3(0, 0.19, 0.0))
+			_part(head, _box_mesh(Vector3(0.16, 0.015, 0.07)), BLACK, Vector3(0, 0.185, -0.12), Vector3(-12, 0, 0))
+		_:
+			# Bare-headed: hair on top.
+			_part(head, _box_mesh(Vector3(0.2, 0.06, 0.2)), HAIR, Vector3(0, 0.19, 0.01))
+
+
+## Haversack and blanket roll on his back (flat when his rations are gone),
+## a canteen at the left hip if he has water, a cartridge box if he has shot.
+func _build_pack(strap: Color) -> void:
+	var rations := int(pack.get("rations", 8))
+	var water := int(pack.get("water", 1))
+	var ammo := int(pack.get("ammo", 20))
+	var depth := 0.14 if rations > 2 else 0.07
+	_part(spine, _box_mesh(Vector3(0.36, 0.34, depth)), PACK, Vector3(0, 0.3, 0.12 + depth * 0.5))
+	_part(spine, _box_mesh(Vector3(0.42, 0.09, 0.1)), ROLL, Vector3(0, 0.51, 0.12 + depth * 0.5))
+	if water > 0:
+		_part(spine, _cyl_mesh(0.07, 0.07, 0.05), Color(0.35, 0.42, 0.5), Vector3(-0.24, -0.06, 0.02), Vector3(0, 0, 90))
+	if ammo > 0:
+		_part(spine, _box_mesh(Vector3(0.16, 0.11, 0.06)), BLACK, Vector3(0.14, 0.0, 0.15))
+		_part(spine, _box_mesh(Vector3(0.05, 0.04, 0.01)), strap, Vector3(0.14, 0.01, 0.185), Vector3.ZERO, true)
+
+
+func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 	musket = Node3D.new()
 	body.add_child(musket)
-	_part(musket, _box_mesh(Vector3(0.045, 0.11, 0.5)), WOOD, Vector3(0, -0.025, 0.2)) # stock
-	_part(musket, _box_mesh(Vector3(0.04, 0.05, 0.75)), WOOD, Vector3(0, -0.01, -0.36)) # forestock
-	_part(musket, _cyl_mesh(0.013, 0.013, MUZZLE), STEEL, Vector3(0, 0.018, -MUZZLE * 0.5), Vector3(90, 0, 0))
+	var wood := WOOD
+	var barrel := STEEL
+	if primary == "worn_musket":
+		wood = WOOD.darkened(0.3)
+		barrel = RUST
+	elif primary == "rifle":
+		wood = Color(0.3, 0.16, 0.08)
+		barrel = BROWNED
+	_part(musket, _box_mesh(Vector3(0.045, 0.11, 0.5)), wood, Vector3(0, -0.025, 0.2)) # stock
+	_part(musket, _box_mesh(Vector3(0.04, 0.05, 0.75)), wood, Vector3(0, -0.01, -0.36)) # forestock
+	_part(musket, _cyl_mesh(0.013, 0.013, MUZZLE), barrel, Vector3(0, 0.018, -MUZZLE * 0.5), Vector3(90, 0, 0))
+	if primary == "rifle":
+		_part(musket, _box_mesh(Vector3(0.048, 0.05, 0.1)), GOLD, Vector3(0, -0.02, 0.3), Vector3.ZERO, true) # patchbox
 	_part(musket, _box_mesh(Vector3(0.02, 0.05, 0.08)), STEEL, Vector3(0.028, 0.01, -0.02), Vector3.ZERO, true) # lock
 	_part(musket, _box_mesh(Vector3(0.007, 0.022, 0.02)), BLACK, Vector3(0, 0.038, -MUZZLE + 0.04), Vector3.ZERO, true) # front sight
 	_part(musket, _box_mesh(Vector3(0.03, 0.012, 0.012)), BLACK, Vector3(0, 0.034, -0.08), Vector3.ZERO, true) # rear notch
+	var blade := 0.62 if secondary == "sword_bayonet" else 0.42
 	bayonet = Node3D.new()
 	bayonet.position = Vector3(0, 0.018, -MUZZLE)
 	musket.add_child(bayonet)
-	_build_bayonet(bayonet)
+	_build_bayonet(bayonet, blade)
 	hand_bayonet = Node3D.new()
 	body.add_child(hand_bayonet)
-	_build_bayonet(hand_bayonet)
+	_build_bayonet(hand_bayonet, blade)
 	hand_bayonet.visible = false
 	ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 	_p_vis[ramrod] = false
 
 
-func _build_bayonet(parent: Node3D) -> void:
+func _build_bayonet(parent: Node3D, blade := 0.42) -> void:
 	_part(parent, _cyl_mesh(0.018, 0.018, 0.08), STEEL, Vector3(0, -0.02, 0.0), Vector3(90, 0, 0))
-	_part(parent, _box_mesh(Vector3(0.012, 0.03, 0.42)), Color(0.82, 0.84, 0.88), Vector3(0, -0.02, -0.23))
+	_part(parent, _box_mesh(Vector3(0.012, 0.03, blade)), Color(0.82, 0.84, 0.88), Vector3(0, -0.02, -0.02 - blade * 0.5))
 
 
 func _build_lizard() -> void:
