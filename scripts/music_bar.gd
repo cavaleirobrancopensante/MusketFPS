@@ -122,6 +122,8 @@ func _refresh() -> void:
 	var t: Dictionary = Music.current
 	_title.text = "♪ " + (String(t["title"]) if not t.is_empty() else "Nothing playing")
 	_sub.text = Music.label(t) + ("" if Music.auto else "  ·  manual")
+	if Music.last_error != "":
+		_sub.text = Music.last_error
 	_pause.text = "PLAY" if Music.paused else "PAUSE"
 	_shuffle.text = "RANDOM" if Music.shuffle else "IN ORDER"
 	_auto.text = "AUTO: ON" if Music.auto else "AUTO: OFF"

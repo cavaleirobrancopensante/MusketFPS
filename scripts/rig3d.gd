@@ -86,6 +86,7 @@ var bayonet_on := true
 var bayonet_in_hand := false
 var ramrod_on := false
 var show_head := true
+var _fp_hide: Array = [] # parts right under your eye (collar, epaulettes): hidden in first person
 ## A soldier's kit (Company gear ids: head, torso, primary, secondary) and
 ## pack ({water, rations, ammo}); empty means the regulation kit, full pack.
 var gear := {}
@@ -257,9 +258,9 @@ func _build_soldier() -> void:
 		_part(spine, _box_mesh(Vector3(0.44, 0.04, 0.26)), RED, Vector3(0, 0.02, 0)) # sash
 		_part(spine, _box_mesh(Vector3(0.17, 0.42, 0.02)), WHITE, Vector3(0, 0.32, -0.125)) # lapels
 		_part(spine, _box_mesh(Vector3(0.03, 0.42, 0.025)), GOLD, Vector3(0, 0.32, -0.13), Vector3.ZERO, true) # buttons
-		_part(spine, _cyl_mesh(0.085, 0.09, 0.07), RED, Vector3(0, 0.6, 0)) # high collar
-		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0))
-		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0))
+		_fp_hide.append(_part(spine, _cyl_mesh(0.085, 0.09, 0.07), RED, Vector3(0, 0.6, 0))) # high collar
+		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0)))
+		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0)))
 	else:
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, 38))
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, -38))
@@ -532,9 +533,12 @@ func _update(delta: float, snap: bool) -> void:
 	_lean = lerpf(_lean, t_lean, k)
 	_jaw = lerpf(_jaw, t_jaw, k)
 	spine.rotation.x = -_lean
-	# First person: hide your own torso, collar and head, so the screen shows
-	# only arms and musket (the arms and legs aren't parented to the spine).
-	spine.visible = show_head
+	# First person: your head (and the collar and epaulettes right under your
+	# eye) are hidden; the rest of you is there when you look down.
+	if head != null:
+		head.visible = show_head
+	for id in _fp_hide:
+		_p_vis[id] = show_head
 
 	if kind == "lizard":
 		_update_lizard(delta, kh)
@@ -573,7 +577,8 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	_hand_l = _hand_l.lerp(l_target, kh)
 	# First person: anchor the shoulders lower and a touch forward, so the
 	# upper arms rise from below the screen edge instead of beside the lens.
-	var fp_drop := Vector3.ZERO if show_head else FP_SHOULDER_DROP
+	# Looking down at your own chest, the shoulders go back where they belong.
+	var fp_drop := Vector3.ZERO if show_head else FP_SHOULDER_DROP * clampf(1.0 + aim_pitch * 1.6, 0.0, 1.0)
 	_place_arm("r", spine.transform * _shoulder_r + fp_drop, _hand_r, Vector3(1.0, -1.0, 0.4))
 	_place_arm("l", spine.transform * _shoulder_l + fp_drop, _hand_l, Vector3(-1.0, -1.0, 0.4))
 

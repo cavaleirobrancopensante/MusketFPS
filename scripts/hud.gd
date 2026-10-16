@@ -287,10 +287,17 @@ func _draw() -> void:
 
 	# Crosshair and hit marker.
 	var c := s * 0.5
-	# Sighting down the barrel replaces the crosshair dot.
-	var dot_a := 0.85 * (1.0 - clampf(player.aim_amount * 1.5, 0.0, 1.0))
-	if dot_a > 0.01:
-		draw_circle(c, 2.5, Color(1, 1, 1, dot_a))
+	# First person: sighting down the barrel replaces the crosshair dot.
+	# Third person has no barrel to sight along: aiming tightens a small
+	# ring round the dot instead.
+	if player.third_person:
+		draw_circle(c, 2.5, Color(1, 1, 1, 0.9))
+		var r := lerpf(14.0, 6.0, player.aim_amount)
+		draw_arc(c, r, 0.0, TAU, 24, Color(1, 1, 1, 0.35 + 0.45 * player.aim_amount), 1.5)
+	else:
+		var dot_a := 0.85 * (1.0 - clampf(player.aim_amount * 1.5, 0.0, 1.0))
+		if dot_a > 0.01:
+			draw_circle(c, 2.5, Color(1, 1, 1, dot_a))
 	if hit_marker > 0.0:
 		var a := hit_marker / 0.35
 		var col := Color(1, 0.3, 0.2, a)

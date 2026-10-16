@@ -206,12 +206,27 @@ func _order(list: Array, start: int) -> void:
 	index = 0
 
 
+## The imported track if the editor has imported it; failing that, the raw
+## .ogg decoded straight from the project folder (a project synced onto the
+## phone may not have been imported yet, and then load() gives nothing).
+var last_error := ""
+
+
 func _load_stream(path: String) -> AudioStream:
+	var s: AudioStream = null
 	if ResourceLoader.exists(path):
-		return load(path)
-	if FileAccess.file_exists(path):
-		return AudioStreamOggVorbis.load_from_file(path)
-	return null
+		s = load(path) as AudioStream
+	if s == null and FileAccess.file_exists(path):
+		var bytes := FileAccess.get_file_as_bytes(path)
+		if bytes.size() > 0:
+			s = AudioStreamOggVorbis.load_from_buffer(bytes)
+	if s == null:
+		last_error = "Can't open %s (%s)" % [path.get_file(),
+			"file missing" if not FileAccess.file_exists(path) else "not readable"]
+		push_warning("Music: " + last_error)
+	else:
+		last_error = ""
+	return s
 
 
 func _play(track_id: String, from_pos: float = 0.0) -> void:
@@ -220,7 +235,7 @@ func _play(track_id: String, from_pos: float = 0.0) -> void:
 		return
 	var stream := _load_stream(t["file"])
 	if stream == null:
-		push_warning("Music: missing " + String(t["file"]))
+		state_changed.emit()
 		return
 	current = t
 	var old: AudioStreamPlayer = _players[_active]
