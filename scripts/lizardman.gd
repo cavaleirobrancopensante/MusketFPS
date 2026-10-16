@@ -35,6 +35,11 @@ var shield_up := 0.0 # seconds the shield stays raised
 var _read_windup := false # already reacted to the player's current wind-up
 var looter := false # would rather plunder the wagon than fight
 var looting := false
+var carried := 0.0 # share of the wagon in his arms (back to the wagon if he dies)
+var eaten := 0 # rations he's already wolfed down (those are gone for good)
+var _dig_t := 0.0
+var _bites := 0 # rations still to eat from the sack in his hands
+var _bite_t := 0.0
 
 
 func _ready() -> void:
@@ -142,12 +147,27 @@ func _go_loot(delta: float) -> bool:
 	_cancel_windup()
 	face_toward(to_w)
 	if dw < 2.6:
+		# At the wagon: dig through it, then pull out a ration sack and eat.
 		looting = true
 		velocity = battle.separation(self, battle.enemies, 1.1) * 2.0
-		set_base_anim("idle")
-		battle.loot_tick(delta)
+		if _bites > 0:
+			set_base_anim("eat")
+			_bite_t -= delta
+			if _bite_t <= 0.0:
+				_bite_t = 1.6
+				_bites -= 1
+				battle.eat_ration(self)
+		else:
+			set_base_anim("rummage")
+			battle.loot_tick(delta, self)
+			_dig_t += delta
+			if _dig_t > 2.5:
+				_dig_t = 0.0
+				if battle.rations_left() > 0:
+					_bites = randi_range(2, 4)
+					_bite_t = 1.2
 		if randf() < delta * 0.3:
-			battle.play_sound("hiss", global_position + Vector3.UP * 1.4, -10.0)
+			battle.play_sound("hiss", global_position + Vector3.UP * 1.4, -12.0)
 	else:
 		velocity = to_w / dw * speed + battle.separation(self, battle.enemies, 1.1) * 3.0
 		set_base_anim("walk")
@@ -249,6 +269,7 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 		# Hurt while plundering: drop the loot and go for whoever did it.
 		looter = false
 		looting = false
+		_bites = 0
 		target = from
 	super.take_damage(amount, from)
 	if alive and amount < 100.0:
@@ -257,11 +278,14 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 
 func _on_died() -> void:
 	_cancel_windup()
+	if carried > 0.0:
+		battle.recover_loot(self)
 	remove_from_group("enemies")
 	if last_hit_by != null and is_instance_valid(last_hit_by) and "kills" in last_hit_by:
 		last_hit_by.kills += 1
 	battle.play_sound("death", global_position + Vector3.UP * 1.4, -4.0)
 	battle.on_enemy_died(self)
 	# Leave the corpse a while, then clean up to keep the phone happy.
-	var tw := _fade_corpse(15.0, 1.5)
+	battle.lizard_corpses.append(global_position)
+	var tw := _fade_corpse(60.0, 1.5) # long enough to be searched after the fight
 	tw.tween_callback(queue_free)

@@ -166,10 +166,16 @@ lizards at nine feet and hold them off the musketeers.
 
 **The wagon** comes to every battle on the map, dragged by two porters to
 its place in the plan (at the rear, usually). Some lizards would rather
-plunder than fight: they make for the wagon and rummage in it until it's
-empty or someone hurts them, carrying off a share of the food, cartridges,
-rum and kit. Out in front it's bait: looting lizards stand still for a
-volley.
+plunder than fight: they make for the wagon, put the cleaver in their belt
+and the shield on their back, dig through the stores, then pull out a
+ration sack and start eating. Kill a looter and what he grabbed goes back in
+the wagon; only the rations already eaten are lost, so the sooner you deal
+with them the less it costs. Lose the fight and the survivors carry their
+share off. Out in front the wagon is bait: looters stand still for a volley.
+
+**After a victory** the men cheer, then spread over the field: some kneel by
+fallen comrades to bind their wounds, others go through the dead lizards'
+things.
 
 ### Loot and the wagon's load
 

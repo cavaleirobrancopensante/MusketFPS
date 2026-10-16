@@ -146,6 +146,9 @@ func _physics_process(delta: float) -> void:
 	if not alive:
 		return
 	_clock += delta
+	if battle.victory:
+		_after_victory(delta)
+		return
 	if routing:
 		_rout(delta)
 		return
@@ -421,6 +424,39 @@ func _shoot() -> void:
 	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult
 	var v: Vector3 = battle.projectiles.spread_dir(aim_point - muzzle, spread) * BALL_SPEED
 	battle.projectiles.fire("ball", muzzle, v, self)
+
+
+## The fight is won: a cheer, then each man finds something to do, a
+## fallen comrade to tend or a dead lizard to go through, walks over and
+## kneels to it.
+var _task := {}
+var _task_asked := false
+
+
+func _after_victory(delta: float) -> void:
+	if battle.victory_t < 2.5 + reaction:
+		face_toward(battle.player.global_position - global_position)
+		set_base_anim("cheer")
+		velocity = Vector3.ZERO
+		return
+	if not _task_asked:
+		_task_asked = true
+		_task = battle.victory_task(self)
+	if _task.is_empty():
+		set_base_anim("idle")
+		return
+	var to: Vector3 = _task["pos"] - global_position
+	to.y = 0.0
+	var d := to.length()
+	if d > 1.1:
+		velocity = to / d * SPEED * 0.55 * pace
+		face_toward(to)
+		set_base_anim("walk")
+		_move(delta)
+	else:
+		velocity = Vector3.ZERO
+		face_toward(to if d > 0.05 else facing)
+		set_base_anim(_task["what"])
 
 
 ## His line broke: run for it, and he's safe once he gets there.

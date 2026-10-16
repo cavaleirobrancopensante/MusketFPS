@@ -59,6 +59,12 @@ var ambush := false
 var wagon: Node3D # the baggage wagon (campaign battles)
 var wagon_looted := 0.0 # share of its stores the lizards have carried off (0..0.8)
 var _porters: Array = []
+## After a victory: men cheer, then go through the dead lizards' things and
+## tend the fallen (see soldier.gd _after_victory).
+var victory := false
+var victory_t := 0.0
+var lizard_corpses: Array = [] # Vector3
+var _claimed := {} # corpse/comrade index -> soldier
 var _loot_told := false
 var _reported := false
 var game_state := "starting" # starting, fighting, between, won, lost
@@ -253,8 +259,8 @@ func status_line() -> String:
 	if prologue:
 		var what := "RETREAT" if story_phase == "retreat" else Lore.BEACH
 		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
-	if wagon_looted > 0.005:
-		tail += "   Wagon looted %d%%" % int(wagon_looted * 100)
+	if rations_spoiled > 0 or looters() > 0:
+		tail += "   Wagon: %d looters, %d rations eaten" % [looters(), rations_spoiled]
 	return "Wave %d/%d   Lizardmen %d   %s" % [wave, wave_count(), enemies.size(), tail]
 
 
@@ -427,6 +433,14 @@ func _update_wagon(delta: float) -> void:
 		r.facing = -wagon.global_transform.basis.z
 
 
+## A looter is cut down: what he was carrying goes back in the wagon.
+func recover_loot(who) -> void:
+	wagon_looted = maxf(0.0, wagon_looted - float(who.carried))
+	who.carried = 0.0
+	if wagon_looted <= 0.0005 and _loot_told:
+		hud.show_message("The wagon is ours again!", 1.5)
+
+
 func wagon_open() -> bool:
 	return wagon != null and wagon_looted < LOOT_MAX
 
@@ -439,10 +453,33 @@ func looters() -> int:
 	return _looting_prev
 
 
+var rations_spoiled := 0 # eaten by looters before they were cut down
+
+
 ## A lizard rummaging in the wagon (called every physics frame per looter).
-func loot_tick(delta: float) -> void:
+## What he grabs stays in his arms: kill him and it comes back, except the
+## food he'd already started on (a ration or two).
+func loot_tick(delta: float, who) -> void:
 	_looting_now += 1
-	wagon_looted = minf(LOOT_MAX, wagon_looted + LOOT_RATE * delta)
+	var grab := minf(LOOT_RATE * delta, LOOT_MAX - wagon_looted)
+	if grab <= 0.0:
+		return
+	wagon_looted += grab
+	who.carried += grab
+
+
+## A looter eats a ration from the wagon: that one's gone, whatever happens.
+func eat_ration(who) -> void:
+	if rations_left() <= 0:
+		return
+	rations_spoiled += 1
+	who.eaten += 1
+	spawn_puff(who.global_position + Vector3.UP * 1.4 - who.facing * -0.5, Color(0.7, 0.6, 0.4), 0.25)
+	play_sound("thud", who.global_position + Vector3.UP * 1.4, -16.0)
+
+
+func rations_left() -> int:
+	return (int(Company.stores.get("rations", 0)) if Company.active else 40) - rations_spoiled
 	if not _loot_told:
 		_loot_told = true
 		hud.show_message("They're at the wagon! Lizards are looting the stores!", 2.5)
@@ -606,6 +643,31 @@ func on_out_of_ammo(s) -> void:
 		hud.show_message("%s is out of cartridges!" % s.display_name, 1.8)
 
 
+## Something for a man to do after the fight: a fallen comrade to tend
+## (first), or a dead lizard to search. Returns {"pos", "what"} or {}.
+func victory_task(s) -> Dictionary:
+	var best := {}
+	var bd := INF
+	for o in _all_men:
+		if o.alive or _claimed.has(o):
+			continue
+		var d: float = s.global_position.distance_to(o.global_position)
+		if d < bd:
+			bd = d
+			best = {"pos": o.global_position, "what": "tend", "key": o}
+	if best.is_empty():
+		for i in lizard_corpses.size():
+			if _claimed.has(i):
+				continue
+			var d2: float = s.global_position.distance_to(lizard_corpses[i])
+			if d2 < bd and d2 < 60.0:
+				bd = d2
+				best = {"pos": lizard_corpses[i], "what": "kneel", "key": i}
+	if not best.is_empty():
+		_claimed[best["key"]] = s
+	return best
+
+
 func on_enemy_died(e) -> void:
 	enemies.erase(e)
 	slain += 1
@@ -623,7 +685,8 @@ func _end_battle(won: bool) -> void:
 			men[int(s.record["id"])] = {"kills": s.kills, "ammo_used": s.ammo_used,
 				"status": "fit" if s.alive else s.down_status}
 		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men,
-			"prologue": prologue, "wagon_looted": wagon_looted, "enemy": "lizards"})
+			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
+			"enemy": "lizards"})
 	hud.show_restart()
 
 
@@ -655,6 +718,8 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if victory:
+		victory_t += delta
 	if Input.is_action_just_pressed("volley"):
 		order_volley()
 	if Input.is_action_just_pressed("order_follow"):
@@ -683,6 +748,7 @@ func _process(delta: float) -> void:
 			elif enemies.is_empty():
 				if wave >= waves.size():
 					hud.show_message("Victory! The field is ours.", 9999.0)
+					victory = true
 					_end_battle(true)
 				else:
 					game_state = "between"
@@ -1208,7 +1274,7 @@ func _run_autotest(delta: float) -> void:
 			Engine.get_physics_frames() / 60, story_phase, wave, soldiers.size(), allies.size(), enemies.size(), int(player.hp)])
 	if game_state == "won" or game_state == "lost":
 		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size(), " melee ", _at_stats)
-		print("  shots: ", projectiles.stats, " slain ", slain, " wagon looted ", snappedf(wagon_looted, 0.01), " looters ", _looting_prev)
+		print("  shots: ", projectiles.stats, " slain ", slain, " wagon looted ", snappedf(wagon_looted, 0.01), " spoiled ", rations_spoiled)
 		if Company.active and Company.battles < 4:
 			# Campaign test: show the result, hire, march on, fight again.
 			var r: Dictionary = Company.last_result
