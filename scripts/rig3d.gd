@@ -230,15 +230,19 @@ func _build_soldier() -> void:
 	var officer := kind == "officer"
 	var g := {"head": "shako", "torso": "coat", "primary": "musket", "secondary": "bayonet"}
 	g.merge(gear, true)
+	if officer and not gear.has("torso"):
+		g["torso"] = "officer_coat"
+	if officer and not gear.has("head"):
+		g["head"] = "bicorne"
 	var torso := String(g["torso"])
-	var coat := COAT_OFFICER if officer else COAT
-	var cuff := RED if officer else WHITE
+	var coat := COAT_OFFICER if officer and torso == "officer_coat" else COAT
+	var cuff := RED if officer and torso == "officer_coat" else WHITE
 	var belt := WHITE
-	if not officer and torso == "shirt":
+	if torso == "shirt":
 		coat = SHIRT
 		cuff = SHIRT.darkened(0.08)
 		belt = LEATHER
-	elif not officer and torso == "buffcoat":
+	elif torso == "buffcoat":
 		coat = BUFF
 		cuff = BUFF.darkened(0.15)
 		belt = LEATHER
@@ -273,7 +277,7 @@ func _build_soldier() -> void:
 	_part(head, _box_mesh(Vector3(0.21, 0.13, 0.09)), HAIR, Vector3(0, 0.12, 0.065))
 	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(0.105, 0.08, -0.01), Vector3.ZERO, true)
 	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(-0.105, 0.08, -0.01), Vector3.ZERO, true)
-	if officer:
+	if String(g["head"]) == "bicorne":
 		# Bicorne worn side to side: a crescent, tallest in the middle.
 		_part(head, _cyl_mesh(0.118, 0.118, 0.05), BLACK, Vector3(0, 0.19, 0))
 		_part(head, _box_mesh(Vector3(0.27, 0.15, 0.05)), BLACK, Vector3(-0.115, 0.26, 0), Vector3(0, 0, 20))

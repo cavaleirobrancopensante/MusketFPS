@@ -240,6 +240,34 @@ place left off, and drops in battle so the muskets carry. The ♪ button opens
 the player: previous, pause, next, random or in order, Auto, music on/off,
 volume and the track list.
 
+### Your character sheet (YOU)
+
+Opened with **YOU** on the map, in camp and on the Company screen.
+
+- **You:** a live 3D figure in your own kit, your name (tap to rename), rank,
+  level, experience and record.
+- **Attributes** (1-10): Aim (a steadier shot), Strength (harder blows),
+  Constitution (+8 hit points a point over 5), Fitness (+3% speed), Wits (an
+  extra skill point every level at 7+) and Presence. Each also caps the
+  skills it governs.
+- **Skills** (0-10), each feeding a real mechanic:
+  Marksmanship (your spread and reload), Bladework (your blade damage and
+  parry arc), Leadership (your men's steadiness; fewer desertions and
+  mutinies), Tactics (orders ripple down the line faster; the night watch
+  sees attacks sooner; slipping away is likelier), Surgery (faster healing;
+  after a victory some "dead" men pull through), Logistics (the wagon carries
+  more), Pathfinding (faster march, further sight, fewer scouts lost), Trade
+  (cheaper food and rum, better prices for loot) and Training (your men gain
+  more experience). Each card shows what it does for you now.
+- **Your kit:** head, coat, firearm and blade, changed from the wagon like
+  your men's (a rifle shoots tighter but loads slower; a buff coat turns
+  hacks but slows you), and your **cartridge box**: your own shots in battle
+  now come from it, shown as "Your shot" in the battle status line.
+- **In battle:** the numbers it all adds up to (hit points, speed, reload,
+  spread, misfires, blade, parry) and what you give your men.
+- **Levels:** experience from every battle, your kills and victories; each
+  level gives 1 attribute point and 2 skill points (3 with Wits 7+).
+
 ### The Company screen (COMPANY & KIT)
 
 - **Left:** the man himself, a live 3D figure wearing his actual kit (drag to
@@ -414,6 +442,8 @@ aftermath node.
 | `scripts/company.gd` | `Company` autoload: the men, kit, the wagon, the march, money, results, saving |
 | `scripts/men.gd` | A soldier's attributes, levels, morale, health and conditions, and what they do in battle |
 | `scripts/aftermath.gd` | Between battles: results, the company, hiring, marching on |
+| `scripts/officer.gd` | You: attributes, skills, levels and the effects they feed |
+| `scripts/officer_sheet.gd` | Your character sheet screen (YOU) |
 | `scripts/company_screen.gd` | The Company screen: portrait, kit, pack, attributes, the men |
 | `scripts/logistics_popup.gd` | The wagon: stocks, days left, sharing out, sutler, grog |
 | `scripts/battle.gd` | The battle: world, waves, the company's line and orders, the beach prologue (guns, tutorial), smoke, sound |

@@ -204,7 +204,7 @@ func refresh() -> void:
 		t += "\n[color=#%s][b]The men are close to mutiny.[/b][/color]" % RED.to_html(false)
 	var load := Company.wagon_load()
 	t += "\nLoad: [b]%d / %d kg[/b]   ·   space [b]%.0f / %.0f[/b]   (CARGO for the full list)" % [
-		int(load[0]), int(Company.WAGON_KG), load[1], Company.WAGON_SPACE]
+		int(load[0]), int(Company.wagon_kg()), load[1], Company.wagon_space()]
 	_info.text = t
 	_fill_cargo()
 	_grog.text = "GROG: ON" if bool(s["grog"]) else "GROG: OFF"
@@ -230,9 +230,10 @@ func _offer(key: String) -> Array:
 		return []
 	var kind: String = m["kind"]
 	if key == "rations":
-		return {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}[kind]
+		var o: Array = {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}[kind]
+		return [o[0], Company.price(o[1])]
 	if key == "rum" and kind != "village":
-		return [10, 6]
+		return [10, Company.price(6)]
 	return []
 
 
@@ -267,8 +268,8 @@ func _fill_cargo() -> void:
 	if not _cargo.visible:
 		return
 	var load := Company.wagon_load()
-	_cargo_head.text = "[b]CARGO[/b]   %d / %d kg   ·   space %.0f / %.0f" % [int(load[0]), int(Company.WAGON_KG),
-		load[1], Company.WAGON_SPACE]
+	_cargo_head.text = "[b]CARGO[/b]   %d / %d kg   ·   space %.0f / %.0f" % [int(load[0]), int(Company.wagon_kg()),
+		load[1], Company.wagon_space()]
 	for c in _cargo_list.get_children():
 		c.queue_free()
 	var rows: Array = []

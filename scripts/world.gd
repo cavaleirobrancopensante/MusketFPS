@@ -261,7 +261,8 @@ func party_pace() -> float:
 	fit /= men.size()
 	var pace := 0.85 + 0.03 * (fit - 5.0)
 	pace *= 1.0 - 0.25 * float(slow) / men.size() # carrying the wounded
-	return clampf(pace, 0.5, 1.3)
+	pace *= Company.Officer.march_mult() # your Pathfinding
+	return clampf(pace, 0.5, 1.45)
 
 
 func speed_here() -> float:
@@ -516,7 +517,7 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 	var fit := 5.0
 	for m in men:
 		fit = Men.attr(m, "fitness")
-	risk = clampf(risk - 0.02 * (fit - 5.0), 0.03, 0.6)
+	risk = clampf((risk - 0.02 * (fit - 5.0)) * Company.Officer.scout_risk_mult(), 0.02, 0.6)
 	var report := {"names": sc["names"], "lost": [], "found": [], "parties": [], "terrain": ""}
 	for m in men:
 		m.erase("away")
@@ -529,7 +530,7 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 				Company.roster.erase(m)
 				report["lost"].append(Company.title(m))
 			else:
-				m["wounded_days"] = randi_range(3, 7)
+				m["wounded_days"] = maxi(1, int(round(randi_range(3, 7) * Company.Officer.wound_mult())))
 		if report["lost"].size() == men.size():
 			Company.save()
 			return report
@@ -596,7 +597,7 @@ func sight_radius() -> float:
 		r -= 6.0
 	if hours_of_day() < 5.0 or hours_of_day() > 21.0:
 		r *= 0.6 # night
-	return r
+	return r * Company.Officer.sight_mult()
 
 
 func hours_of_day() -> float:

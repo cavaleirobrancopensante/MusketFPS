@@ -223,7 +223,7 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				if r < 0.7:
 					var m2 := _random_man()
 					if not m2.is_empty():
-						m2["wounded_days"] = randi_range(3, 6)
+						m2["wounded_days"] = maxi(1, int(round(randi_range(3, 6) * Company.Officer.wound_mult())))
 						return _done("A floor gives way. %s is hurt in the fall." % Company.title(m2))
 				w._reveal(w.pos, 35.0)
 				return _done("Nothing of value, but from the top of the tower you can see far across the land.")

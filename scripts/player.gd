@@ -84,6 +84,17 @@ var blocking := false
 var block_held := false
 
 var kills := 0
+# From your character sheet (officer.gd) in a campaign; plain values otherwise.
+var reload_time := RELOAD_TIME
+var spread_mult := 1.0
+var speed_mult := 1.0
+var melee_mult := 1.0
+var block_arc := BLOCK_ARC
+var armour := 0.0
+var misfire_chance := 0.0
+var ammo := -1 # cartridges in your box; -1 = no count (stand-alone battles)
+var ammo_used := 0
+var _reprime := 0.0
 var asleep_left := 0.0 # night camp: still asleep for this long (see battle._setup_camp)
 var wake_left := 0.0 # ...then getting up off the bedroll
 const WAKE_TIME := 1.5
@@ -126,6 +137,9 @@ func _ready() -> void:
 	third_person = Settings.third_person
 	rig = Rig3D.new()
 	rig.kind = "officer"
+	if Company.active:
+		_apply_sheet()
+		rig.gear = Company.officer.get("gear", {})
 	rig.manual = true
 	add_child(rig)
 	var ctrl := PlayerBody.new()
@@ -133,6 +147,22 @@ func _ready() -> void:
 	ctrl.rig = rig
 	add_child(ctrl)
 	_update_camera()
+
+
+## Your attributes, skills and kit (see officer.gd and the YOU screen).
+func _apply_sheet() -> void:
+	var O = Company.Officer
+	max_hp = O.max_hp()
+	hp = max_hp
+	reload_time = RELOAD_TIME * O.reload_mult()
+	spread_mult = O.spread_mult()
+	speed_mult = O.speed_mult()
+	melee_mult = O.melee_mult()
+	block_arc = O.block_arc()
+	armour = O.armour()
+	misfire_chance = O.misfire() * 0.5 # you look after your own lock
+	ammo = int(Company.officer.get("pack", {}).get("ammo", 30))
+	loaded = ammo > 0
 
 
 ## 3D mode: switch between first and third person.
@@ -302,7 +332,7 @@ func charge() -> float:
 func reload_progress() -> float:
 	if loaded:
 		return 1.0
-	return 1.0 - reload_left / RELOAD_TIME
+	return 1.0 - reload_left / reload_time
 
 
 ## 0..1 through fixing or unfixing the bayonet (1 when not switching).
@@ -334,7 +364,7 @@ func _physics_process(delta: float) -> void:
 		var kb := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		if kb != Vector2.ZERO:
 			input = kb
-		var speed := SPEED * lerpf(1.0, 0.5, aim_amount)
+		var speed := SPEED * speed_mult * lerpf(1.0, 0.5, aim_amount)
 		if blocking:
 			speed *= 0.5
 		elif swing_phase != "idle":
@@ -354,8 +384,9 @@ func _physics_process(delta: float) -> void:
 			if weapon == "musket" and switch_left <= 0.0 and throw_left <= 0.0:
 				_fire()
 
-		# You need both hands on the musket to reload it.
-		if not loaded and weapon == "musket" and switch_left <= 0.0:
+		_reprime = maxf(0.0, _reprime - delta)
+		# You need both hands on the musket to reload it (and a cartridge).
+		if not loaded and weapon == "musket" and switch_left <= 0.0 and ammo != 0:
 			reload_left -= delta
 			var p := reload_progress()
 			for stroke in RAM_STROKES:
@@ -473,7 +504,7 @@ func _apply_melee() -> void:
 		candidates.append([d, e])
 	candidates.sort_custom(func(a, b): return a[0] < b[0])
 
-	var damage: float = data["damage"] + data["charge_damage"] * strike_charge
+	var damage: float = (data["damage"] + data["charge_damage"] * strike_charge) * melee_mult
 	var knock: float = data["knock"] * (1.0 + strike_charge * 0.5)
 	var right := global_transform.basis.x
 	var count := 0
@@ -507,10 +538,22 @@ func _apply_melee() -> void:
 
 
 func _fire() -> void:
-	if not loaded:
+	if not loaded and ammo == 0:
+		battle.hud.show_message("Your cartridge box is empty!", 1.2)
+		return
+	if not loaded or _reprime > 0.0:
+		return
+	if randf() < misfire_chance:
+		# A flash in the pan: prime it again.
+		_reprime = 1.2
+		battle.play_sound_ui("crack", -10.0)
+		battle.hud.show_message("Misfire!", 1.0)
 		return
 	loaded = false
-	reload_left = RELOAD_TIME
+	reload_left = reload_time
+	if ammo > 0:
+		ammo -= 1
+		ammo_used += 1
 	_last_reload_p = 0.0
 	battle.play_sound_ui("musket", 0.0)
 
@@ -521,7 +564,7 @@ func _fire() -> void:
 	var fwd := -camera.global_transform.basis.z
 	var to_me := global_position + Vector3.UP * 1.5 - from
 	from += fwd * maxf(0.4, to_me.dot(fwd))
-	var spread := lerpf(SPREAD, AIM_SPREAD, aim_amount)
+	var spread := lerpf(SPREAD, AIM_SPREAD, aim_amount) * spread_mult
 	fwd = battle.projectiles.spread_dir(fwd, spread)
 	battle.projectiles.fire("ball", from, fwd * BALL_SPEED, self)
 	var hit := false
@@ -563,13 +606,15 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	if blocking and not _shot and from != null and is_instance_valid(from):
 		var to := from.global_position - global_position
 		to.y = 0.0
-		if rad_to_deg(_flat_forward().angle_to(to)) <= BLOCK_ARC:
+		if rad_to_deg(_flat_forward().angle_to(to)) <= block_arc:
 			# Parried: no damage, and the attacker reels back.
 			if from.has_method("stagger"):
 				from.stagger(to.normalized() * 2.5, 0.5)
 			battle.play_sound_ui("clang", -3.0)
 			blocked.emit()
 			return
+	if not _shot:
+		amount *= 1.0 - armour # your coat turns some of a hack
 	hp -= amount
 	battle.play_sound_ui("stab", -4.0)
 	battle.play_sound_ui("grunt", -6.0)

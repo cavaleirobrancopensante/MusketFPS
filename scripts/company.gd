@@ -21,6 +21,7 @@ extends Node
 
 const Men := preload("res://scripts/men.gd")
 const Lore := preload("res://scripts/lore.gd")
+const Officer := preload("res://scripts/officer.gd")
 ## Saved in the current slot's folder (see Settings.slot_dir()).
 func save_path() -> String:
 	return "%s/campaign.json" % Settings.slot_dir()
@@ -48,6 +49,10 @@ const SLOT_NAMES := {"head": "Head", "torso": "Torso", "primary": "Primary weapo
 ## armour (fraction of melee damage turned), spread / reload (multipliers),
 ## misfire (chance), melee (bayonet damage).
 const ITEMS := {
+	"bicorne": {"name": "Officer's bicorne", "slot": "head", "steady": 0.05, "kg": 0.5, "space": 0.5, "value": 8,
+		"desc": "Black felt, gold lace, a red cockade. The men can find you in the smoke."},
+	"officer_coat": {"name": "Officer's coat", "slot": "torso", "steady": 0.05, "kg": 2.2, "space": 0.6, "value": 15,
+		"desc": "Fine blue wool with white lapels, gold buttons and a crimson sash."},
 	"shako": {"name": "Shako", "slot": "head", "steady": 0.05, "kg": 0.4, "space": 0.4, "value": 3,
 		"desc": "Regulation felt shako with a brass plate. A man stands taller in it."},
 	"tricorne": {"name": "Tricorne", "slot": "head", "steady": 0.03, "kg": 0.4, "space": 0.4, "value": 2,
@@ -87,7 +92,7 @@ const ITEMS := {
 }
 ## Weight (kg) and space of a unit of each kind of store.
 const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01]}
-const WAGON_KG := 900.0
+const WAGON_KG := 900.0 # before your Logistics skill (see wagon_kg())
 const WAGON_SPACE := 60.0
 ## What each kind of slain enemy may leave behind: [item id, chance per body].
 const LOOT_TABLE := {"lizards": [["cleaver", 0.22], ["lizard_shield", 0.12], ["hide", 0.2], ["charm", 0.1],
@@ -171,7 +176,7 @@ func new_campaign() -> void:
 	next_id = 1
 	roster.clear()
 	fallen.clear()
-	officer = {"kills": 0, "battles": 0, "rank": "Ensign"}
+	officer = Officer.blank()
 	last_result = {}
 	results_unseen = false
 	# Captain Harrow's company at full strength, before the battle: a sergeant,
@@ -322,6 +327,13 @@ func apply_battle(result: Dictionary) -> void:
 		battles += 1
 	officer["battles"] = int(officer["battles"]) + 1
 	officer["kills"] = int(officer["kills"]) + int(result["officer_kills"])
+	var opack: Dictionary = officer.get("pack", {})
+	opack["ammo"] = maxi(0, int(opack.get("ammo", 0)) - int(result.get("officer_ammo", 0)))
+	var oxp := Officer.XP_BATTLE + Officer.XP_KILL * int(result["officer_kills"]) + (Officer.XP_VICTORY if won else 0)
+	var oup := Officer.gain_xp(oxp)
+	summary["officer_xp"] = oxp
+	if oup > 0:
+		summary["officer_level"] = Officer.level()
 	if won:
 		victories += 1
 	# A won field is yours to strip: the fallen's gear and what the enemy
@@ -339,6 +351,10 @@ func apply_battle(result: Dictionary) -> void:
 		m["kills"] = int(m["kills"]) + int(r["kills"])
 		var pack: Dictionary = m["pack"]
 		pack["ammo"] = maxi(0, int(pack["ammo"]) - int(r.get("ammo_used", 0)))
+		if r["status"] == "killed" and won and not was_prologue and randf() < Officer.save_chance():
+			# Your surgery: he was breathing after all.
+			r["status"] = "wounded"
+			summary.get_or_add("saved", []).append(title(m))
 		if r["status"] == "killed":
 			fallen.append({"name": m["name"], "rank": RANKS[int(m["rank"])], "day": day,
 				"battles": m["battles"], "kills": m["kills"]})
@@ -350,7 +366,7 @@ func apply_battle(result: Dictionary) -> void:
 					summary.get_or_add("kit_home", []).append("%s: %s" % [title(m), back[0]])
 				summary["kit_left"] = int(summary.get("kit_left", 0)) + int(back[1])
 			continue
-		var gained := XP_SURVIVE + XP_KILL * int(r["kills"]) + (XP_VICTORY if won else 0)
+		var gained := int(round((XP_SURVIVE + XP_KILL * int(r["kills"]) + (XP_VICTORY if won else 0)) * Officer.xp_mult()))
 		var old_level := Men.level(m)
 		m["xp"] = int(m["xp"]) + gained
 		var levels := Men.level(m) - old_level
@@ -371,7 +387,7 @@ func apply_battle(result: Dictionary) -> void:
 				Men.add_morale(m, 6)
 				summary.get_or_add("conduct", []).append("%s fought for the wagon" % title(m))
 		if r["status"] == "wounded":
-			m["wounded_days"] = randi_range(3, 10)
+			m["wounded_days"] = maxi(1, int(round(randi_range(3, 10) * Officer.wound_mult())))
 			summary["wounded"].append("%s (%d days)" % [title(m), m["wounded_days"]])
 		var new_rank := _rank_for(int(m["xp"]))
 		if new_rank > int(m["rank"]):
@@ -657,8 +673,8 @@ func room_for(id: String) -> int:
 	if l[0] <= 0.0 and l[1] <= 0.0:
 		return 999999
 	var w := wagon_load()
-	var by_kg := int(floor((WAGON_KG - w[0]) / maxf(l[0], 0.0001)))
-	var by_sp := int(floor((WAGON_SPACE - w[1]) / maxf(l[1], 0.0001)))
+	var by_kg := int(floor((wagon_kg() - w[0]) / maxf(l[0], 0.0001)))
+	var by_sp := int(floor((wagon_space() - w[1]) / maxf(l[1], 0.0001)))
 	return maxi(0, mini(by_kg, by_sp))
 
 
@@ -720,7 +736,21 @@ func goods_value(kind: String) -> int:
 	for id in stores["items"]:
 		if ITEMS.has(id) and (ITEMS[id]["slot"] == "goods" or id in ["cleaver", "spear"]):
 			total += float(ITEMS[id].get("value", 0)) * int(stores["items"][id]) * f
-	return int(total)
+	return int(total * Officer.sell_mult())
+
+
+## What the wagon can carry: better with your Logistics.
+func wagon_kg() -> float:
+	return WAGON_KG * Officer.wagon_mult()
+
+
+func wagon_space() -> float:
+	return WAGON_SPACE * Officer.wagon_mult()
+
+
+## A settlement's price for something, after your Trade.
+func price(base: int) -> int:
+	return maxi(1, int(round(base * Officer.buy_mult())))
 
 
 func sell_goods(kind: String) -> int:
@@ -956,13 +986,13 @@ func pass_day(water: String) -> PackedStringArray:
 			notes.append("No pay! The men are angry.")
 			for m in roster:
 				Men.add_morale(m, -20)
-	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12)
+	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult())
 	for g in gone:
 		roster.erase(g)
 	if gone.size() > 0:
 		notes.append("%d deserted in the night." % gone.size())
 	var cm := company_morale()
-	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015:
+	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015 * Officer.desert_mult():
 		notes.append(_mutiny())
 	save()
 	return notes
@@ -1018,13 +1048,13 @@ func march_on() -> String:
 				Men.add_morale(m, -20)
 
 	# Desertion and mutiny.
-	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.3)
+	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.3 * Officer.desert_mult())
 	for g in gone:
 		roster.erase(g)
 	if gone.size() > 0:
 		notes.append("%d deserted in the night." % gone.size())
 	var cm := company_morale()
-	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.05:
+	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.05 * Officer.desert_mult():
 		notes.append(_mutiny())
 
 	# Camp: the barrels are refilled from whatever water there is.
@@ -1098,6 +1128,7 @@ func load_campaign() -> bool:
 	officer = data.get("officer", {"kills": 0, "battles": 0})
 	if not officer.has("rank"):
 		officer["rank"] = "Captain"
+	Officer.migrate(officer)
 	prologue = bool(data.get("prologue", false))
 	stash = data.get("stash", {})
 	next_battle = data.get("next_battle", {})
