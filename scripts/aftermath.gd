@@ -197,8 +197,11 @@ func _refresh() -> void:
 		t += "\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]" % _hex(RED)
 	_summary.text = t
 
-	_hire.text = "HIRE RECRUIT (%d)" % Company.RECRUIT_COST
-	_hire.disabled = not Company.can_hire()
+	# Recruits can only be found where there are people: a town or city.
+	var m := World.market_here()
+	var in_town: bool = not m.is_empty() and m["kind"] in ["town", "city"]
+	_hire.text = "HIRE RECRUIT (%d)" % Company.RECRUIT_COST if in_town else "HIRE (in towns)"
+	_hire.disabled = not Company.can_hire() or not in_town
 	_march.disabled = men == 0 and not Company.can_hire()
 	_honour.text = "THE COMPANY" if _showing_honour else "ROLL OF HONOUR (%d)" % Company.fallen.size()
 	if _showing_honour:

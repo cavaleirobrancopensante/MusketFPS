@@ -103,7 +103,47 @@ func speed_at(x: int, y: int) -> float:
 
 # ---------------------------------------------------------------- height
 
+## Every new game draws its own land. The broad plan (a coast where you
+## wash up, lizard swamps behind it, two nations at war across the middle,
+## a mountain range with the dwarves beyond) is kept so the story works,
+## but where each of those lies is shuffled: the whole layout is turned and
+## mirrored at random (8 ways), and its proportions are drawn per seed:
+## how far the sea reaches in, how wide the west coast is, where the range
+## starts, whether a second range or an inland ridge rises, where the
+## border between the nations runs and who holds which side.
+var lay := {} # this land's layout parameters
+
+
+func _layout() -> void:
+	lay = {
+		"swap": _rng.randf() < 0.5, "flip_x": _rng.randf() < 0.5, "flip_y": _rng.randf() < 0.5,
+		"shore": _rng.randf_range(0.76, 0.87), "west": _rng.randf_range(0.03, 0.12),
+		"west_bay": _rng.randf_range(0.04, 0.16), "north": _rng.randf_range(0.28, 0.42),
+		"spur": _rng.randf() < 0.65, "spur_x": _rng.randf_range(0.7, 0.85),
+		"ridge": _rng.randf() < 0.45, "ridge_a": _rng.randf_range(-0.6, 0.6), "ridge_c": _rng.randf_range(0.4, 0.6),
+		"border": _rng.randf_range(0.42, 0.6), "aurest_west": _rng.randf() < 0.5,
+		"lizard_w": _rng.randf_range(0.4, 0.55), "lizard_n": _rng.randf_range(0.52, 0.64),
+		"rivers": _rng.randi_range(12, 20),
+	}
+
+
+## Map cell -> where it lies in the layout plan (0..1, "north" is small y).
+func canon(x: float, y: float) -> Vector2:
+	var fx := x / SIZE
+	var fy := y / SIZE
+	if lay["swap"]:
+		var tmp := fx
+		fx = fy
+		fy = tmp
+	if lay["flip_x"]:
+		fx = 1.0 - fx
+	if lay["flip_y"]:
+		fy = 1.0 - fy
+	return Vector2(fx, fy)
+
+
 func _heights() -> void:
+	_layout()
 	var base := FastNoiseLite.new()
 	base.seed = seed
 	base.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -121,24 +161,34 @@ func _heights() -> void:
 	wet.seed = seed + 3
 	wet.frequency = 0.008
 	wet.fractal_octaves = 3
+	var north_at: float = lay["north"]
+	var shore_at: float = lay["shore"]
 	for y in SIZE:
-		var fy := float(y) / SIZE
 		for x in SIZE:
-			var fx := float(x) / SIZE
+			var c := canon(x, y)
+			var fx := c.x
+			var fy := c.y
 			var v := 0.5 + 0.32 * base.get_noise_2d(x, y)
-			# The Greyspine: a ridged range across the north, and a spur east.
-			var north := smoothstep(0.36, 0.06, fy) + 0.6 * smoothstep(0.75, 0.95, fx) * smoothstep(0.7, 0.3, fy)
+			# The great range across the north, maybe a spur down one side,
+			# maybe a lower ridge across the middle.
+			var north := smoothstep(north_at, north_at - 0.3, fy)
+			if lay["spur"]:
+				north += 0.6 * smoothstep(lay["spur_x"], lay["spur_x"] + 0.2, fx) * smoothstep(0.7, 0.3, fy)
+			if lay["ridge"]:
+				var d := absf(fy - (lay["ridge_c"] + lay["ridge_a"] * (fx - 0.5)))
+				north += 0.45 * smoothstep(0.06, 0.0, d) * smoothstep(0.15, 0.3, fx) * smoothstep(0.95, 0.8, fx)
+			north = clampf(north, 0.0, 1.0)
 			var r := clampf(ridge.get_noise_2d(x, y) * 0.5 + 0.5, 0.0, 1.0)
-			v += r * r * 0.45 * clampf(north, 0.0, 1.0)
-			v += 0.08 * clampf(north, 0.0, 1.0)
-			# The coast: sea to the south, curving up along the west.
-			var shore := 0.82 + 0.06 * coast.get_noise_1d(x * 1.0) + 0.1 * smoothstep(0.35, 0.0, fx)
-			var west := 0.06 + 0.05 * coast.get_noise_1d(y + 900.0)
+			v += r * r * 0.45 * north + 0.08 * north
+			# The coast: sea along the "south", curving up the "west".
+			var shore := shore_at + 0.06 * coast.get_noise_1d(fx * SIZE) + float(lay["west_bay"]) * smoothstep(0.35, 0.0, fx)
+			var west: float = lay["west"] + 0.05 * coast.get_noise_1d(fy * SIZE + 900.0)
 			var land := minf(smoothstep(shore + 0.04, shore - 0.05, fy), smoothstep(west - 0.03, west + 0.06, fx))
 			land = minf(land, smoothstep(0.995, 0.96, fy))
 			v = lerpf(0.12, v, land)
 			var i := idx(x, y)
 			height[i] = clampf(v, 0.0, 1.0)
+			# Wet lowlands behind the landing coast: the lizards' swamps.
 			moist[i] = 0.5 + 0.5 * wet.get_noise_2d(x, y) + 0.25 * smoothstep(0.45, 0.85, fy) * smoothstep(0.6, 0.15, fx)
 
 
@@ -191,10 +241,10 @@ func _rivers() -> void:
 		buckets[b] = []
 
 	var tries := 0
-	while rivers < 16 and tries < 800:
+	while rivers < int(lay["rivers"]) and tries < 900:
 		tries += 1
 		var x := _rng.randi_range(20, SIZE - 20)
-		var y := _rng.randi_range(20, int(SIZE * 0.75))
+		var y := _rng.randi_range(20, SIZE - 20)
 		var i := idx(x, y)
 		if height[i] < 0.56 or height[i] > 0.8 or river[i] != 0 or _near_water(x, y, 10):
 			continue
@@ -287,22 +337,23 @@ func _terrain() -> void:
 
 
 func _regions() -> void:
+	var west_nation := 1 if lay["aurest_west"] else 2
+	var east_nation := 3 - west_nation
 	for y in SIZE:
 		for x in SIZE:
 			var i := idx(x, y)
-			var fx := float(x) / SIZE
-			var fy := float(y) / SIZE
+			var c := canon(x, y)
 			var r := 0
 			if terrain[i] == T.SEA:
 				r = 0
-			elif fy < 0.3 or (terrain[i] == T.MOUNTAIN and fy < 0.5):
+			elif c.y < float(lay["north"]) - 0.08 or (terrain[i] == T.MOUNTAIN and c.y < 0.5):
 				r = 3
-			elif fx < 0.5 and fy > 0.58 - 0.15 * (0.5 - fx):
+			elif c.x < float(lay["lizard_w"]) and c.y > float(lay["lizard_n"]) - 0.15 * (0.5 - c.x):
 				r = 4
-			elif fx < 0.5 + 0.06 * sin(fy * 9.0):
-				r = 1
+			elif c.x < float(lay["border"]) + 0.06 * sin(c.y * 9.0):
+				r = west_nation
 			else:
-				r = 2
+				r = east_nation
 			region[i] = r
 
 
@@ -310,13 +361,13 @@ func _regions() -> void:
 
 func _place_settlements() -> void:
 	# The wreck: the south-west coast, where land meets sea.
-	wreck = _find(func(x, y): return terrain[idx(x, y)] == T.BEACH and float(x) / SIZE < 0.3 and float(y) / SIZE > 0.6, Vector2i(80, 420))
+	wreck = _landing()
 	start = _inland_of(wreck, 6)
 	var plan := [
 		["aurest", "city", 2, 70], ["aurest", "town", 5, 40], ["aurest", "village", 16, 16],
 		["vell", "city", 2, 70], ["vell", "town", 5, 40], ["vell", "village", 16, 16],
 		["dwarves", "hold", 3, 50], ["dwarves", "village", 4, 18],
-		["lizards", "nest", 3, 40],
+		["lizards", "nest", 5, 34],
 	]
 	for p in plan:
 		var fac: String = p[0]
@@ -337,6 +388,27 @@ func _place_settlements() -> void:
 				stash_nest = s["id"]
 
 
+## Where the ship broke up: the stretch of shore nearest the far corner of
+## the lizard coast (in the layout plan, the south-west).
+func _landing() -> Vector2i:
+	var best := Vector2i(SIZE / 2, SIZE / 2)
+	var best_d := INF
+	var aim := Vector2(0.2, 0.86)
+	for y in range(2, SIZE - 2, 2):
+		for x in range(2, SIZE - 2, 2):
+			var i := idx(x, y)
+			if terrain[i] in [T.SEA, T.LAKE, T.MOUNTAIN] or river[i] != 0:
+				continue
+			if terrain[idx(x + 2, y)] != T.SEA and terrain[idx(x - 2, y)] != T.SEA \
+					and terrain[idx(x, y + 2)] != T.SEA and terrain[idx(x, y - 2)] != T.SEA:
+				continue
+			var d := canon(x, y).distance_to(aim)
+			if d < best_d:
+				best_d = d
+				best = Vector2i(x, y)
+	return best
+
+
 func _find(ok: Callable, fallback: Vector2i) -> Vector2i:
 	for tries in 4000:
 		var x := _rng.randi_range(5, SIZE - 5)
@@ -350,7 +422,7 @@ func _inland_of(p: Vector2i, steps: int) -> Vector2i:
 	var c := p
 	for i in steps:
 		var best := c
-		for d in [Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+		for d in [Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, -1), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(-1, 1)]:
 			var q: Vector2i = c + d
 			if inside(q.x, q.y) and terrain[idx(q.x, q.y)] not in [T.SEA, T.LAKE] and river[idx(q.x, q.y)] == 0 \
 					and h(q.x, q.y) > h(best.x, best.y):

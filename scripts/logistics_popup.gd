@@ -133,16 +133,23 @@ func refresh() -> void:
 			_grid.add_child(b)
 		else:
 			_grid.add_child(Control.new())
-		if Company.SUPPLY.has(key):
-			var spec: Array = Company.SUPPLY[key]
-			var buy := _button("BUY %d (%d cr)" % [int(spec[0]), int(spec[1])], _on_buy.bind(key))
+		# You can only buy where someone sells: at a settlement on the map.
+		var offer := _offer(key)
+		if not offer.is_empty():
+			var buy := _button("BUY %d (%d cr)" % [int(offer[0]), int(offer[1])], _on_buy.bind(key))
 			buy.add_theme_font_size_override("font_size", 15)
-			buy.disabled = not Company.can_buy(key)
+			buy.disabled = Company.money < int(offer[1])
 			_grid.add_child(buy)
 		else:
-			_grid.add_child(_label("refilled at camp", 15, DIM))
+			var why := "rivers, lakes, towns" if key == "water" else ("nobody here makes powder" if key == "ammo" else "")
+			_grid.add_child(_label(why, 15, DIM))
 
 	var t := ""
+	var market := World.market_here()
+	if market.is_empty():
+		t += "[color=#%s]Nobody to buy from out here: visit a village, town, city or hold.[/color]\n" % DIM.to_html(false)
+	else:
+		t += "At %s: food%s for sale.\n" % [market["name"], " and rum" if market["kind"] != "village" else ""]
 	if bool(s["foul"]):
 		t += "[color=#%s][b]The water is foul.[/b][/color] Drunk plain, it makes men sick. " % RED.to_html(false)
 		if bool(s["grog"]) and int(s["rum"]) > 0:
@@ -187,8 +194,27 @@ func _on_share_all() -> void:
 	changed.emit()
 
 
+## What the settlement you're at sells: [amount, crowns], or [] if nothing.
+## Nobody in this land makes gunpowder, so cartridges can't be bought.
+func _offer(key: String) -> Array:
+	var m := World.market_here()
+	if m.is_empty() or key in ["ammo", "water"]:
+		return []
+	var kind: String = m["kind"]
+	if key == "rations":
+		return {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}[kind]
+	if key == "rum" and kind != "village":
+		return [10, 6]
+	return []
+
+
 func _on_buy(key: String) -> void:
-	Company.buy(key)
+	var offer := _offer(key)
+	if offer.is_empty() or Company.money < int(offer[1]):
+		return
+	Company.money -= int(offer[1])
+	Company.stores[key] = int(Company.stores[key]) + int(offer[0])
+	Company.save()
 	refresh()
 	changed.emit()
 
