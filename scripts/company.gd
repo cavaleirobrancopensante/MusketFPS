@@ -20,6 +20,7 @@ extends Node
 ## the company, and you lead what's left of it out.
 
 const Men := preload("res://scripts/men.gd")
+const Lore := preload("res://scripts/lore.gd")
 const SAVE_PATH := "user://campaign.json"
 const SAVE_VERSION := 3
 
@@ -88,7 +89,7 @@ const RECRUIT_GEAR := {"head": "cap", "torso": "shirt", "primary": "worn_musket"
 
 # ---- the prologue
 const PROLOGUE_MEN := 18
-const CAPTAIN := "Captain Aldous Harrow"
+const CAPTAIN := Lore.COMMANDER
 
 const FIRST_NAMES := ["John", "Thomas", "William", "James", "Patrick", "Michael",
 	"Henry", "George", "Samuel", "Daniel", "Owen", "Robert", "Hugh", "Edward",
@@ -114,6 +115,9 @@ var officer := {"kills": 0, "battles": 0, "rank": "Ensign"}
 ## rations, cartridges, rum, and whether the water is served as grog.
 var stores := {"items": {}, "water": 0, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true}
 var prologue := false # the opening battle is still to be fought
+## The ship's stores the lizards carried off (muskets, cartridges, guns,
+## rum): recovering them is the first great objective. Empty once recovered.
+var stash := {}
 var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
@@ -149,6 +153,7 @@ func new_campaign() -> void:
 		m["pack"] = {"water": 1, "rations": 8, "ammo": 24}
 		roster.append(m)
 	prologue = true
+	stash = {}
 	march_note = ""
 	save()
 
@@ -328,11 +333,15 @@ func apply_battle(result: Dictionary) -> void:
 	save()
 
 
-## The retreat: men drop things, the captain's effects come with you, and
-## you are the company's captain now.
+## The rout from the beach: men drop things, morale is low, the wagon holds
+## next to nothing (the lizards have the ship's stores), and you are the
+## company's captain now.
 func _after_prologue(summary: Dictionary) -> void:
 	prologue = false
 	officer["rank"] = "Captain"
+	stash = Lore.STASH.duplicate()
+	for m in roster:
+		m["morale"] = randi_range(26, 40) # castaways, beaten, in a strange land
 	summary["captain"] = CAPTAIN
 	var dropped := 0
 	for m in roster:
@@ -347,9 +356,9 @@ func _after_prologue(summary: Dictionary) -> void:
 		if randf() < 0.3:
 			pack["rations"] = randi_range(1, 4) # a haversack torn away in the press
 	summary["lost_gear"] = dropped
-	money = 60
-	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 2, "shako": 1, "buffcoat": 1},
-		"water": WATER_CART, "rations": 30, "ammo": 80, "rum": 6, "foul": false, "grog": true}
+	money = 40 # the regiment's pay chest, what's left of it
+	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1},
+		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true}
 	summary["pay"] = 0
 
 
@@ -722,7 +731,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
@@ -750,6 +759,7 @@ func load_campaign() -> bool:
 	if not officer.has("rank"):
 		officer["rank"] = "Captain"
 	prologue = bool(data.get("prologue", false))
+	stash = data.get("stash", {})
 	stores = data.get("stores", {"items": {"musket": 1, "bayonet": 1}, "water": WATER_CART, "rations": 40, "ammo": 120})
 	last_result = data.get("last_result", {})
 	march_note = String(data.get("march_note", ""))

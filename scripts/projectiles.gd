@@ -16,6 +16,12 @@ const KINDS := {
 		"shield_stops": false, "tracer": true},
 	"grenade": {"gravity": 9.8, "drag": 0.05, "life": 10.0, "fuse": 2.6, "bounce": 0.35,
 		"blast_radius": 5.0, "kill_radius": 2.2},
+	# Field guns: a solid iron ball that ploughs through ranks and bounces on,
+	# and canister (a tin of musket balls) for close work.
+	"roundshot": {"gravity": 9.8, "drag": 0.02, "life": 4.0, "damage": 220.0, "player_damage": 120.0,
+		"shield_stops": false, "tracer": false, "pierce": 4, "bounce": 0.45},
+	"canister": {"gravity": 9.8, "drag": 0.5, "life": 1.2, "damage": 90.0, "player_damage": 45.0,
+		"shield_stops": false, "tracer": true},
 	# Ready for the lizard skirmishers: a heavy, slow, arcing throw.
 	"javelin": {"gravity": 9.8, "drag": 0.05, "life": 5.0, "damage": 70.0, "player_damage": 35.0,
 		"shield_stops": true, "tracer": false},
@@ -30,6 +36,7 @@ var _tracers: MultiMesh
 var _grenade_mesh: SphereMesh
 var _grenade_mat: StandardMaterial3D
 var _javelin_mesh: BoxMesh
+var _shot_mesh: SphereMesh
 
 
 func _ready() -> void:
@@ -60,6 +67,12 @@ func _ready() -> void:
 	var jm := StandardMaterial3D.new()
 	jm.albedo_color = Color(0.45, 0.32, 0.18)
 	_javelin_mesh.material = jm
+	_shot_mesh = SphereMesh.new()
+	_shot_mesh.radius = 0.09
+	_shot_mesh.height = 0.18
+	_shot_mesh.radial_segments = 8
+	_shot_mesh.rings = 4
+	_shot_mesh.material = _grenade_mat
 
 
 # ---------------------------------------------------------------- spawning
@@ -71,9 +84,9 @@ func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D, only:
 	var p := {"kind": kind, "pos": from, "prev": from, "vel": velocity, "shooter": shooter, "age": 0.0}
 	if only != null:
 		p["only"] = only
-	if kind == "javelin":
+	if kind == "javelin" or kind == "roundshot":
 		var mj := MeshInstance3D.new()
-		mj.mesh = _javelin_mesh
+		mj.mesh = _javelin_mesh if kind == "javelin" else _shot_mesh
 		mj.position = from
 		add_child(mj)
 		p["node"] = mj
@@ -138,11 +151,24 @@ func _step(p: Dictionary, delta: float) -> bool:
 		nd.position = pos
 		if vel.length_squared() > 0.01:
 			nd.basis = Basis.looking_at(vel.normalized(), Vector3.UP if absf(vel.normalized().y) < 0.97 else Vector3.BACK)
-	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0)
+	var done: Array = p.get("hit_list", [])
+	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done)
 	if not hit.is_empty():
 		_impact_unit(p, k, hit["unit"], prev.lerp(pos, float(hit["t"])))
+		# Round shot ploughs on through the ranks behind.
+		if int(k.get("pierce", 0)) > done.size():
+			done.append(hit["unit"])
+			p["hit_list"] = done
+			p["vel"] = vel * 0.8
+			return true
 		_spent(p, false)
 		return false
+	if pos.y <= 0.02 and k.has("bounce") and vel.length() > 30.0:
+		# A ball that grazes the ground skips on, lower and slower.
+		battle.spawn_puff(Vector3(pos.x, 0.05, pos.z), Color(0.6, 0.52, 0.38), 0.8)
+		p["pos"] = Vector3(pos.x, 0.03, pos.z)
+		p["vel"] = Vector3(vel.x * 0.75, absf(vel.y) * float(k["bounce"]), vel.z * 0.75)
+		return float(p["age"]) < float(k["life"])
 	if pos.y <= 0.02:
 		stats["ground"] += 1
 		battle.spawn_puff(Vector3(pos.x, 0.05, pos.z), Color(0.45, 0.38, 0.28), 0.35)
@@ -211,19 +237,19 @@ func _step_grenade(p: Dictionary, k: Dictionary, prev: Vector3, pos: Vector3, ve
 ## The first unit (or the player) whose body the segment a->b passes through.
 ## Bodies are upright cylinders. `extra` widens them (for line-of-fire checks).
 ## Returns {} or {"unit": Node3D, "t": 0..1 along the segment}.
-func _sweep(a: Vector3, b: Vector3, shooter: Node3D, extra: float) -> Dictionary:
+func _sweep(a: Vector3, b: Vector3, shooter: Node3D, extra: float, exclude: Array = []) -> Dictionary:
 	var best_t := 2.0
 	var best: Node3D = null
 	for entry in battle.units_near_segment(a, b):
 		var u: Node3D = entry[0]
-		if u == shooter or not u.alive:
+		if u == shooter or not u.alive or u in exclude:
 			continue
 		var t := _cylinder_hit(a, b, entry[1], float(u.hit_radius) + extra, float(u.hit_height))
 		if t >= 0.0 and t < best_t:
 			best_t = t
 			best = u
 	var pl: Node3D = battle.player
-	if pl != shooter and pl.alive:
+	if pl != shooter and pl.alive and not pl in exclude:
 		var tp := _cylinder_hit(a, b, pl.global_position, 0.35 + extra, 1.8)
 		if tp >= 0.0 and tp < best_t:
 			best_t = tp

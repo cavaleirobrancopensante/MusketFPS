@@ -6,6 +6,7 @@ extends Control
 const BATTLE := "res://scenes/battle.tscn"
 const CAMP := "res://scenes/aftermath.tscn"
 const COMPANY := "res://scenes/company.tscn"
+const INTRO := "res://scenes/intro.tscn"
 
 var _tp_check: CheckButton
 var _new_btn: Button
@@ -18,6 +19,12 @@ func _ready() -> void:
 	#   -- --autotest [--stress] [--tp]   a stand-alone battle
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	var args := OS.get_cmdline_user_args()
+	if "--intro" in args or "--intro-render" in args:
+		if "--intro" in args:
+			Engine.time_scale = 4.0
+		Company.new_campaign()
+		get_tree().change_scene_to_file.call_deferred(INTRO)
+		return
 	if "--company" in args:
 		# Headless check of the Company screen after the prologue.
 		Company.new_campaign()
@@ -94,7 +101,7 @@ func _on_continue() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	if Company.load_campaign():
-		# Saved before the prologue was fought: back to Cinder Ford.
+		# Saved before the prologue was fought: back to the beach.
 		get_tree().change_scene_to_file(BATTLE if Company.prologue else CAMP)
 
 
@@ -107,7 +114,7 @@ func _on_new() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	Company.new_campaign()
-	get_tree().change_scene_to_file(BATTLE) # the prologue: Cinder Ford
+	get_tree().change_scene_to_file(INTRO) # the shipwreck, then the beach
 
 
 func _on_stress() -> void:
