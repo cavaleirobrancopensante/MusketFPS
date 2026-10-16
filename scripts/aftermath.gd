@@ -198,6 +198,8 @@ func _refresh() -> void:
 				t += "[color=#%s]There's loot on the field: LOOT THE FIELD to pick through it.[/color]\n" % _hex(GOLD)
 		else:
 			t += "Baggage plundered: [color=#%s]%d crowns[/color], half the wagon's stores and %d pieces of kit\n" % [_hex(RED), pay, int(r.get("lost_gear", 0))]
+			if r["fallen"].size() > 0:
+				t += "[color=#%s]The dead were left where they fell, and their muskets with them.[/color]\n" % _hex(RED)
 		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
 		t += _section("At the wagon", r.get("conduct", []), DIM, "")
