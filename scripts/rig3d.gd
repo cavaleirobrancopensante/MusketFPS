@@ -477,10 +477,14 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 	if primary in ["hunting_bow", "war_bow", "crossbow", "dwarf_crossbow"]:
 		_build_missile_weapon(primary, secondary)
 		return
-	if primary in ["rammer", "linstock"]:
+	if primary in ["rammer", "linstock", "spade"]:
 		# A gun crew's tools: the rammer (a sponge at one end), or the
 		# linstock with its smouldering match.
-		if primary == "rammer":
+		if primary == "spade":
+			_part(musket, _cyl_mesh(0.018, 0.018, 1.05), Color(0.5, 0.38, 0.22), Vector3(0, 0, -0.42), Vector3(90, 0, 0))
+			_part(musket, _box_mesh(Vector3(0.12, 0.03, 0.06)), Color(0.45, 0.32, 0.18), Vector3(0, 0, 0.1)) # the T-grip
+			_part(musket, _box_mesh(Vector3(0.2, 0.02, 0.26)), STEEL.darkened(0.25), Vector3(0, 0, -1.04)) # the blade
+		elif primary == "rammer":
 			_part(musket, _cyl_mesh(0.02, 0.02, 2.6), Color(0.5, 0.38, 0.22), Vector3(0, 0, -0.5), Vector3(90, 0, 0))
 			_part(musket, _cyl_mesh(0.075, 0.075, 0.26), Color(0.25, 0.23, 0.2), Vector3(0, 0, -1.83), Vector3(90, 0, 0))
 		else:
@@ -535,7 +539,7 @@ static func _weapon_of(primary: String) -> String:
 		return "bow"
 	if primary in ["crossbow", "dwarf_crossbow"]:
 		return "crossbow"
-	if primary in ["pike", "spear", "war_spear", "rammer", "linstock"]:
+	if primary in ["pike", "spear", "war_spear", "rammer", "linstock", "spade"]:
 		return "pole"
 	if primary == "none":
 		return "none"

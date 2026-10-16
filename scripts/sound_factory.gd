@@ -44,6 +44,7 @@ static func build_all() -> Dictionary:
 		"bow": bow(),
 		"crossbow": crossbow(),
 		"crank": crank(),
+		"drum": drum(),
 	}
 
 
@@ -203,6 +204,18 @@ static func thud() -> AudioStreamWAV:
 		var t := float(i) / RATE
 		lp += 0.1 * (_noise() - lp)
 		b[i] = lp * exp(-t / 0.03) + sin(TAU * 90.0 * t) * exp(-t / 0.04) * 0.5
+	return _to_wav(b)
+
+
+## A big skin drum far off in the trees: a deep, soft boom.
+static func drum() -> AudioStreamWAV:
+	var b := _buf(1.2)
+	var lp := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		lp += 0.04 * (_noise() - lp)
+		var body := sin(TAU * (62.0 + 30.0 * exp(-t / 0.05)) * t) * exp(-t / 0.35)
+		b[i] = body + lp * 4.0 * exp(-t / 0.08)
 	return _to_wav(b)
 
 
