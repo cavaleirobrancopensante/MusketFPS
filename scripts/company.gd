@@ -21,7 +21,10 @@ extends Node
 
 const Men := preload("res://scripts/men.gd")
 const Lore := preload("res://scripts/lore.gd")
-const SAVE_PATH := "user://campaign.json"
+## Saved in the current slot's folder (see Settings.slot_dir()).
+func save_path() -> String:
+	return "%s/campaign.json" % Settings.slot_dir()
+
 const SAVE_VERSION := 3
 
 const RANKS := ["Recruit", "Musketeer", "Veteran", "Sergeant"]
@@ -235,8 +238,9 @@ func company_morale() -> int:
 	return t / roster.size()
 
 
+## Men who can fight: not wounded, and not away scouting.
 func fit_men() -> Array:
-	return roster.filter(func(m): return int(m["wounded_days"]) <= 0)
+	return roster.filter(func(m): return int(m["wounded_days"]) <= 0 and not m.get("away", false))
 
 
 func weekly_wages() -> int:
@@ -771,7 +775,7 @@ func _mutiny() -> String:
 # ---------------------------------------------------------------- saving
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return FileAccess.file_exists(save_path())
 
 
 func save() -> void:
@@ -782,7 +786,8 @@ func save() -> void:
 		"last_result": last_result, "march_note": march_note,
 		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle,
 	}
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
+	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data, "\t"))
 
@@ -790,7 +795,7 @@ func save() -> void:
 func load_campaign() -> bool:
 	if not has_save():
 		return false
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var f := FileAccess.open(save_path(), FileAccess.READ)
 	if f == null:
 		return false
 	var data = JSON.parse_string(f.get_as_text())

@@ -41,10 +41,13 @@ first great objective.
 
 ### The map
 
-After the beach, **TO THE MAP** takes the company inland. The land is
-generated from a seed (a new one for each campaign): 512 × 512 cells of
-real 3D terrain, about 250 leagues of coast, forest, swamp, plains, hills
-and mountains.
+After the beach, **TO THE MAP** takes the company inland. Every new
+campaign draws a new land: 512 × 512 cells of real 3D terrain (coast,
+forest, swamp, plains, hills, mountains). The story's plan is kept (a coast
+where you wash up, lizard swamps behind it, two nations at war, a mountain
+range with the dwarves), but the whole layout is turned and mirrored at
+random, and its proportions, ranges, ridges, rivers and borders change
+with every seed.
 
 - **Warband time:** tap where to go and the company marches there along the
   best route. The clock (and the calendar, food, water, wages, healing and
@@ -61,6 +64,20 @@ and mountains.
   forests block sight and shorten it, night shortens it too. Land you've
   seen stays mapped (dimmed when out of sight); parties show only while you
   can see them.
+- **Nightfall:** at 18:00 on the march you're asked: **make camp** and
+  sleep until 06:00 (the night passes quickly; rested men gain a little
+  morale), or **march on in the dark**, slower, half blind, and the men
+  resent it. A warband can still find your camp.
+- **Events on the road**, picked by where you are: wreckage from the ship on
+  the coast, hunting and berries and lost men in the forest, fever mist and
+  bogs in the swamp, lizard tracks and ambushes in their country, farmers,
+  pedlars, refugees and deserters in the nations' lands, a crag to climb in
+  the hills, fishing on the rivers, floods at the fords, ruins, dwarf
+  prospectors. Each has choices with consequences.
+- **Scouts:** send one man a day's ride, or two men twice as far, in any of
+  eight directions. They come back to the company wherever it is with what
+  they found (land, towns, warbands) and map it, unless they don't come
+  back at all (likelier in the lizards' country or near a warband).
 - **Water:** passing rivers and lakes refills the barrels with clean water,
   swamps with foul water; a dry day leaves you with what you carry.
 - **The land's powers** (placeholder names in `lore.gd`): the Kingdom of
@@ -76,8 +93,10 @@ and mountains.
   ground that matches the map: forest, hills, swamp, beach, plains) or a
   chance to slip away, better in cover. Tap any party to go after it.
 - **Settlements:** visit villages, towns, cities and holds to buy food and
-  rum, refill water and rest. Raided villages have nothing left. Nobody in
-  this land has heard of gunpowder.
+  rum, refill water and rest. Raided villages have nothing left. You can
+  only buy where someone sells (the wagon's Logistics shows what's on offer
+  where you stand), recruits are found only in towns and cities, and nobody
+  in this land has heard of gunpowder, so cartridges can't be bought at all.
 - **Controls:** tap to march; drag to pan; pinch or mouse wheel to zoom
   (from a single village to the whole land); CENTRE to follow the company;
   COMPANY, WAGON, CAMP and MENU at the top right.
@@ -115,8 +134,10 @@ and mountains.
 - **Camp:** hire recruits (25 crowns; raw, with a worn musket and no
   cartridges), look after the company, then **MARCH ON**. Wages fall due every
   week. A beaten company loses a quarter of its purse and half its baggage.
-- The campaign saves itself after every battle and march; **CONTINUE** picks
-  it up.
+- The campaign saves itself after every battle and every day on the map.
+  There are **four save slots**, each its own campaign in its own land:
+  **CONTINUE** picks up the last one, **LOAD** any other, **NEW CAMPAIGN**
+  asks which slot to use (and a second tap to overwrite).
 
 ### The Company screen (COMPANY & KIT)
 
@@ -279,6 +300,7 @@ aftermath node.
 | `scripts/intro.gd` | The shipwreck cutscene |
 | `scripts/world_gen.gd` | Generates the land from a seed: height, terrain, rivers, lakes, fords, bridges, roads, settlements |
 | `scripts/world.gd` | `World` autoload: the map's clock, your march, sight and fog, every roaming party, encounters, saving |
+| `scripts/events.gd` | Events on the road: where they can happen, their choices and outcomes |
 | `scripts/map.gd` | The 3D map: terrain chunks, fog shader, trees, settlements, parties, camera, taps, HUD, visits |
 | `scripts/props.gd` | Scenery from primitives: ship, longboats, cannon, earthworks, rocks, the sea |
 | `scripts/settings.gd` | `Settings` autoload: camera mode, stress test |

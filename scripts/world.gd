@@ -16,10 +16,13 @@ extends Node
 const Gen := preload("res://scripts/world_gen.gd")
 const Lore := preload("res://scripts/lore.gd")
 const Men := preload("res://scripts/men.gd")
-const SAVE_PATH := "user://world.json"
+const Events := preload("res://scripts/events.gd")
 
 const HOURS_PER_SEC := 1.2 # game hours per real second while moving
 const WAIT_HOURS_PER_SEC := 4.0
+const CAMP_HOURS_PER_SEC := 7.0 # the night goes by quickly when you sleep
+const NIGHT_PACE := 0.7 # marching in the dark
+const EVENT_CHANCE := 0.09 # per hour on the march, once the cooldown is over
 const BASE_SPEED := 2.5 # cells per hour on open ground (a cell is about half a league)
 const SIGHT := 16.0 # cells, on flat open ground
 const CONTACT := 1.1 # cells: close enough to meet
@@ -30,6 +33,10 @@ signal day_passed(notes: PackedStringArray)
 signal news(text: String)
 signal encounter(party: Dictionary) # a hostile party has caught you
 signal arrived(target: Dictionary) # {"kind": "settlement"/"party"/"cell", ...}
+signal dusk # 18:00 on the march: make camp, or march on in the dark?
+signal dawn # 06:00: camp is struck
+signal event(ev: Dictionary) # something happened on the road (see events.gd)
+signal scouts_back(report: Dictionary)
 
 var gen # world_gen.gd, built from `seed`
 var seed := 0
@@ -39,6 +46,13 @@ var pos := Vector2.ZERO # the party, in cells (floats)
 var path: Array = [] # Vector2i cells still to walk
 var goal := {} # what we're walking to: {"kind", "id"/"cell"}
 var waiting := false
+var camping := false # asleep until 06:00
+var night_march_day := -1 # the day you chose to march on through the night
+var scouts: Array = [] # out scouting: {"ids", "names", "target": [x, y], "back": hours, "far": bool}
+var _dusk_pending := false # waiting for your answer at dusk
+var _event_cd := 4.0 # hours of marching before the next event may happen
+var _fight_t := 0.0
+var events := Events.new()
 var explored := PackedByteArray() # 1 once seen
 var in_sight := PackedByteArray() # 1 in sight right now
 var parties: Array = []
@@ -67,7 +81,7 @@ func new_world(s: int) -> void:
 	for st in gen.settlements:
 		places[int(st["id"])] = {"raided": 0.0, "known": false}
 	# The world doesn't wait for you: warbands are already out, caravans on the roads.
-	for i in 8:
+	for i in 12:
 		_spawn_tick(true)
 	update_sight(true)
 	save()
@@ -101,12 +115,16 @@ func _build() -> void:
 ## Forget the current world (a new campaign makes a new one on the map).
 func reset() -> void:
 	is_ready = false
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	if FileAccess.file_exists(save_path()):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path()))
+
+
+func save_path() -> String:
+	return "%s/world.json" % Settings.slot_dir()
 
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return FileAccess.file_exists(save_path())
 
 
 func save() -> void:
@@ -120,8 +138,10 @@ func save() -> void:
 	var data := {"seed": seed, "hours": hours, "pos": [pos.x, pos.y], "parties": plist,
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
-		"goal": goal, "path": path.map(func(c): return [c.x, c.y])}
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd}
+	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
+	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
 
@@ -129,7 +149,7 @@ func save() -> void:
 func load_world() -> bool:
 	if not has_save():
 		return false
-	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	var data = JSON.parse_string(FileAccess.get_file_as_string(save_path()))
 	if typeof(data) != TYPE_DICTIONARY:
 		return false
 	seed = int(data["seed"])
@@ -151,6 +171,10 @@ func load_world() -> bool:
 	log = data.get("log", [])
 	goal = data.get("goal", {})
 	path = data.get("path", []).map(func(c): return Vector2i(int(c[0]), int(c[1])))
+	camping = bool(data.get("camping", false))
+	night_march_day = int(data.get("night_march_day", -1))
+	scouts = data.get("scouts", [])
+	_event_cd = float(data.get("event_cd", 4.0))
 	var raw := Marshalls.base64_to_raw(String(data["explored"]))
 	var dec := raw.decompress(Gen.SIZE * Gen.SIZE, FileAccess.COMPRESSION_DEFLATE)
 	if dec.size() == explored.size():
@@ -250,12 +274,74 @@ func speed_here() -> float:
 ## Advance the world by `dt` real seconds (called by the map each frame).
 ## Time only runs while the party moves or waits.
 func tick(dt: float) -> void:
-	if not is_ready:
+	if not is_ready or _dusk_pending:
 		return
-	if moving():
+	if camping:
+		advance(dt * CAMP_HOURS_PER_SEC)
+	elif moving():
 		advance(dt * HOURS_PER_SEC)
 	elif waiting:
 		advance(dt * WAIT_HOURS_PER_SEC)
+
+
+## Time spent standing still (hunting, digging, climbing): the world moves
+## on, the company doesn't.
+func pass_hours(h: float) -> void:
+	var keep := path.duplicate()
+	var keep_goal := goal.duplicate()
+	path.clear()
+	goal = {}
+	advance(h)
+	path = keep
+	goal = keep_goal
+
+
+## A party appearing near the company (events), `dist` cells away.
+func spawn_near(kind: String, faction: String, size: int, dist: float) -> Dictionary:
+	var a := randf() * TAU
+	var at := pos + Vector2(cos(a), sin(a)) * dist
+	var c := Vector2i(clampi(int(at.x), 0, Gen.SIZE - 1), clampi(int(at.y), 0, Gen.SIZE - 1))
+	if grid.is_point_solid(c):
+		c = _nearest_open(c)
+	var home := -1
+	var best := INF
+	for st in gen.settlements:
+		var ok: bool = (st["kind"] == "nest") if faction == "lizards" else (st["faction"] == faction)
+		var d := pos.distance_to(Vector2(st["x"], st["y"]))
+		if ok and d < best:
+			best = d
+			home = int(st["id"])
+	var p := _new_party(kind, faction, size, {"x": c.x, "y": c.y, "id": home})
+	p["wait"] = 1.0
+	return p
+
+
+## Dusk answers.
+func make_camp() -> void:
+	_dusk_pending = false
+	camping = true
+	waiting = false
+
+
+func march_through_night() -> void:
+	_dusk_pending = false
+	night_march_day = day()
+	for m in Company.roster:
+		Men.add_morale(m, -2) # tired, stumbling men
+
+
+func is_night() -> bool:
+	var hd := hours_of_day()
+	return hd >= 18.0 or hd < 6.0
+
+
+func _wake() -> void:
+	camping = false
+	if Company.active:
+		for m in Company.roster:
+			if int(m["hunger"]) == 0 and int(m["thirst"]) == 0:
+				Men.add_morale(m, 1) # a night's sleep
+	dawn.emit()
 
 
 ## Run the world `dh` game hours forward, in small steps.
@@ -264,20 +350,42 @@ func advance(dh: float) -> void:
 		var step := minf(dh, 0.25)
 		dh -= step
 		var day_before := day()
+		var hd_before := hours_of_day()
 		hours += step
-		_walk(step)
+		if camping:
+			if hd_before < 6.0 and hours_of_day() >= 6.0:
+				_wake()
+		else:
+			_walk(step)
 		_note_water()
+		_scouts_tick()
+		if moving() and not camping:
+			_event_cd -= step
+			if _event_cd <= 0.0 and randf() < EVENT_CHANCE * step:
+				var ev: Dictionary = events.pick(self)
+				if not ev.is_empty():
+					_event_cd = randf_range(5.0, 10.0)
+					event.emit(ev)
+					return
 		for p in parties.duplicate():
 			_party_tick(p, step)
-		_fights()
+		_fight_t -= step
+		if _fight_t <= 0.0:
+			_fight_t = 0.5
+			_fights()
 		if day() != day_before:
 			_midnight()
 		if _check_contact():
 			return # stop the clock: something needs you
+		# Dusk on the march: stop and ask.
+		if moving() and not camping and hd_before < 18.0 and hours_of_day() >= 18.0 and night_march_day != day():
+			_dusk_pending = true
+			dusk.emit()
+			return
 
 
 func _walk(dh: float) -> void:
-	var left := BASE_SPEED * party_pace() * dh
+	var left := BASE_SPEED * party_pace() * dh * (NIGHT_PACE if is_night() else 1.0)
 	while left > 0.0 and not path.is_empty():
 		var nxt: Vector2i = path[0]
 		var target := Vector2(nxt) + Vector2(0.5, 0.5)
@@ -329,6 +437,147 @@ func _midnight() -> void:
 	_spawn_tick(false)
 	day_passed.emit(notes)
 	save()
+
+
+# ---------------------------------------------------------------- trade
+
+## The settlement you're at, if anyone there will sell to you: a known,
+## unburned village, town, city or hold within a couple of cells. {} if
+## you're out in the wilds (nobody to buy from).
+func market_here() -> Dictionary:
+	if not is_ready:
+		return {}
+	for st in gen.settlements:
+		if st["kind"] == "nest" or is_raided(int(st["id"])):
+			continue
+		if pos.distance_to(Vector2(st["x"], st["y"]) + Vector2(0.5, 0.5)) < 2.5:
+			return st
+	return {}
+
+
+# ---------------------------------------------------------------- scouts
+
+const SCOUT_NEAR := 25.0
+const SCOUT_FAR := 50.0
+
+
+## Men who could go: fit, not already out; the fittest first, sergeants last.
+func scout_candidates() -> Array:
+	var men: Array = Company.fit_men().filter(func(m): return int(m["rank"]) < 3)
+	men.sort_custom(func(a, b): return Men.attr(a, "fitness") > Men.attr(b, "fitness"))
+	return men
+
+
+## Send one man (near) or two (far) in a direction. They come back to the
+## company wherever it is, with what they found, unless they don't.
+func send_scouts(dir: Vector2, far: bool) -> Dictionary:
+	var men := scout_candidates()
+	var n := 2 if far else 1
+	if men.size() < n + 2:
+		return {}
+	var dist := SCOUT_FAR if far else SCOUT_NEAR
+	var tgt := pos + dir.normalized() * dist
+	tgt = Vector2(clampf(tgt.x, 2, Gen.SIZE - 3), clampf(tgt.y, 2, Gen.SIZE - 3))
+	# They ride as far as the land goes: back off from the sea.
+	while tgt.distance_to(pos) > 4.0 and gen.t(int(tgt.x), int(tgt.y)) in [T.SEA, T.LAKE]:
+		tgt = tgt.move_toward(pos, 2.0)
+	var ids: Array = []
+	var names: Array = []
+	for m in men.slice(0, n):
+		m["away"] = true
+		ids.append(int(m["id"]))
+		names.append(Company.surname_title(m))
+	var out := {"ids": ids, "names": names, "target": [tgt.x, tgt.y], "far": far,
+		"back": hours + dist * 2.0 / (BASE_SPEED * 0.9) + 3.0}
+	scouts.append(out)
+	Company.save()
+	return out
+
+
+func _scouts_tick() -> void:
+	for sc in scouts.duplicate():
+		if hours >= float(sc["back"]):
+			scouts.erase(sc)
+			scouts_back.emit(_scout_report(sc))
+
+
+## What the scouts found, and whether they came back at all.
+func _scout_report(sc: Dictionary) -> Dictionary:
+	var tgt := Vector2(sc["target"][0], sc["target"][1])
+	var tc := Vector2i(int(tgt.x), int(tgt.y))
+	var risk := 0.06 + (0.06 if sc["far"] else 0.0)
+	if gen.region[Gen.idx(tc.x, tc.y)] == 4:
+		risk += 0.14 # the lizards' country
+	for p in parties:
+		if p["faction"] == "lizards" and tgt.distance_to(Vector2(p["x"], p["y"])) < 14.0:
+			risk += 0.12
+			break
+	var men: Array = Company.roster.filter(func(m): return int(m["id"]) in sc["ids"])
+	var fit := 5.0
+	for m in men:
+		fit = Men.attr(m, "fitness")
+	risk = clampf(risk - 0.02 * (fit - 5.0), 0.03, 0.6)
+	var report := {"names": sc["names"], "lost": [], "found": [], "parties": [], "terrain": ""}
+	for m in men:
+		m.erase("away")
+	if randf() < risk:
+		# Lost: killed, or one comes back wounded with half a story.
+		for m in men:
+			if randf() < 0.7 or men.size() == 1:
+				Company.fallen.append({"name": m["name"], "rank": Company.RANKS[int(m["rank"])], "day": Company.day,
+					"battles": m["battles"], "kills": m["kills"], "cause": "lost scouting"})
+				Company.roster.erase(m)
+				report["lost"].append(Company.title(m))
+			else:
+				m["wounded_days"] = randi_range(3, 7)
+		if report["lost"].size() == men.size():
+			Company.save()
+			return report
+	# What they saw: a wide circle round where they went, and the way there.
+	_reveal(tgt, 24.0 if sc["far"] else 18.0)
+	var steps := int(pos.distance_to(tgt) / 6.0)
+	for k in steps:
+		_reveal(pos.lerp(tgt, float(k) / maxf(1, steps)), 6.0)
+	for st in gen.settlements:
+		if tgt.distance_to(Vector2(st["x"], st["y"])) < 24.0:
+			places[int(st["id"])]["known"] = true
+			report["found"].append("%s (%s%s)" % [st["name"], st["kind"], ", raided" if is_raided(int(st["id"])) else ""])
+	for p in parties:
+		if tgt.distance_to(Vector2(p["x"], p["y"])) < 24.0:
+			report["parties"].append(party_name(p))
+	var counts := {}
+	for dy in range(-12, 13, 3):
+		for dx in range(-12, 13, 3):
+			if gen.inside(tc.x + dx, tc.y + dy):
+				var tt: int = gen.t(tc.x + dx, tc.y + dy)
+				counts[tt] = counts.get(tt, 0) + 1
+	var most := -1
+	for k in counts:
+		if most < 0 or counts[k] > counts[most]:
+			most = k
+	report["terrain"] = Gen.T_NAMES[most].to_lower() if most >= 0 else ""
+	Company.save()
+	return report
+
+
+## Mark land as explored (scouts, a climb to a high point).
+func _reveal(center: Vector2, r: float) -> void:
+	var ri := int(r)
+	for dy in range(-ri, ri + 1):
+		for dx in range(-ri, ri + 1):
+			if dx * dx + dy * dy > r * r:
+				continue
+			var x := int(center.x) + dx
+			var y := int(center.y) + dy
+			if gen.inside(x, y):
+				explored[Gen.idx(x, y)] = 1
+	for st in gen.settlements:
+		if center.distance_to(Vector2(st["x"], st["y"])) < r:
+			places[int(st["id"])]["known"] = true
+	revealed.emit()
+
+
+signal revealed # explored land changed outside normal sight
 
 
 # ---------------------------------------------------------------- sight
@@ -417,6 +666,9 @@ const KINDS := {
 	"caravan": {"speed": 0.75, "name": "Caravan", "hostile": false},
 	"villagers": {"speed": 0.7, "name": "Villagers", "hostile": false},
 	"traders": {"speed": 0.8, "name": "Dwarf traders", "hostile": false},
+	"hunters": {"speed": 1.05, "name": "Lizard hunting party", "hostile": true},
+	"refugees": {"speed": 0.6, "name": "Refugees", "hostile": false},
+	"deserters": {"speed": 0.85, "name": "Deserters", "hostile": false},
 }
 
 
@@ -454,21 +706,31 @@ func _spawn_tick(initial: bool) -> void:
 		var id := int(st["id"])
 		match st["kind"]:
 			"nest":
-				if _count("warband", "", id) < 3 and (initial or randf() < 0.5):
+				if _count("warband", "", id) < 2 and (initial or randf() < 0.5):
 					_new_party("warband", "lizards", 8 + randi_range(0, 6) + day() / 3, st)
+				# Small hunting parties range far and wide.
+				for k in (2 if initial else 1):
+					if _count("hunters", "", id) < 2 and (initial or randf() < 0.6):
+						_new_party("hunters", "lizards", randi_range(4, 7), st)
 			"city":
-				if _count("patrol", st["faction"]) < 4 and (initial or randf() < 0.3):
+				if _count("patrol", st["faction"]) < 6 and (initial or randf() < 0.35):
 					_new_party("patrol", st["faction"], randi_range(14, 26), st)
-				if _count("caravan") < 10 and (initial or randf() < 0.3):
+				if _count("caravan") < 14 and (initial or randf() < 0.35):
 					_new_party("caravan", st["faction"], randi_range(6, 12), st)
+				if _count("deserters") < 4 and randf() < (0.3 if initial else 0.15):
+					_new_party("deserters", st["faction"], randi_range(3, 8), st)
 			"town":
-				if _count("caravan") < 10 and randf() < (0.1 if initial else 0.2):
+				if _count("caravan") < 14 and randf() < (0.15 if initial else 0.25):
 					_new_party("caravan", st["faction"], randi_range(5, 10), st)
 			"village":
-				if _count("villagers") < 10 and randf() < (0.08 if initial else 0.12) and not is_raided(id):
+				if is_raided(id):
+					# The burned-out leave for the nearest town.
+					if _count("refugees") < 6 and randf() < 0.4:
+						_new_party("refugees", st["faction"], randi_range(5, 14), st)
+				elif _count("villagers") < 16 and randf() < (0.12 if initial else 0.18):
 					_new_party("villagers", st["faction"], randi_range(3, 6), st)
 			"hold":
-				if _count("traders") < 3 and (initial or randf() < 0.25):
+				if _count("traders") < 4 and (initial or randf() < 0.3):
 					_new_party("traders", "dwarves", randi_range(6, 10), st)
 
 
@@ -480,8 +742,14 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 	var kind: String = p["kind"]
 	# Hunters: lizards come for you (or anyone) when they see you; patrols
 	# go after lizards.
-	if kind == "warband" or kind == "patrol":
-		var prey := _prey_for(p, me)
+	if kind == "warband" or kind == "patrol" or kind == "hunters":
+		# Look around every half hour (cheaper than every step).
+		p["look"] = float(p.get("look", 0.0)) - dh
+		var prey := {}
+		if float(p["look"]) <= 0.0:
+			p["look"] = 0.5
+			prey = _prey_for(p, me)
+			p["prey"] = not prey.is_empty()
 		if not prey.is_empty():
 			if float(p["chase"]) <= 0.0 or (p["path"] as Array).is_empty():
 				p["chase"] = 1.5
@@ -495,7 +763,7 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 ## Who this party would hunt, if it can see them.
 func _prey_for(p: Dictionary, me: Vector2) -> Dictionary:
 	var sight := 8.0
-	if p["kind"] == "warband" and Company.active:
+	if p["faction"] == "lizards" and Company.active:
 		var to_us := me.distance_to(pos)
 		var hidden := 0.6 if gen.t(cell().x, cell().y) in [T.FOREST, T.SWAMP] else 1.0
 		if to_us < sight * hidden:
@@ -543,6 +811,23 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 				var roam := Vector2(home["x"], home["y"]) + Vector2(randf_range(-45, 45), randf_range(-45, 45))
 				p["path"] = _route(me, roam)
 				return
+		"hunters":
+			# Hunting parties wander far from the nest, anywhere they like.
+			var far := Vector2(home["x"], home["y"]) + Vector2(randf_range(-110, 110), randf_range(-110, 110))
+			p["path"] = _route(me, far)
+			if (p["path"] as Array).is_empty():
+				p["wait"] = 6.0
+			return
+		"deserters":
+			var drift := me + Vector2(randf_range(-40, 40), randf_range(-40, 40))
+			p["path"] = _route(me, drift)
+			if (p["path"] as Array).is_empty() or randf() < 0.1:
+				parties.erase(p) # they scatter
+			return
+		"refugees":
+			choices = gen.settlements.filter(func(s): return s["kind"] in ["town", "city"] and s["faction"] == p["faction"])
+			choices.sort_custom(func(a, b): return Vector2(a["x"], a["y"]).distance_squared_to(me) < Vector2(b["x"], b["y"]).distance_squared_to(me))
+			choices = choices.slice(0, 1)
 		"patrol":
 			choices = gen.settlements.filter(func(s): return s["faction"] == p["faction"] and s["id"] != p["target"])
 		"caravan":
@@ -583,7 +868,7 @@ func _move_party(p: Dictionary, dh: float) -> void:
 		var nxt: Vector2i = path_p[0]
 		var target := Vector2(nxt) + Vector2(0.5, 0.5)
 		var sp: float = gen.speed_at(nxt.x, nxt.y)
-		if p["kind"] == "warband" and gen.t(nxt.x, nxt.y) in [T.SWAMP, T.FOREST]:
+		if p["faction"] == "lizards" and gen.t(nxt.x, nxt.y) in [T.SWAMP, T.FOREST]:
 			sp = maxf(sp, 0.85) # at home in the swamp and the trees
 		sp = maxf(sp, 0.1)
 		var d := me.distance_to(target)

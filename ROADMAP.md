@@ -68,8 +68,10 @@ speeds; line of sight on the heightmap and fog of war; Warband time that
 runs only while you move; day and night; villages, towns, cities, dwarf
 holds and lizard nests; roaming warbands, patrols, caravans, villagers and
 dwarf traders that fight each other and raid; encounters into battles on
-matching ground; buying food and rum in settlements. Still to do: scouts,
-smaller "lost" settlements in the lizard lands, rumours, a minimap.
+matching ground; buying food and rum in settlements (only there); camp at
+nightfall; events on the road by terrain and region; scouts; a new layout
+for every campaign; four save slots. Still to do: smaller "lost"
+settlements in the lizard lands, rumours, a minimap.
 
 
 - **Warband-style:** your party is a figure walking on the map. Tap where to

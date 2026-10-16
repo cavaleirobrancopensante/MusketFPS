@@ -122,6 +122,11 @@ func _ready() -> void:
 	World.news.connect(func(t): _push_toast(t))
 	World.encounter.connect(_on_encounter)
 	World.arrived.connect(_on_arrived)
+	World.dusk.connect(_on_dusk)
+	World.dawn.connect(func(): _push_toast("Dawn. The company breaks camp." + (" On the march again." if World.moving() else "")))
+	World.event.connect(_on_event)
+	World.scouts_back.connect(_on_scouts_back)
+	World.revealed.connect(func(): _rebuild_fog())
 	_target = _world_pos(World.pos)
 	_apply_battle_result()
 	_update_fog(true)
@@ -536,7 +541,7 @@ func _build_hud() -> void:
 	right.position = Vector2(-170, 12)
 	right.add_theme_constant_override("separation", 8)
 	root.add_child(right)
-	for spec in [["COMPANY", _go.bind(COMPANY_SCREEN)], ["WAGON", func(): _logistics.open()],
+	for spec in [["COMPANY", _go.bind(COMPANY_SCREEN)], ["WAGON", func(): _logistics.open()], ["SCOUTS", _open_scouts],
 			["CAMP", _go.bind(CAMP)], ["MENU", _go.bind(MENU)]]:
 		right.add_child(_button(spec[0], spec[1]))
 	var br := HBoxContainer.new()
@@ -604,8 +609,26 @@ func _button(text: String, cb: Callable) -> Button:
 	b.text = text
 	b.custom_minimum_size = Vector2(96, 54)
 	b.add_theme_font_size_override("font_size", 19)
+	for st in ["normal", "hover", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = {"normal": Color(0.18, 0.21, 0.3, 0.92), "hover": Color(0.24, 0.28, 0.4, 0.95),
+			"pressed": Color(0.5, 0.42, 0.22, 0.95)}[st]
+		sb.set_corner_radius_all(6)
+		sb.border_color = Color(0.95, 0.8, 0.45, 0.35)
+		sb.set_border_width_all(1)
+		for side in ["left", "right"]:
+			sb.set("content_margin_" + side, 12)
+		b.add_theme_stylebox_override(st, sb)
 	b.pressed.connect(cb)
 	return b
+
+
+## Put a panel in the middle of the screen once it knows its size.
+func _center(c: Control) -> void:
+	c.reset_size()
+	await get_tree().process_frame
+	c.reset_size()
+	c.position = (get_viewport().get_visible_rect().size - c.size) * 0.5
 
 
 func _go(scene: String) -> void:
@@ -616,7 +639,12 @@ func _go(scene: String) -> void:
 
 
 func _update_hud() -> void:
-	_clock.text = World.clock() + ("" if World.moving() or World.waiting else "   (paused)")
+	var state := "   (paused)"
+	if World.camping:
+		state = "   (in camp, sleeping)"
+	elif World.moving() or World.waiting:
+		state = "" if not World.is_night() else "   (night march)" if World.moving() else ""
+	_clock.text = World.clock() + state
 	var fit := Company.fit_men().size()
 	var cm := Company.company_morale()
 	_status.text = "%d crowns · %d/%d men fit · morale %d (%s)\nfood %.1f days · water %.1f days%s" % [
@@ -635,8 +663,14 @@ func _update_hud() -> void:
 	var eta := ""
 	if World.moving():
 		eta = " · %d cells to go" % World.path.size()
-	_terrain_l.text = "%s · pace ×%.2f · sight %d%s" % [what, g.speed_at(c.x, c.y) * World.party_pace(),
-		int(World.sight_radius()), eta]
+	var scouting := ""
+	if not World.scouts.is_empty():
+		var out := 0
+		for sc in World.scouts:
+			out += (sc["ids"] as Array).size()
+		scouting = "\n%d scout%s out" % [out, "" if out == 1 else "s"]
+	_terrain_l.text = "%s · pace ×%.2f · sight %d%s%s" % [what, g.speed_at(c.x, c.y) * World.party_pace(),
+		int(World.sight_radius()), eta, scouting]
 	_wait_btn.text = "STOP" if World.waiting else "WAIT"
 
 
@@ -647,7 +681,7 @@ func _push_toast(t: String) -> void:
 # ---------------------------------------------------------------- frame
 
 func _process(delta: float) -> void:
-	if not _popup.visible and not _logistics.visible:
+	if not _popup.visible and not _logistics.visible and (_scout_panel == null or not _scout_panel.visible):
 		World.tick(delta)
 	if _rest_until > 0.0 and World.hours >= _rest_until:
 		World.waiting = false
@@ -679,6 +713,16 @@ func _process(delta: float) -> void:
 			_toast_t = 3.5
 	if _test:
 		_run_test(delta)
+
+
+## Explored land changed outside sight (scouts, a climb): redraw it all.
+func _rebuild_fog() -> void:
+	var data := _fog_img.get_data()
+	for i in data.size():
+		if World.explored[i] == 1 and data[i] < 128:
+			data[i] = 128
+	_fog_img.set_data(Gen.SIZE, Gen.SIZE, false, Image.FORMAT_R8, data)
+	_fog_tex.update(_fog_img)
 
 
 func _update_fog(force := false) -> void:
@@ -765,7 +809,7 @@ func _zoom(f: float) -> void:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _popup.visible or _logistics.visible:
+	if _popup.visible or _logistics.visible or (_scout_panel != null and _scout_panel.visible):
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -830,6 +874,10 @@ func _tap(screen: Vector2) -> void:
 	if cell.x < 0:
 		return
 	_chase = {}
+	if World.camping:
+		World.camping = false
+		_push_toast("You break camp and march in the dark.")
+		World.night_march_day = World.day()
 	var tap := Vector2(cell) + Vector2(0.5, 0.5)
 	for p in World.parties:
 		if World.can_see(p) and tap.distance_to(Vector2(p["x"], p["y"])) < 3.0:
@@ -895,18 +943,23 @@ func _on_arrived(g: Dictionary) -> void:
 				_meet(p)
 
 
-func _popup_open(title: String, text: String, buttons: Array) -> void:
-	World.stop()
+## A popup with choices. The clock stops while it's open; `halt` also
+## cancels the march (arrivals, encounters), otherwise the march resumes.
+func _popup_open(title: String, text: String, buttons: Array, halt := true) -> void:
+	if halt:
+		World.stop()
 	World.waiting = false
 	_popup_title.text = title
 	_popup_text.text = text
 	for c in _popup_buttons.get_children():
+		_popup_buttons.remove_child(c) # gone now, not at the end of the frame
 		c.queue_free()
 	for b in buttons:
 		var btn := _button(b[0], b[1])
 		btn.custom_minimum_size = Vector2(150, 58)
 		_popup_buttons.add_child(btn)
 	_popup.visible = true
+	_center(_popup)
 
 
 func _popup_close() -> void:
@@ -985,14 +1038,147 @@ func _meet(p: Dictionary) -> void:
 	_popup_open(World.party_name(p), text, [["LEAVE", _popup_close]])
 
 
+## 18:00 on the march.
+func _on_dusk() -> void:
+	_popup_open("Dusk", "The light is going. Make camp and sleep until dawn, or march on through the night: slower, half blind, and the men won't thank you.",
+		[["MAKE CAMP", func():
+			_popup_close()
+			World.make_camp()], ["MARCH ON IN THE DARK", func():
+			_popup_close()
+			World.march_through_night()]], false)
+
+
+## Something on the road (events.gd): show it with its choices.
+func _on_event(ev: Dictionary) -> void:
+	var buttons: Array = []
+	for o in ev["options"]:
+		buttons.append([o[0], _event_choice.bind(ev, o[1])])
+	_popup_open(ev["title"], ev["text"], buttons, false)
+
+
+func _event_choice(ev: Dictionary, key: String) -> void:
+	_popup_close()
+	var r: Dictionary = World.events.resolve(World, ev["id"], key)
+	if r.has("fight"):
+		World.stop()
+		_on_encounter(r["fight"])
+		return
+	if String(r["text"]) != "":
+		_popup_open(ev["title"], r["text"], [["CARRY ON", _popup_close]], false)
+
+
+## Scouts: pick a direction and how far.
+var _scout_panel: PanelContainer
+var _scout_info: Label
+var _scout_far := false
+
+
+func _open_scouts() -> void:
+	if _scout_panel == null:
+		_build_scout_panel()
+	_refresh_scouts()
+	_scout_panel.visible = true
+	_center(_scout_panel)
+
+
+func _build_scout_panel() -> void:
+	_scout_panel = _panel(Color(0.08, 0.1, 0.15, 0.97))
+	_scout_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_scout_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_scout_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_popup.get_parent().add_child(_scout_panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	_scout_panel.add_child(v)
+	v.add_child(_label("SEND SCOUTS", 26, Color(0.95, 0.8, 0.45)))
+	_scout_info = _label("", 18, Color.WHITE)
+	_scout_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_scout_info.custom_minimum_size = Vector2(560, 0)
+	v.add_child(_scout_info)
+	var range_row := HBoxContainer.new()
+	range_row.add_theme_constant_override("separation", 10)
+	v.add_child(range_row)
+	var near := _button("NEAR: 1 man, a day", func():
+		_scout_far = false
+		_refresh_scouts())
+	var far := _button("FAR: 2 men, two days", func():
+		_scout_far = true
+		_refresh_scouts())
+	near.name = "near"
+	far.name = "far"
+	range_row.add_child(near)
+	range_row.add_child(far)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	v.add_child(grid)
+	var dirs := [["NW", Vector2(-1, -1)], ["N", Vector2(0, -1)], ["NE", Vector2(1, -1)],
+		["W", Vector2(-1, 0)], ["", Vector2.ZERO], ["E", Vector2(1, 0)],
+		["SW", Vector2(-1, 1)], ["S", Vector2(0, 1)], ["SE", Vector2(1, 1)]]
+	for d in dirs:
+		if d[0] == "":
+			grid.add_child(_button("CANCEL", func(): _scout_panel.visible = false))
+		else:
+			grid.add_child(_button(d[0], _send_scouts.bind(d[1])))
+	_scout_panel.visible = false
+
+
+func _refresh_scouts() -> void:
+	var cands := World.scout_candidates()
+	var n := 2 if _scout_far else 1
+	var t := "Scouts ride out, look around, and come back to the company wherever it is, with word of what they found: towns, roads, warbands. Some never come back, more often in the lizards' country.\n\n"
+	if cands.size() < n + 2:
+		t += "Not enough fit men to spare."
+	else:
+		var names: Array = cands.slice(0, n).map(func(m): return Company.surname_title(m))
+		t += "Going: %s." % ", ".join(names)
+	for sc in World.scouts:
+		t += "\nOut now: %s, back around day %d." % [", ".join(sc["names"]), 1 + int(float(sc["back"]) / 24.0)]
+	_scout_info.text = t
+	(_scout_panel.find_child("near", true, false) as Button).modulate = Color(1, 0.85, 0.4) if not _scout_far else Color.WHITE
+	(_scout_panel.find_child("far", true, false) as Button).modulate = Color(1, 0.85, 0.4) if _scout_far else Color.WHITE
+
+
+func _send_scouts(dir: Vector2) -> void:
+	var sc := World.send_scouts(dir, _scout_far)
+	_scout_panel.visible = false
+	if sc.is_empty():
+		_push_toast("Not enough fit men to spare.")
+	else:
+		_push_toast("%s set out." % ", ".join(sc["names"]))
+
+
+func _on_scouts_back(r: Dictionary) -> void:
+	var t := ""
+	var names: Array = r["names"]
+	if r["lost"].size() == names.size():
+		t = "%s never came back. You wait as long as you dare." % ", ".join(names)
+		_popup_open("The scouts are lost", t, [["CARRY ON", _popup_close]], false)
+		return
+	if r["lost"].size() > 0:
+		t += "Only one comes back, wounded. %s did not.\n\n" % ", ".join(r["lost"])
+	else:
+		t += "%s report:\n\n" % ", ".join(names)
+	if r["terrain"] != "":
+		t += "Mostly %s out there.\n" % r["terrain"]
+	t += ("They found: " + ", ".join(r["found"]) + ".\n") if r["found"].size() > 0 else "No towns or villages.\n"
+	t += ("They saw: " + ", ".join(r["parties"]) + ".") if r["parties"].size() > 0 else "Nobody on the move."
+	_popup_open("The scouts are back", t, [["CARRY ON", _popup_close]], false)
+
+
 ## A lizard warband has caught you.
 func _on_encounter(p: Dictionary) -> void:
 	var c := World.cell()
 	var cover: bool = World.gen.t(c.x, c.y) in [T.FOREST, T.SWAMP]
 	var chance := clampf(0.3 + (0.25 if cover else 0.0) + (World.party_pace() - 0.85), 0.1, 0.8)
+	var where := "in the trees" if cover else "in the open"
+	if World.camping:
+		where = "in your camp, in the dark"
+		World.camping = false
 	_popup_open("%s!" % World.party_name(p),
 		"They've caught up with you %s. %d of them against %d fit men.\n\nSlip away? About %d%% chance; fail and you fight anyway, tired." % [
-			"in the trees" if cover else "in the open", int(p["size"]), Company.fit_men().size(), int(chance * 100)],
+			where, int(p["size"]), Company.fit_men().size(), int(chance * 100)],
 		[["FIGHT", _fight.bind(p)], ["SLIP AWAY", _slip.bind(p, chance)]])
 
 
@@ -1052,16 +1238,22 @@ func _run_test(delta: float) -> void:
 	if _test_t < 0.2:
 		return
 	if _popup.visible:
-		print("  POPUP: ", _popup_title.text)
+		print("  POPUP: ", _popup_title.text, "  |  ", _popup_text.text.substr(0, 90).replace("\n", " "))
 		var n := _popup_buttons.get_child_count()
-		if _popup_title.text.ends_with("!"):
+		var last: Button = _popup_buttons.get_child(n - 1)
+		if _popup_title.text.ends_with("!") and n > 1:
 			print("  (would fight; slipping away for the test)")
 			_popup_buttons.get_child(1).emit_signal("pressed")
+		elif last.text == "LEAVE" and n > 2:
+			_popup_buttons.get_child(0).emit_signal("pressed") # buy food once
+			last.emit_signal("pressed")
 		else:
-			if n > 2:
-				_popup_buttons.get_child(0).emit_signal("pressed") # buy food once
-			_popup_buttons.get_child(n - 1).emit_signal("pressed") # leave
+			_popup_buttons.get_child(0).emit_signal("pressed") # camp / the first choice / carry on
 		return
+	if int(get_meta("scouted", 0)) == 0 and _test_t > 1.0:
+		set_meta("scouted", 1)
+		var sc := World.send_scouts(Vector2(1, -1), true)
+		print("MAPTEST: scouts out: ", sc.get("names", []))
 	if not World.moving() and not World.waiting:
 		var stage := int(get_meta("stage", 0))
 		set_meta("stage", stage + 1)
@@ -1078,6 +1270,10 @@ func _run_test(delta: float) -> void:
 				print("MAPTEST: ", World.clock(), " at ", World.cell(), " -> stash nest ", nest["name"])
 				World.go_to(Vector2i(nest["x"], nest["y"]), {"kind": "settlement", "id": int(nest["id"])})
 			_:
+				var kinds := {}
+				for pp in World.parties:
+					kinds[pp["kind"]] = kinds.get(pp["kind"], 0) + 1
+				print("  parties: ", kinds, " stores ", Company.stores)
 				print("MAPTEST END ", World.clock(), " men ", Company.roster.size(), " parties ", World.parties.size(),
 					" explored ", Array(World.explored).count(1), " fps ", Engine.get_frames_per_second())
 				get_tree().quit()
