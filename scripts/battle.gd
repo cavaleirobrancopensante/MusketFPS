@@ -31,6 +31,7 @@ const STRESS_WAVES := [200]
 const LINE_SPACING := 1.5 # metres between men in the line
 const LINE_DISTANCE := 0.0 # you stand in the line itself, in the gap at its centre
 const REALIGN_ANGLE := 40.0 # degrees you must turn before a following line wheels
+const MIXED_WAVES := [14, 22, 30]
 const WAVES := [8, 12, 16] # (eased when the reload grew two seconds longer)
 const SPAWN_DISTANCE := 65.0
 
@@ -157,6 +158,19 @@ func _ready() -> void:
 			s.battle = self
 			s.frames = soldier_frames
 			s.record = rec
+			soldiers.append(s)
+	elif Settings.mixed:
+		# A skirmish with a mixed company: muskets in the line, spears in
+		# front, bows behind (they loft over), crossbows on the wings.
+		waves = MIXED_WAVES
+		var recs := _mixed_company()
+		for rec in recs:
+			var s = SoldierScript.new()
+			s.battle = self
+			s.frames = soldier_frames
+			s.record = rec
+			var pl: Array = rec["plan"]
+			s.plan_pos = Vector2(float(pl[0]), float(pl[1]))
 			soldiers.append(s)
 	else:
 		waves = STRESS_WAVES if Settings.stress else WAVES
@@ -711,7 +725,37 @@ func on_ally_escaped(s) -> void:
 
 func on_out_of_ammo(s) -> void:
 	if s.record != null:
-		hud.show_message("%s is out of cartridges!" % s.display_name, 1.8)
+		hud.show_message("%s is out of %s!" % [s.display_name, {"arrow": "arrows", "bolt": "bolts"}.get(s.missile, "cartridges")], 1.8)
+
+
+## The skirmish's company (records that aren't on any roll).
+func _mixed_company() -> Array:
+	var kits := []
+	for i in 8:
+		kits.append([Company.REGULAR_GEAR, 40])
+	for i in 4:
+		kits.append([{"head": "hood", "torso": "tunic", "primary": "war_spear", "secondary": ""}, 0])
+	for i in 5:
+		kits.append([{"head": "hood" if i % 2 == 0 else "", "torso": "tunic", "primary": "war_bow" if i < 2 else "hunting_bow", "secondary": "hatchet" if i % 2 == 0 else "long_knife"}, 40])
+	for i in 3:
+		kits.append([{"head": "kettle_hat", "torso": "jack", "primary": "crossbow", "secondary": "long_knife"}, 30])
+	var recs: Array = []
+	for k in kits:
+		var m: Dictionary = Company.make_recruit()
+		m["gear"] = (k[0] as Dictionary).duplicate()
+		m["pack"] = {"water": 1, "rations": 4, "ammo": int(k[1])}
+		m["morale"] = 70
+		recs.append(m)
+	Company.mixed_places(recs)
+	return recs
+
+
+## Arrows and bolts shot this battle (about half can be picked up after a win).
+var _spent := {}
+
+
+func missile_spent(kind: String) -> void:
+	_spent[kind] = int(_spent.get(kind, 0)) + 1
 
 
 ## Something for a man to do after the fight: a fallen comrade to tend
@@ -757,7 +801,7 @@ func _end_battle(won: bool) -> void:
 				"status": "fit" if s.alive else s.down_status, "conduct": s.conduct}
 		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "officer_ammo": player.ammo_used, "men": men,
 			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
-			"enemy": "lizards"})
+			"enemy": "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0))})
 	hud.show_restart()
 
 

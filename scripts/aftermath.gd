@@ -212,9 +212,9 @@ func _refresh() -> void:
 		t += "[color=#%s]%s[/color]\n\n" % [_hex(DIM), Company.march_note]
 		t += "%d men, %d fit to fight. Morale %d (%s).\n" % [men, fit, Company.company_morale(),
 			Men.morale_word(Company.company_morale())]
-		var no_shot := Company.roster.filter(func(m): return int(m["pack"]["ammo"]) == 0).size()
+		var no_shot := Company.roster.filter(func(m): return int(m["pack"]["ammo"]) == 0 and Company.shot_key(m) != "").size()
 		if no_shot > 0:
-			t += "[color=#%s]%d men have no cartridges.[/color]\n" % [_hex(RED), no_shot]
+			t += "[color=#%s]%d men have nothing to shoot.[/color]\n" % [_hex(RED), no_shot]
 		pass
 	if men > 0 and fit == 0:
 		t += "\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]" % _hex(RED)

@@ -90,6 +90,7 @@ func _ready() -> void:
 	if "--autotest" in args or "--shots" in args:
 		Settings.third_person = "--tp" in args
 		Settings.stress = "--stress" in args
+		Settings.mixed = "--mixed" in args
 		if "--camp" in args:
 			# A night camp attacked: -- --autotest --camp [--spotted]
 			Company.new_campaign()
@@ -143,6 +144,7 @@ func _ready() -> void:
 	box.add_child(_button("NEW CAMPAIGN", _open_slots.bind("new")))
 	box.add_child(_button("LOAD", _open_slots.bind("load")))
 
+	box.add_child(_button("SKIRMISH  (muskets, spears, bows)", _on_skirmish))
 	var stress := _button("STRESS TEST  (50 vs 200)", _on_stress)
 	stress.custom_minimum_size = Vector2(520, 64)
 	stress.add_theme_font_size_override("font_size", 22)
@@ -180,6 +182,7 @@ func _button(text: String, cb: Callable) -> Button:
 func _on_continue() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
+	Settings.mixed = false
 	Settings.save_prefs()
 	World.is_ready = false # load this slot's land fresh
 	if Company.load_campaign():
@@ -278,6 +281,7 @@ func _on_slot(i: int) -> void:
 		Settings.use_slot(i)
 		Settings.third_person = _tp_check.button_pressed
 		Settings.stress = false
+		Settings.mixed = false
 		Settings.save_prefs()
 		Settings.delete_slot(i)
 		Company.new_campaign()
@@ -298,8 +302,17 @@ func _on_delete(i: int) -> void:
 	_fill_slots()
 
 
+func _on_skirmish() -> void:
+	Settings.third_person = _tp_check.button_pressed
+	Settings.stress = false
+	Settings.mixed = true
+	Company.active = false
+	Loading.change(BATTLE)
+
+
 func _on_stress() -> void:
 	Settings.third_person = _tp_check.button_pressed
+	Settings.mixed = false
 	Settings.stress = true
 	Company.active = false
 	Loading.change(BATTLE)

@@ -29,6 +29,7 @@ var _cargo: VBoxContainer
 var _cargo_list: VBoxContainer
 var _cargo_head: RichTextLabel
 var _cargo_btn: Button
+var _make: Button
 
 
 func _ready() -> void:
@@ -93,6 +94,8 @@ func _ready() -> void:
 	row.add_child(_cargo_btn)
 	_grog = _button("", _on_grog)
 	row.add_child(_grog)
+	_make = _button("", _on_make)
+	row.add_child(_make)
 	var all := _button("SHARE EVERYTHING EVENLY", _on_share_all)
 	all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(all)
@@ -130,29 +133,39 @@ func refresh() -> void:
 		c.queue_free()
 	for h in ["", "WAGON", "PACKS", "PER DAY", "DAYS LEFT", "", ""]:
 		_grid.add_child(_label(h, 15, DIM))
-	for key in ["water", "rations", "ammo", "rum"]:
-		var name: String = {"water": "Water", "rations": "Rations", "ammo": "Cartridges", "rum": "Rum (tots)"}[key]
+	for key in ["water", "rations", "ammo", "arrows", "bolts", "rum", "powder", "lead"]:
+		var name: String = {"water": "Water", "rations": "Rations", "ammo": "Cartridges", "arrows": "Arrows",
+			"bolts": "Bolts", "rum": "Rum (tots)", "powder": "Powder (lb)", "lead": "Lead (lb)"}[key]
+		var shot: bool = key in ["ammo", "arrows", "bolts"]
+		if key in ["arrows", "bolts"] and int(s.get(key, 0)) == 0 and not Company.roster.any(func(mm): return Company.shot_key(mm) == key):
+			continue # nobody shoots these and the wagon has none: keep the table short
 		var in_packs := 0
-		if Company.PACK.has(key):
+		var shooters := 0
+		if Company.PACK.has(key) or shot:
 			for m in Company.roster:
-				in_packs += int(m["pack"][key])
+				if shot:
+					if Company.shot_key(m) == key:
+						in_packs += int(m["pack"]["ammo"])
+						shooters += 1
+				else:
+					in_packs += int(m["pack"][key])
 		var per_day := men if key in ["water", "rations"] else (men if key == "rum" and bool(s["foul"]) and bool(s["grog"]) else 0)
-		var total := int(s[key]) + in_packs
+		var total := int(s.get(key, 0)) + in_packs
 		var days := "-"
 		var col := Color.WHITE
 		if per_day > 0:
 			var d := float(total) / per_day
 			days = "%.1f" % d
 			col = RED if d < 2.0 else (Color(1, 0.8, 0.4) if d < 4.0 else GREEN)
-		elif key == "ammo":
-			days = "%d a man" % (total / maxi(1, men))
+		elif shot:
+			days = "%d a man" % (total / maxi(1, shooters))
 		_grid.add_child(_label(name, 20, Color.WHITE))
-		_grid.add_child(_label(str(int(s[key])), 20, Color.WHITE))
-		_grid.add_child(_label(str(in_packs) if Company.PACK.has(key) else "-", 20, Color.WHITE))
+		_grid.add_child(_label(str(int(s.get(key, 0))), 20, Color.WHITE))
+		_grid.add_child(_label(str(in_packs) if Company.PACK.has(key) or shot else "-", 20, Color.WHITE))
 		_grid.add_child(_label(str(per_day) if per_day > 0 else "-", 20, DIM))
 		_grid.add_child(_label(days, 20, col))
-		if Company.PACK.has(key):
-			var b := _button("SHARE EVENLY", _on_share.bind(key))
+		if Company.PACK.has(key) or shot:
+			var b := _button("SHARE EVENLY", _on_share.bind("ammo" if shot else key))
 			b.add_theme_font_size_override("font_size", 15)
 			_grid.add_child(b)
 		else:
@@ -165,7 +178,8 @@ func refresh() -> void:
 			buy.disabled = Company.money < int(offer[1])
 			_grid.add_child(buy)
 		else:
-			var why := "rivers, lakes, towns" if key == "water" else ("nobody here makes powder" if key == "ammo" else "")
+			var why: String = {"water": "rivers, lakes, towns", "ammo": "make them: powder + lead",
+				"powder": "only the dwarves sell it"}.get(key, "")
 			_grid.add_child(_label(why, 15, DIM))
 
 	var t := ""
@@ -173,7 +187,7 @@ func refresh() -> void:
 	if market.is_empty():
 		t += "[color=#%s]Nobody to buy from out here: visit a village, town, city or hold.[/color]\n" % DIM.to_html(false)
 	else:
-		t += "At %s: food%s for sale.\n" % [market["name"], " and rum" if market["kind"] != "village" else ""]
+		t += "At %s: food%s for sale; more in the town's market.\n" % [market["name"], " and rum" if market["kind"] != "village" else ""]
 	if bool(s["foul"]):
 		t += "[color=#%s][b]The water is foul.[/b][/color] Drunk plain, it makes men sick. " % RED.to_html(false)
 		if bool(s["grog"]) and int(s["rum"]) > 0:
@@ -208,6 +222,10 @@ func refresh() -> void:
 	_info.text = t
 	_fill_cargo()
 	_grog.text = "GROG: ON" if bool(s["grog"]) else "GROG: OFF"
+	var batches := Company.cartridge_batches()
+	_make.text = "MAKE %d CARTRIDGES" % Company.CARTRIDGE_BATCH if batches > 0 else "NO POWDER/LEAD"
+	_make.disabled = batches <= 0
+	_make.tooltip_text = "1 lb of powder and 3 lb of lead make %d cartridges." % Company.CARTRIDGE_BATCH
 
 
 func _on_share(key: String) -> void:
@@ -226,14 +244,11 @@ func _on_share_all() -> void:
 ## Nobody in this land makes gunpowder, so cartridges can't be bought.
 func _offer(key: String) -> Array:
 	var m := World.market_here()
-	if m.is_empty() or key in ["ammo", "water"]:
+	if m.is_empty():
 		return []
-	var kind: String = m["kind"]
-	if key == "rations":
-		var o: Array = {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}[kind]
-		return [o[0], Company.price(o[1])]
-	if key == "rum" and kind != "village":
-		return [10, Company.price(6)]
+	for o in Company.market_offers(String(m["kind"]), String(m["faction"])):
+		if String(o[0]) == key:
+			return [o[1], Company.price(int(o[2]))]
 	return []
 
 
@@ -241,9 +256,17 @@ func _on_buy(key: String) -> void:
 	var offer := _offer(key)
 	if offer.is_empty() or Company.money < int(offer[1]):
 		return
+	if Company.room_for(key) < int(offer[0]):
+		return
 	Company.money -= int(offer[1])
-	Company.stores[key] = int(Company.stores[key]) + int(offer[0])
+	Company.stow(key, int(offer[0]))
 	Company.save()
+	refresh()
+	changed.emit()
+
+
+func _on_make() -> void:
+	Company.make_cartridges(1)
 	refresh()
 	changed.emit()
 

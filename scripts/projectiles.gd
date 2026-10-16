@@ -26,12 +26,22 @@ const KINDS := {
 		"shield_stops": false, "tracer": false, "pierce": 4, "bounce": 0.45},
 	"canister": {"gravity": 9.8, "drag": 0.5, "life": 1.2, "damage": 90.0, "player_damage": 45.0,
 		"shield_stops": false, "tracer": true},
+	# Native archers and crossbowmen. Arrows are drawn as shafts in flight and
+	# stay stuck in the ground a while; a raised shield catches them.
+	"arrow": {"gravity": 9.8, "drag": 0.02, "life": 6.0, "damage": 45.0, "player_damage": 22.0,
+		"shield_stops": true, "tracer": false, "shaft": 0.75},
+	"bolt": {"gravity": 9.8, "drag": 0.04, "life": 4.0, "damage": 72.0, "player_damage": 32.0,
+		"shield_stops": true, "tracer": false, "shaft": 0.4},
 	# Ready for the lizard skirmishers: a heavy, slow, arcing throw.
 	"javelin": {"gravity": 9.8, "drag": 0.05, "life": 5.0, "damage": 70.0, "player_damage": 35.0,
 		"shield_stops": true, "tracer": false},
 }
 
 const TRACER_COLOR := Color(1.0, 0.92, 0.7)
+const SHAFT_COLOR := Color(0.36, 0.26, 0.15)
+const FLETCH_COLOR := Color(0.85, 0.82, 0.75)
+const STUCK_TIME := 15.0
+const STUCK_MAX := 400
 
 var battle
 var stats := {"balls": 0, "hit_enemy": 0, "hit_friend": 0, "ground": 0}
@@ -41,6 +51,7 @@ var _grenade_mesh: SphereMesh
 var _grenade_mat: StandardMaterial3D
 var _javelin_mesh: BoxMesh
 var _shot_mesh: SphereMesh
+var _stuck: Array = [] # [position, direction, length, age]: arrows standing in the ground
 
 
 func _ready() -> void:
@@ -131,6 +142,11 @@ func _physics_process(delta: float) -> void:
 		if _step(p, delta):
 			alive_list.append(p)
 	_list = alive_list
+	if not _stuck.is_empty():
+		for s in _stuck:
+			s[3] = float(s[3]) + delta
+		while not _stuck.is_empty() and float(_stuck[0][3]) > STUCK_TIME:
+			_stuck.pop_front()
 	_draw_tracers()
 
 
@@ -177,6 +193,13 @@ func _step(p: Dictionary, delta: float) -> bool:
 		return float(p["age"]) < float(k["life"])
 	if pos.y <= 0.02:
 		stats["ground"] += 1
+		if k.has("shaft"):
+			# It sticks where it fell, at the angle it came down.
+			var l := float(k["shaft"])
+			_stuck.append([Vector3(pos.x, 0.0, pos.z) - vel.normalized() * l * 0.35, vel.normalized(), l, 0.0])
+			if _stuck.size() > STUCK_MAX:
+				_stuck.pop_front()
+			return false
 		battle.spawn_puff(Vector3(pos.x, 0.05, pos.z), Color(0.45, 0.38, 0.28), 0.35)
 		_spent(p, true)
 		return false
@@ -314,12 +337,30 @@ func line_blocked(from: Vector3, to: Vector3, shooter: Node3D) -> bool:
 
 # ---------------------------------------------------------------- drawing
 
+## An arrow or bolt: a dark shaft, pale fletching at the back.
+func _shaft(buf: PackedFloat32Array, tip: Vector3, dir: Vector3, length: float) -> void:
+	var b := Basis.looking_at(dir, Vector3.UP if absf(dir.y) < 0.97 else Vector3.BACK)
+	var shaft := b * Basis.from_scale(Vector3(0.018, 0.018, length))
+	var o := tip - dir * length * 0.5
+	buf.append_array([shaft.x.x, shaft.y.x, shaft.z.x, o.x, shaft.x.y, shaft.y.y, shaft.z.y, o.y,
+		shaft.x.z, shaft.y.z, shaft.z.z, o.z, SHAFT_COLOR.r, SHAFT_COLOR.g, SHAFT_COLOR.b, 1.0])
+	var fl := b * Basis.from_scale(Vector3(0.05, 0.05, length * 0.18))
+	var o2 := tip - dir * length * 0.88
+	buf.append_array([fl.x.x, fl.y.x, fl.z.x, o2.x, fl.x.y, fl.y.y, fl.z.y, o2.y,
+		fl.x.z, fl.y.z, fl.z.z, o2.z, FLETCH_COLOR.r, FLETCH_COLOR.g, FLETCH_COLOR.b, 1.0])
+
+
 ## Musket balls are too small and fast to see; a short bright streak along
 ## their path shows where each shot went.
 func _draw_tracers() -> void:
 	var buf := PackedFloat32Array()
 	for p in _list:
 		var k: Dictionary = KINDS[p["kind"]]
+		if k.has("shaft"):
+			var v: Vector3 = p["vel"]
+			if v.length_squared() > 0.01:
+				_shaft(buf, p["pos"], v.normalized(), float(k["shaft"]))
+			continue
 		if not bool(k.get("tracer", false)):
 			continue
 		var a: Vector3 = p["prev"]
@@ -336,6 +377,8 @@ func _draw_tracers() -> void:
 		var c := TRACER_COLOR
 		buf.append_array([basis.x.x, basis.y.x, basis.z.x, o.x, basis.x.y, basis.y.y, basis.z.y, o.y,
 			basis.x.z, basis.y.z, basis.z.z, o.z, c.r, c.g, c.b, 1.0])
+	for s in _stuck:
+		_shaft(buf, s[0], s[1], s[2])
 	var n := buf.size() / 16
 	if _tracers.instance_count < n:
 		_tracers.instance_count = maxi(64, nearest_po2(n))

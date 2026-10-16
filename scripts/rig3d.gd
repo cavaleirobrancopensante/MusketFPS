@@ -36,6 +36,8 @@ const STEEL := Color(0.62, 0.64, 0.68)
 const GOLD := Color(0.85, 0.68, 0.2)
 const RED := Color(0.58, 0.1, 0.1)
 const PACK := Color(0.3, 0.2, 0.12)
+const TUNIC := Color(0.47, 0.4, 0.29)
+const JACK := Color(0.64, 0.58, 0.44)
 const HAIR := Color(0.28, 0.18, 0.1)
 const ROLL := Color(0.55, 0.55, 0.5)
 const HIDE := Color(0.3, 0.5, 0.22)
@@ -95,6 +97,22 @@ var bayonet_on := true
 var hand_item := ""
 var _pistol: Node3D
 var _saber: Node3D
+## What he carries in his hands: "musket", "pole" (pike, spear), "bow",
+## "crossbow" or "none" (townsfolk). Bows ride in their own node (_bow) held
+## in the left hand, with a string that follows the drawing hand.
+var weapon := "musket"
+var _bow: Node3D
+var _bow_tip_up := Vector3.ZERO # bow space
+var _bow_tip_dn := Vector3.ZERO
+var _bow_str_a := -1
+var _bow_str_b := -1
+var _bow_arrow := -1
+var _bow_draw := 0.0
+var t_bow_draw := 0.0
+var bow_on_back := false
+var arrow_on := false
+var _sling := false # musket or crossbow slung across the back (an archer's knife fight)
+var _muzzle_z := MUZZLE
 var bayonet_in_hand := false
 var ramrod_on := false
 var show_head := true
@@ -253,6 +271,9 @@ func _build_soldier() -> void:
 	if officer and not gear.has("head"):
 		g["head"] = "bicorne"
 	var torso := String(g["torso"])
+	weapon = _weapon_of(String(g["primary"]))
+	if kind == "civilian":
+		weapon = "none"
 	var coat := COAT_OFFICER if officer and torso == "officer_coat" else COAT
 	var cuff := RED if officer and torso == "officer_coat" else WHITE
 	var belt := WHITE
@@ -270,13 +291,21 @@ func _build_soldier() -> void:
 		coat = BUFF
 		cuff = BUFF.darkened(0.15)
 		belt = LEATHER
+	elif torso == "tunic":
+		coat = TUNIC
+		cuff = TUNIC.darkened(0.12)
+		belt = LEATHER
+	elif torso == "jack":
+		coat = JACK
+		cuff = JACK.darkened(0.12)
+		belt = LEATHER
 	spine.position = Vector3(0, _hip_y, 0)
 	# Torso, coat tails (not on a bare shirt), crossbelts, pack.
 	_part(spine, _box_mesh(Vector3(0.42, 0.56, 0.24)), coat, Vector3(0, 0.28, 0))
 	if civ and female:
 		# A long skirt from the waist to the shins.
 		_part(spine, _box_mesh(Vector3(0.44, 0.62, 0.3)), cloth.darkened(0.2), Vector3(0, -0.28, 0.0))
-	elif civ:
+	elif civ or torso == "tunic":
 		_part(spine, _box_mesh(Vector3(0.42, 0.2, 0.25)), coat, Vector3(0, -0.04, 0.0)) # tunic skirt
 		_part(spine, _box_mesh(Vector3(0.44, 0.05, 0.27)), LEATHER, Vector3(0, 0.06, 0)) # belt
 	elif officer or torso != "shirt":
@@ -292,6 +321,13 @@ func _build_soldier() -> void:
 		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0)))
 	elif civ:
 		pass
+	elif torso in ["tunic", "jack"]:
+		# Native kit: no crossbelts; a padded jack shows its quilting.
+		if torso == "jack":
+			for qy in [0.12, 0.26, 0.4]:
+				_part(spine, _box_mesh(Vector3(0.43, 0.015, 0.245)), JACK.darkened(0.18), Vector3(0, qy, 0), Vector3.ZERO, true)
+			_part(spine, _box_mesh(Vector3(0.44, 0.05, 0.25)), LEATHER, Vector3(0, 0.02, 0)) # belt
+		_build_pack(belt)
 	else:
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, 38))
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, -38))
@@ -334,8 +370,9 @@ func _build_soldier() -> void:
 	_segment("l_cuff", 0.112, cuff, _arm)
 	# Legs.
 	for side in ["l", "r"]:
-		_segment(side + "_thigh", 0.13, trousers if civ else WHITE, _leg)
-		_segment(side + "_shin", 0.115, trousers.darkened(0.25) if civ else BLACK, _leg)
+		var native := torso in ["tunic", "jack"]
+		_segment(side + "_thigh", 0.13, trousers if civ or native else WHITE, _leg)
+		_segment(side + "_shin", 0.115, trousers.darkened(0.25) if civ or native else BLACK, _leg) # (natives: leg wraps)
 		_leg[side + "_foot"] = _part(body, _box_mesh(Vector3(0.11, 0.07, 0.24)), BLACK, Vector3.ZERO)
 	_build_musket("none" if civ else String(g["primary"]), String(g["secondary"]))
 	if officer:
@@ -363,6 +400,12 @@ func _build_hat(hat: String) -> void:
 				var at := Vector3(sin(a), 0, -cos(a)) * -0.1
 				_part(head, _box_mesh(Vector3(0.27, 0.08, 0.025)), BLACK, at + Vector3(0, 0.22, 0),
 					Vector3(25, rad_to_deg(-a), 0))
+		"hood":
+			_part(head, _box_mesh(Vector3(0.25, 0.24, 0.26)), TUNIC.darkened(0.2), Vector3(0, 0.13, 0.03))
+			_part(spine, _box_mesh(Vector3(0.48, 0.1, 0.3)), TUNIC.darkened(0.2), Vector3(0, 0.56, 0.01)) # short cape
+		"kettle_hat":
+			_part(head, _cyl_mesh(0.1, 0.115, 0.11), STEEL.darkened(0.15), Vector3(0, 0.24, 0))
+			_part(head, _cyl_mesh(0.2, 0.2, 0.014), STEEL.darkened(0.1), Vector3(0, 0.19, 0)) # the broad brim
 		"cap":
 			_part(head, _cyl_mesh(0.125, 0.115, 0.075), COAT, Vector3(0, 0.215, 0.01))
 			_part(head, _cyl_mesh(0.117, 0.117, 0.025), RED, Vector3(0, 0.19, 0.0))
@@ -383,7 +426,14 @@ func _build_pack(strap: Color) -> void:
 	_part(spine, _box_mesh(Vector3(0.42, 0.09, 0.1)), ROLL, Vector3(0, 0.51, 0.12 + depth * 0.5))
 	if water > 0:
 		_part(spine, _cyl_mesh(0.07, 0.07, 0.05), Color(0.35, 0.42, 0.5), Vector3(-0.24, -0.06, 0.02), Vector3(0, 0, 90))
-	if ammo > 0:
+	if weapon == "bow":
+		# A quiver over the right shoulder, fletchings showing while there are arrows.
+		_part(spine, _cyl_mesh(0.06, 0.05, 0.5), LEATHER, Vector3(0.13, 0.38, 0.17), Vector3(-12, 0, -22))
+		if ammo > 0:
+			_part(spine, _box_mesh(Vector3(0.07, 0.06, 0.07)), Color(0.85, 0.82, 0.75), Vector3(0.235, 0.64, 0.115), Vector3(-12, 0, -22))
+	elif weapon == "crossbow":
+		_part(spine, _box_mesh(Vector3(0.1, 0.24, 0.09)), LEATHER, Vector3(0.24, -0.08, 0.04)) # bolt case
+	elif ammo > 0:
 		_part(spine, _box_mesh(Vector3(0.16, 0.11, 0.06)), BLACK, Vector3(0.14, 0.0, 0.15))
 		_part(spine, _box_mesh(Vector3(0.05, 0.04, 0.01)), strap, Vector3(0.14, 0.01, 0.185), Vector3.ZERO, true)
 
@@ -409,11 +459,14 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 		_p_vis[ramrod] = false
 		return
-	if primary == "pike" or primary == "spear":
+	if primary in ["hunting_bow", "war_bow", "crossbow", "dwarf_crossbow"]:
+		_build_missile_weapon(primary, secondary)
+		return
+	if primary == "pike" or primary == "spear" or primary == "war_spear":
 		# A pole arm: an ash shaft, butt behind the right hand, head far forward.
-		var long := 3.0 if primary == "pike" else 2.2
+		var long: float = {"pike": 3.0, "spear": 2.2, "war_spear": 2.5}[primary]
 		_part(musket, _cyl_mesh(0.022, 0.026, long), Color(0.55, 0.42, 0.26), Vector3(0, 0, -long * 0.5 + 0.45), Vector3(90, 0, 0))
-		var head := STEEL if primary == "pike" else Color(0.45, 0.42, 0.38)
+		var head := Color(0.45, 0.42, 0.38) if primary == "spear" else STEEL
 		_part(musket, _cyl_mesh(0.0, 0.035, 0.28), head, Vector3(0, 0, -long + 0.31), Vector3(-90, 0, 0))
 		bayonet = Node3D.new()
 		musket.add_child(bayonet)
@@ -445,6 +498,110 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 
 
 ## A flintlock pistol: barrel along -Z from the hand, grip angled down.
+static func _weapon_of(primary: String) -> String:
+	if primary in ["hunting_bow", "war_bow"]:
+		return "bow"
+	if primary in ["crossbow", "dwarf_crossbow"]:
+		return "crossbow"
+	if primary in ["pike", "spear", "war_spear"]:
+		return "pole"
+	if primary == "none":
+		return "none"
+	return "musket"
+
+
+## Bows and crossbows, and the knife or hatchet an archer fights with up close
+## (in hand_bayonet, so the melee poses can show it).
+func _build_missile_weapon(primary: String, secondary: String) -> void:
+	bayonet = Node3D.new()
+	musket.add_child(bayonet)
+	hand_bayonet = Node3D.new()
+	body.add_child(hand_bayonet)
+	if secondary == "hatchet":
+		_part(hand_bayonet, _box_mesh(Vector3(0.03, 0.03, 0.42)), WOOD, Vector3(0, 0, -0.15))
+		_part(hand_bayonet, _box_mesh(Vector3(0.015, 0.12, 0.09)), STEEL, Vector3(0, 0.05, -0.33))
+	else:
+		_part(hand_bayonet, _box_mesh(Vector3(0.025, 0.03, 0.1)), LEATHER, Vector3(0, 0, 0.0))
+		_part(hand_bayonet, _box_mesh(Vector3(0.01, 0.035, 0.3)), STEEL, Vector3(0, 0, -0.2))
+	hand_bayonet.visible = false
+	ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
+	_p_vis[ramrod] = false
+	if weapon == "crossbow":
+		# Held like a musket: a stock along -Z, the steel prod across the front.
+		var dw := primary == "dwarf_crossbow"
+		var wood := Color(0.3, 0.2, 0.12) if dw else WOOD
+		_muzzle_z = 0.62
+		_part(musket, _box_mesh(Vector3(0.05, 0.08, 0.8)), wood, Vector3(0, -0.02, -0.18)) # stock
+		_part(musket, _box_mesh(Vector3(0.03, 0.03, 0.06)), STEEL, Vector3(0, 0.03, -0.18), Vector3.ZERO, true) # nut
+		for sgn in [-1.0, 1.0]:
+			_part(musket, _box_mesh(Vector3(0.34, 0.03, 0.03)), STEEL if dw else STEEL.darkened(0.2), Vector3(0.16 * sgn, 0.0, -0.56), Vector3(0, -14.0 * sgn, 0))
+		_bow_str_a = _part(musket, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.8, 0.78, 0.7), Vector3.ZERO, Vector3.ZERO, true)
+		_bow_str_b = _part(musket, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.8, 0.78, 0.7), Vector3.ZERO, Vector3.ZERO, true)
+		_place_segment(_bow_str_a, Vector3(0.32, 0.0, -0.48), Vector3(0, 0.03, -0.18))
+		_place_segment(_bow_str_b, Vector3(-0.32, 0.0, -0.48), Vector3(0, 0.03, -0.18))
+		_part(musket, _box_mesh(Vector3(0.12, 0.012, 0.012)), STEEL, Vector3(0, -0.02, -0.62), Vector3.ZERO, true) # stirrup
+		return
+	# A bow: two limbs bending back toward the archer from the grip.
+	_bow = Node3D.new()
+	body.add_child(_bow)
+	var war := primary == "war_bow"
+	var limb := 0.8 if war else 0.55
+	var col := Color(0.5, 0.36, 0.2) if war else Color(0.38, 0.27, 0.16)
+	_part(_bow, _box_mesh(Vector3(0.035, 0.12, 0.04)), LEATHER, Vector3.ZERO) # grip
+	var bend := 38.0
+	for up in [true, false]:
+		var n := Node3D.new()
+		_bow.add_child(n)
+		n.position = Vector3(0, 0.05 if up else -0.05, 0)
+		n.basis = Basis(Vector3.RIGHT, PI * 0.5) if up else Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, -PI * 0.5)
+		_arc(n, 0.0, limb, 6, bend, 0.045, 0.022, 0.026, col)
+		# Where the tip ends up, in bow space (same walk as _arc).
+		var pos := Vector3.ZERO
+		for i in 6:
+			var th := deg_to_rad(bend * (i + 0.5) / 6)
+			pos += Vector3(0, sin(th), -cos(th)) * limb / 6
+		var tip := n.transform * pos
+		if up:
+			_bow_tip_up = tip
+		else:
+			_bow_tip_dn = tip
+	_bow_str_a = _part(body, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.85, 0.83, 0.75), Vector3.ZERO, Vector3.ZERO, true)
+	_bow_str_b = _part(body, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.85, 0.83, 0.75), Vector3.ZERO, Vector3.ZERO, true)
+	_bow_arrow = _part(body, _box_mesh(Vector3(0.016, 0.016, 1.0)), Color(0.4, 0.3, 0.18), Vector3.ZERO)
+
+
+## A basis whose Y is `y` and whose Z points as near `z` as it can.
+static func _basis_yz(y: Vector3, z: Vector3) -> Basis:
+	var yy := y.normalized()
+	var xx := yy.cross(z).normalized()
+	var zz := xx.cross(yy).normalized()
+	return Basis(xx, yy, zz)
+
+
+## The bow in the left hand (or on his back), its string pulled to the right
+## hand by how far it's drawn, and an arrow on the string when there is one.
+func _update_bow(k: float) -> void:
+	_bow_draw = lerpf(_bow_draw, t_bow_draw, k)
+	var st := spine.transform
+	if bow_on_back:
+		_bow.transform = Transform3D(_basis_yz(st.basis * Vector3(-0.45, 1.0, 0.0), st.basis * Vector3(0, 0, -1)), st * Vector3(0.0, 0.3, 0.2))
+	else:
+		var up := Vector3(0.12, 1.0, 0.0) if anim in ["aim", "fire"] else Vector3(0.0, 1.0, 0.3)
+		_bow.transform = Transform3D(_basis_yz(up, Vector3(0, 0, 1)), _hand_l)
+	var a := _bow.transform * _bow_tip_up
+	var b := _bow.transform * _bow_tip_dn
+	var rest := (a + b) * 0.5 + _bow.transform.basis.z * 0.02
+	var nock := rest.lerp(_hand_r, _bow_draw) if not bow_on_back else rest
+	_place_segment(_bow_str_a, a, nock)
+	_place_segment(_bow_str_b, nock, b)
+	_p_vis[_bow_arrow] = arrow_on and not bow_on_back
+	if arrow_on and not bow_on_back:
+		var through := _bow.transform.origin - nock
+		var fwd := through.normalized() if through.length() > 0.15 else Vector3(0, 0, -1)
+		var tail := nock if _bow_draw > 0.3 else _hand_r
+		_place_segment(_bow_arrow, tail, tail + fwd * 0.75)
+
+
 func _build_pistol() -> void:
 	_pistol = Node3D.new()
 	body.add_child(_pistol)
@@ -687,7 +844,7 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 		grip = pivot + pitch * (grip - pivot)
 		wdir = pitch * wdir
 	var st := spine.transform
-	if hand_item != "":
+	if hand_item != "" or _sling:
 		# Musket slung across the back, muzzle up over the left shoulder.
 		musket.transform = Transform3D(_look_basis(st.basis * Vector3(-0.32, 1.0, 0.1)), st * Vector3(0.16, 0.12, 0.2))
 		bayonet.visible = false
@@ -697,7 +854,7 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 
 	var r_target: Vector3 = grip if t_hand_r == null else _pitched(t_hand_r, pitch, pivot)
 	var l_target: Vector3 = grip + wdir * FORESTOCK if t_hand_l == null else _pitched(t_hand_l, pitch, pivot)
-	if hand_item != "" and t_hand_l == null:
+	if (hand_item != "" or _sling) and t_hand_l == null:
 		l_target = Vector3(-0.27, 0.9, -0.04) # hanging at your side
 	_hand_r = _hand_r.lerp(r_target, kh)
 	_hand_l = _hand_l.lerp(l_target, kh)
@@ -719,9 +876,12 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 		else:
 			_saber.transform = st * Transform3D(_look_basis(SABER_SHEATH_DIR), SABER_SHEATH_AT)
 
+	if _bow != null:
+		_update_bow(k)
 	hand_bayonet.visible = bayonet_in_hand
 	if bayonet_in_hand:
-		hand_bayonet.transform = Transform3D(_look_basis(wdir), _hand_r)
+		var hdir := wdir if weapon in ["musket", "pole"] else (_hand_r - spine.transform * _shoulder_r).normalized().lerp(Vector3(0, 0.3, -1).normalized(), 0.5)
+		hand_bayonet.transform = Transform3D(_look_basis(hdir), _hand_r)
 	_p_vis[ramrod] = ramrod_on
 	if ramrod_on:
 		var muzzle := grip + wdir * MUZZLE
@@ -919,6 +1079,16 @@ func _npc_pose() -> void:
 				t_hand_l = Vector3(-0.15, 1.5, -0.25)
 				t_lean = -0.15
 		return
+	_sling = false
+	bayonet_in_hand = false
+	t_bow_draw = 0.0
+	bow_on_back = false
+	arrow_on = false
+	if weapon == "bow":
+		_bow_pose(swing)
+		return
+	if weapon == "crossbow" and _xbow_pose(swing):
+		return
 	match anim:
 		"idle", "walk":
 			t_grip = Vector3(0.22, 1.12, 0.02)
@@ -995,6 +1165,106 @@ func _npc_pose() -> void:
 			pose_rate = 22.0
 
 
+## An archer: bow in the left hand, the right hand nocks, draws and looses;
+## a knife or hatchet in the right hand up close, the bow kept in the left.
+func _bow_pose(swing: float) -> void:
+	t_grip = Vector3(0.2, 0.7, 0.1) # (the empty musket node: out of the way)
+	t_dir = Vector3(0, 1, 0)
+	var mv := clampf(move_speed / 4.0, 0.0, 1.0)
+	t_hand_l = Vector3(-0.27, 0.92, -0.08 - 0.12 * swing * mv)
+	t_hand_r = Vector3(0.27, 0.86, -0.02 + 0.14 * swing * mv)
+	arrow_on = false
+	match anim:
+		"aim":
+			# Bow arm straight out, string drawn to the cheek.
+			t_hand_l = Vector3(-0.04, 1.47, -0.66)
+			t_hand_r = Vector3(0.05, 1.53, -0.06)
+			t_bow_draw = 1.0
+			arrow_on = true
+			pose_rate = 9.0
+		"fire":
+			# Loosed: the string snaps forward, the drawing hand flies back.
+			t_hand_l = Vector3(-0.04, 1.47, -0.66)
+			t_hand_r = Vector3(0.16, 1.52, 0.06)
+			pose_rate = 30.0
+		"reload":
+			# Bow down, reach back to the quiver, bring an arrow to the string.
+			t_hand_l = Vector3(-0.18, 1.15, -0.45)
+			var ph := fmod(anim_time * 1.1, 1.0)
+			if ph < 0.45:
+				t_hand_r = Vector3(0.2, 1.62, 0.2)
+			else:
+				t_hand_r = Vector3(-0.08, 1.17, -0.38)
+				arrow_on = true
+			pose_rate = 10.0
+		"guard", "thrust", "block":
+			bayonet_in_hand = true
+			t_hand_l = Vector3(-0.3, 1.0, -0.15)
+			match anim:
+				"guard": t_hand_r = Vector3(0.24, 1.12, -0.38)
+				"thrust":
+					t_hand_r = Vector3(0.12, 1.3, -0.68)
+					t_lean = 0.25
+					pose_rate = 30.0
+				"block":
+					t_hand_r = Vector3(0.12, 1.55, -0.35)
+					pose_rate = 22.0
+		"cheer":
+			var b := sin(anim_time * 6.0)
+			t_hand_l = Vector3(-0.08, 2.0 + 0.08 * b, -0.08)
+			t_hand_r = Vector3(0.28, 1.0, 0.0)
+			t_lean = -0.12
+		"haul", "kneel", "tend", "sleep":
+			bow_on_back = true
+			match anim:
+				"haul":
+					t_hand_r = Vector3(0.12, 0.78, -0.4)
+					t_hand_l = Vector3(-0.05, 0.8, -0.45)
+					t_lean = 0.22
+				"kneel":
+					t_hand_l = Vector3(-0.12, 0.18 + 0.08 * sin(anim_time * 5.0), -0.55)
+					t_hand_r = Vector3(0.2, 0.3, -0.4)
+					t_lean = 0.45
+				"tend":
+					var w := sin(anim_time * 3.5)
+					t_hand_r = Vector3(0.1, 0.22 + 0.06 * w, -0.55)
+					t_hand_l = Vector3(-0.12, 0.22 - 0.06 * w, -0.5)
+					t_lean = 0.55
+				"sleep":
+					t_hand_r = Vector3(0.1, 1.05, -0.16)
+					t_hand_l = Vector3(-0.1, 1.12, -0.16)
+
+
+## A crossbowman: aims like a musketeer, spans head-down with the windlass,
+## and fights with a knife (crossbow slung). Returns true when it set the pose.
+func _xbow_pose(_swing: float) -> bool:
+	match anim:
+		"reload":
+			# Nose down, foot in the stirrup, winding the windlass at the butt.
+			t_grip = Vector3(0.08, 0.95, -0.12)
+			t_dir = Vector3(0, -1, -0.35)
+			t_hand_l = t_grip + t_dir.normalized() * 0.3
+			var a := anim_time * 7.0
+			t_hand_r = Vector3(0.2 + 0.06 * cos(a), 1.05 + 0.06 * sin(a), -0.02)
+			t_lean = 0.2
+			return true
+		"guard", "thrust", "block":
+			_sling = true
+			bayonet_in_hand = true
+			t_hand_l = Vector3(-0.3, 1.0, -0.15)
+			match anim:
+				"guard": t_hand_r = Vector3(0.24, 1.12, -0.38)
+				"thrust":
+					t_hand_r = Vector3(0.12, 1.3, -0.68)
+					t_lean = 0.25
+					pose_rate = 30.0
+				"block":
+					t_hand_r = Vector3(0.12, 1.55, -0.35)
+					pose_rate = 22.0
+			return true
+	return false
+
+
 # ---------------------------------------------------------------- geometry
 
 static func _look_basis(dir: Vector3) -> Basis:
@@ -1044,9 +1314,11 @@ func _place_arm(side: String, shoulder: Vector3, hand: Vector3, pole: Vector3) -
 
 ## Muzzle position in world space (for smoke and flashes).
 func muzzle_global() -> Vector3:
+	if _bow != null:
+		return _bow.global_transform * Vector3(0, 0.02, -0.08)
 	if musket == null:
 		return global_position + Vector3.UP * 1.4
-	return musket.global_transform * Vector3(0, 0.018, -MUZZLE)
+	return musket.global_transform * Vector3(0, 0.018, -_muzzle_z)
 
 
 func die() -> void:

@@ -167,7 +167,7 @@ func _refresh() -> void:
 		rows.append([id, int(Company.stores["items"][id])])
 	for r in rows:
 		var w := Company.load_of(String(r[0]), int(r[1]))
-		var step := 10 if String(r[0]) in ["rations", "water", "ammo", "rum"] else 1
+		var step := 10 if String(r[0]) in ["rations", "water", "ammo", "rum", "arrows", "bolts"] else 1
 		_wagon.add_child(_row("%s ×%d" % [Company.item_label(r[0]), int(r[1])], "%.1f kg, %.1f space" % [w[0], w[1]],
 			[["DROP", _drop.bind(String(r[0]), step)]]))
 	_confirm = false
@@ -221,7 +221,9 @@ static func _worth(e: Dictionary) -> float:
 		return 1e5 + _worth({"id": id})
 	match id:
 		"crowns": return 1e9
-		"ammo": return 1e6 # powder is beyond price in this land
+		"ammo", "powder": return 1e6 # powder is beyond price in this land
+		"lead": return 200.0
+		"arrows", "bolts": return 120.0
 		"rum": return 50.0
 		"rations": return 20.0
 		"water": return 1.0

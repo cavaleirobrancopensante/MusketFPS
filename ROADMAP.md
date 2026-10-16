@@ -93,7 +93,17 @@ settlements in the lizard lands, rumours, a minimap.
   foul water and grog as now.
 - Lizard warbands roam out from the nest that holds the stash.
 
-### M3: Natives and primitive arms
+### M3: Natives and primitive arms ✅
+
+Done: recruits come with their own weapons by trade and people (spears,
+hunting and war bows, crossbows, dwarf crossbows; tunics, padded jacks,
+hoods, kettle hats); arrows and bolts as real projectiles (archers arc over
+the line); a MIXED preset in the battle plan; separate cartridges, arrows
+and bolts; cartridges made from powder (sold only by the dwarves) and lead;
+a town market for all of it. Muskets lost in battle are gone unless their
+kit is carried back.
+
+The plan was:
 
 - Recruit in villages: **spearmen, archers, crossbowmen**, cheap and
   numerous, worse than your musketeers. Bows and crossbows are new
