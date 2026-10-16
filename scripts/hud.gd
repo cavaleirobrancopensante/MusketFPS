@@ -174,6 +174,10 @@ func _buttons() -> Array:
 		# The range's own controls, down the left side.
 		var pl := [["pg_still1", "+1 TARGET"], ["pg_still5", "+5 TARGETS"], ["pg_charge5", "+5 CHARGING"],
 			["pg_charge20", "+20 CHARGING"], ["pg_clear", "CLEAR"]]
+		var gun_label := "FIRE GUN"
+		if battle.range_gun != null and not battle.range_gun.ready():
+			gun_label = "LOADING %d%%" % int(battle.range_gun.progress() * 100.0)
+		pl.append(["pg_gun", gun_label])
 		for i in pl.size():
 			list.append({"id": pl[i][0], "circle": false, "rect": Rect2(20, 160 + i * 54, 170, 46), "label": pl[i][1]})
 	if restart_visible:
@@ -269,6 +273,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			battle.playground_spawn(20, false)
 		"pg_clear":
 			battle.playground_clear()
+		"pg_gun":
+			battle.fire_range_gun()
 		"grenade":
 			player.throw_grenade()
 		"aim":
