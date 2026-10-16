@@ -428,6 +428,11 @@ func _setup_input() -> void:
 	_add_key("switch_weapon", KEY_Q)
 	_add_key("block", KEY_E)
 	_add_key("toggle_view", KEY_V)
+	_add_key("aim", KEY_Z)
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	if not InputMap.action_has_event("aim", rmb):
+		InputMap.action_add_event("aim", rmb)
 	_add_key("swing_up", KEY_UP)
 	_add_key("swing_left", KEY_LEFT)
 	_add_key("swing_right", KEY_RIGHT)
