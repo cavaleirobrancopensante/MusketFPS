@@ -15,10 +15,28 @@ sprite, animation and sound is generated in code.
 
 ### Prologue: the wreck and the beach (also the tutorial)
 
-**NEW CAMPAIGN** opens with a cutscene played in the engine: the troopship
-*Steadfast* in a night storm, the strike on uncharted rocks, the survivors
-rowing ashore at dawn, and the regiment digging in on the beach (SKIP jumps
-ahead). All names are placeholders in `scripts/lore.gd`.
+**NEW CAMPAIGN** opens with a film played in the engine (letterboxed, a
+little over a minute; Skip jumps ahead):
+
+1. The troopship *Steadfast* rolling through a night storm.
+2. She strikes uncharted rocks; the mainmast comes down.
+3. Golden dawn over the wreck: a spar is run out over the high rail and a
+   gun is swayed out on a tackle and lowered into a boat, men hauling on
+   deck and two in the boat reaching up to guide it in.
+4. The flotilla pulls for the shore: every oar dips, sweeps and feathers in
+   time, the rowers lean back into each stroke, the cox beats the time, a
+   gun lashed amidships and the colours in the stern.
+5. The landing: boats grounded in the shallows, men wading ashore, two guns
+   dragged up the sand on ropes, the Major against the rising sun, sabre
+   out, waving them on.
+6. The works: a crane shot over a line of men digging (drive the spade,
+   lever, throw), the rampart rising, gun crews at their pieces.
+7. The Major on a crate before the colours, sabre raised at the forest:
+   "Not one step back from this sand."
+8. From behind the rampart, sentries looking out at the trees; birds burst
+   out of the forest, and the drums begin.
+
+All names are placeholders in `scripts/lore.gd`.
 
 Then **Wreck Beach**. You are the **Ensign** of Major Harrow's company,
 behind earthworks with the sea at your back, a company on either side and
