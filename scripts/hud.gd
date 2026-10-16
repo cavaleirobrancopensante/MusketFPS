@@ -51,6 +51,8 @@ func _ready() -> void:
 	player.melee_hit.connect(_on_melee_hit)
 	player.blocked.connect(_on_blocked)
 	player.struck_shield.connect(_on_struck_shield)
+	player.shot_hit.connect(func(): hit_marker = 0.35)
+	player.friendly_fire.connect(_on_friendly_fire)
 
 
 func show_message(text: String, seconds: float) -> void:
@@ -83,6 +85,13 @@ func _on_struck_shield() -> void:
 	shield_flash = 0.6
 
 
+func _on_friendly_fire(by_you: bool) -> void:
+	if by_you:
+		show_message("You shot one of your own men!", 2.0)
+	else:
+		show_message("Watch your fire! Hit by a ball from our own line.", 2.0)
+
+
 func _on_hurt() -> void:
 	hurt_flash = 1.0
 
@@ -111,6 +120,8 @@ func _buttons() -> Array:
 		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": "AIM"})
 	list.append({"id": "weapon", "circle": true, "pos": Vector2(s.x - 58, s.y - 330), "r": 46.0,
 		"label": "MUSKET" if _melee() else "BAYONET"})
+	list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
+		"label": "GRENADE %d" % player.grenades})
 	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": "VOLLEY!"})
 	var bw := 150.0
 	var bh := 56.0
@@ -204,6 +215,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 				look_last = p
 		"weapon":
 			player.toggle_weapon()
+		"grenade":
+			player.throw_grenade()
 		"aim":
 			player.toggle_aim()
 		"block":
@@ -337,6 +350,8 @@ func _draw_button(b: Dictionary) -> void:
 		bg = Color(1, 1, 1, 0.35)
 	if id == "volley" and battle.loaded_count() == 0:
 		label_col = Color(1, 1, 1, 0.35)
+	if id == "grenade" and (player.grenades == 0 or player.is_throwing()):
+		label_col = Color(1, 1, 1, 0.35)
 	var swinging: bool = id.begins_with("swing") and player.swing_phase != "idle" \
 		and int(id.substr(5)) == player.swing_dir
 	if swinging:
@@ -362,7 +377,7 @@ func _draw_button(b: Dictionary) -> void:
 			draw_arc(pos, r + 8, -PI * 0.5, -PI * 0.5 + TAU * ch, 40, ring, 6)
 		if id == "weapon" and player.is_switching():
 			label_col = Color(1, 1, 1, 0.4)
-		var fsize := 24 if id == "fire" else (16 if id == "weapon" or id.begins_with("swing") else 20)
+		var fsize := 24 if id == "fire" else (16 if id == "weapon" or id == "grenade" or id.begins_with("swing") else 20)
 		_text_center(label, pos, fsize, label_col)
 	else:
 		var rect: Rect2 = b["rect"]

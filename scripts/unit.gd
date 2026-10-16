@@ -46,11 +46,16 @@ var _lying := false
 var _sprite_col := Color.WHITE
 var _visual_scale := Vector3.ONE
 var last_hit_by: Node3D = null # who gets the credit for killing us
+var hit_radius := 0.35 # body for projectiles: an upright cylinder
+var hit_height := 1.8
+var _shot := false # the current damage is a projectile or blast: can't be parried
 
 
 func _setup_body(layer: int, radius: float, height: float, sprite_height_m: float) -> void:
 	collision_layer = layer
 	collision_mask = 0
+	hit_radius = radius
+	hit_height = height
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = radius
@@ -215,6 +220,13 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	_flash_left = 0.2
 	if hp <= 0.0:
 		_die()
+
+
+## Damage from a projectile or blast: like take_damage, but no parrying it.
+func take_shot(amount: float, from: Node3D = null) -> void:
+	_shot = true
+	take_damage(amount, from)
+	_shot = false
 
 
 ## Short squash-and-stretch on the visual (strikes, thrusts).

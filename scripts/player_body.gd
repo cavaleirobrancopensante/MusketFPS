@@ -73,6 +73,24 @@ func _pose() -> void:
 	rig.bayonet_in_hand = false
 	rig.t_lean = 0.0
 
+	if player.is_throwing():
+		# Musket dropped to the left hand; the right hand winds back over the
+		# shoulder and whips forward, releasing the grenade.
+		var tp: float = player.throw_progress()
+		rig.bayonet_on = player.weapon == "melee"
+		_apply_pose([READY[0] + Vector3(-0.12, -0.2, 0.08), READY[1] + Vector3(0, 0.3, 0)], 14.0)
+		var back := Vector3(0.38, 1.78, 0.28)
+		var out := Vector3(0.22, 1.55, -0.65)
+		var rest: Vector3 = (READY[0] as Vector3) + Vector3(-0.12, -0.2, 0.08)
+		if tp < 0.5:
+			rig.t_hand_r = rest.lerp(back, smoothstep(0.0, 0.5, tp))
+		elif tp < 0.7:
+			rig.t_hand_r = back.lerp(out, smoothstep(0.5, 0.62, tp))
+		else:
+			rig.t_hand_r = out.lerp(rest, smoothstep(0.7, 1.0, tp))
+		rig.pose_rate = 30.0
+		return
+
 	if player.is_switching():
 		var sp: float = player.switch_progress()
 		var fixing: bool = player.switch_target == "melee"

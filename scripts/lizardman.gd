@@ -39,6 +39,7 @@ func _ready() -> void:
 	add_to_group("enemies")
 	rig_kind = "lizard"
 	_setup_body(2, 0.45, 1.9, 1.95)
+	hit_height = 2.05 # the model stands a little taller than his capsule
 	speed = randf_range(4.0, 5.2)
 	retarget_timer = randf() * 0.5
 	attack_timer = randf() * 0.4
@@ -184,6 +185,14 @@ func receive_blow(damage: float, from: Node3D, heavy: bool) -> String:
 		return "blocked"
 	take_damage(damage, from)
 	return "hit"
+
+
+## A thrown weapon (javelin, arrow) arriving: a raised shield catches it if
+## it comes from in front.
+func catch_projectile(at: Vector3) -> bool:
+	var to := at - global_position
+	to.y = 0.0
+	return shield_up > 0.0 and facing.dot(to.normalized()) > 0.3
 
 
 ## Knocked back by a blow (or a parried hack). `push` is a horizontal velocity.

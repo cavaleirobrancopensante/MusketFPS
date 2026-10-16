@@ -19,6 +19,8 @@ static func build_all() -> Dictionary:
 		"death": death_roar(),
 		"grunt": grunt(),
 		"bayonet": bayonet_fix(),
+		"boom": boom(),
+		"thud": thud(),
 	}
 
 
@@ -68,6 +70,34 @@ static func musket() -> AudioStreamWAV:
 		var boom := lp2 * 6.0 * exp(-t / 0.35)
 		var thump := sin(TAU * (55.0 - 20.0 * t) * t) * exp(-t / 0.12) * 0.8
 		b[i] = crack * 0.9 + boom + thump
+	return _to_wav(b)
+
+
+## A grenade: a sharp crack, a deep blast and a long rumbling tail.
+static func boom() -> AudioStreamWAV:
+	var b := _buf(2.2)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var n := _noise()
+		lp += 0.05 * (n - lp)
+		lp2 += 0.03 * (lp - lp2)
+		var crack := n * exp(-t / 0.03)
+		var blast := lp2 * 9.0 * exp(-t / 0.6)
+		var thump := sin(TAU * (42.0 - 15.0 * t) * t) * exp(-t / 0.25)
+		b[i] = crack * 0.8 + blast + thump
+	return _to_wav(b)
+
+
+## Something heavy landing on turf.
+static func thud() -> AudioStreamWAV:
+	var b := _buf(0.18)
+	var lp := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		lp += 0.1 * (_noise() - lp)
+		b[i] = lp * exp(-t / 0.03) + sin(TAU * 90.0 * t) * exp(-t / 0.04) * 0.5
 	return _to_wav(b)
 
 

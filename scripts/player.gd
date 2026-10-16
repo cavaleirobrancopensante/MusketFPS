@@ -13,6 +13,8 @@ signal fired(hit: bool)
 signal melee_hit(count: int)
 signal blocked
 signal struck_shield # your blow landed on a lizardman's shield
+signal shot_hit # one of your musket balls struck a lizardman
+signal friendly_fire(by_you: bool) # a ball between you and your men
 signal hurt
 signal died
 
@@ -25,6 +27,11 @@ const SPEED := 5.0
 const GRAVITY := 20.0
 const RELOAD_TIME := 3.5
 const RANGE := 90.0
+const BALL_SPEED := 340.0
+const GRENADES_PER_BATTLE := 3
+const THROW_TIME := 0.8 # wind back, throw, recover
+const THROW_RELEASE := 0.42 # when in the throw the grenade leaves your hand
+const THROW_SPEED := 13.0
 const SPREAD := 0.018 # radians of random error per shot from the hip
 const AIM_SPREAD := 0.005 # ...and sighting down the barrel
 const LOOK_SENS := 0.005 # radians per pixel of drag
@@ -77,6 +84,11 @@ var blocking := false
 var block_held := false
 
 var kills := 0
+var _shot := false
+var grenades := GRENADES_PER_BATTLE
+var throw_left := 0.0
+var _thrown := false
+var _shake := 0.0
 var aim_wanted := false
 var aim_amount := 0.0 # 0 = hip, 1 = fully sighted
 
@@ -133,6 +145,7 @@ func _process(delta: float) -> void:
 		aim_amount = move_toward(aim_amount, target, delta / AIM_TIME)
 		var k := aim_amount * aim_amount * (3.0 - 2.0 * aim_amount)
 		camera.fov = lerpf(FOV, AIM_FOV, k)
+		_shake = move_toward(_shake, 0.0, delta * 1.5)
 		_update_camera()
 
 
@@ -145,7 +158,49 @@ func toggle_aim() -> void:
 
 ## Actually sighting right now: wanted, loaded, musket in hand.
 func is_aiming() -> bool:
-	return alive and aim_wanted and weapon == "musket" and switch_left <= 0.0 and loaded
+	return alive and aim_wanted and weapon == "musket" and switch_left <= 0.0 and loaded \
+		and throw_left <= 0.0
+
+
+## Throw a grenade: musket in your left hand, wind back, lob it in an arc.
+func throw_grenade() -> void:
+	if not alive or grenades <= 0 or throw_left > 0.0 or switch_left > 0.0 or swing_phase != "idle":
+		return
+	grenades -= 1
+	throw_left = THROW_TIME
+	_thrown = false
+	blocking = false
+
+
+func is_throwing() -> bool:
+	return throw_left > 0.0
+
+
+## 0..1 through the throw.
+func throw_progress() -> float:
+	return 1.0 - throw_left / THROW_TIME
+
+
+## A blast nearby rattles your view (0..1).
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
+
+
+func _update_throw(delta: float) -> void:
+	if throw_left <= 0.0:
+		return
+	throw_left -= delta
+	if not _thrown and throw_progress() >= THROW_RELEASE / THROW_TIME:
+		_thrown = true
+		# Out of the right hand, along where you look, lofted into an arc.
+		var fwd := -camera.global_transform.basis.z
+		var right := global_transform.basis.x
+		var from := global_position + Vector3.UP * 1.75 + right * 0.25 + _flat_forward() * 0.3
+		var vel := fwd * THROW_SPEED + Vector3.UP * 3.5 + Vector3(velocity.x, 0.0, velocity.z) * 0.5
+		battle.projectiles.fire("grenade", from, vel, self)
+		battle.play_sound_ui("swish", -4.0)
+	if throw_left < 0.0:
+		throw_left = 0.0
 
 
 func _update_camera() -> void:
@@ -161,6 +216,10 @@ func _update_camera() -> void:
 		# arms rise from below the screen, so nothing of you blocks the view.
 		camera.position = Vector3(0, 1.64, 0.02)
 	camera.rotation = Vector3(pitch, 0, 0)
+	if _shake > 0.0:
+		var s := _shake * _shake
+		camera.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.06 * s
+		camera.rotation += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.03 * s
 
 
 # ---------------------------------------------------------------- called by the HUD
@@ -179,7 +238,7 @@ func request_fire() -> void:
 
 
 func toggle_weapon() -> void:
-	if not alive or switch_left > 0.0 or swing_phase != "idle":
+	if not alive or switch_left > 0.0 or swing_phase != "idle" or throw_left > 0.0:
 		return
 	aim_wanted = false
 	switch_target = "melee" if weapon == "musket" else "musket"
@@ -194,7 +253,7 @@ func is_switching() -> bool:
 
 ## Start winding up a blow. Returns false if you can't swing right now.
 func begin_swing() -> bool:
-	if not alive or weapon != "melee" or switch_left > 0.0 or swing_phase != "idle":
+	if not alive or weapon != "melee" or switch_left > 0.0 or swing_phase != "idle" or throw_left > 0.0:
 		return false
 	swing_phase = "windup"
 	phase_time = 0.0
@@ -266,9 +325,10 @@ func _physics_process(delta: float) -> void:
 		_update_swing(delta)
 		blocking = block_held and weapon == "melee" and swing_phase == "idle" and switch_left <= 0.0
 
+		_update_throw(delta)
 		if _want_fire:
 			_want_fire = false
-			if weapon == "musket" and switch_left <= 0.0:
+			if weapon == "musket" and switch_left <= 0.0 and throw_left <= 0.0:
 				_fire()
 
 		# You need both hands on the musket to reload it.
@@ -297,6 +357,8 @@ func _physics_process(delta: float) -> void:
 func _keyboard_controls() -> void:
 	if Input.is_action_just_pressed("switch_weapon"):
 		toggle_weapon()
+	if Input.is_action_just_pressed("grenade"):
+		throw_grenade()
 	if Input.is_action_just_pressed("aim"):
 		toggle_aim()
 	if Input.is_action_just_pressed("toggle_view"):
@@ -429,20 +491,17 @@ func _fire() -> void:
 	_last_reload_p = 0.0
 	battle.play_sound_ui("musket", 0.0)
 
+	# The ball leaves along your line of sight (so it goes where the crosshair
+	# is), starting level with you so in third person it can't hit the men
+	# behind you. It flies, drops, and hits whatever is first in its path.
 	var from := camera.global_position
 	var fwd := -camera.global_transform.basis.z
+	var to_me := global_position + Vector3.UP * 1.5 - from
+	from += fwd * maxf(0.4, to_me.dot(fwd))
 	var spread := lerpf(SPREAD, AIM_SPREAD, aim_amount)
-	var err := Vector3(randf_range(-spread, spread), randf_range(-spread, spread), randf_range(-spread, spread))
-	fwd = (fwd + err).normalized()
-	# Layer 2 = enemies only (no friendly fire in this prototype).
-	var query := PhysicsRayQueryParameters3D.create(from, from + fwd * RANGE, 2)
-	var result := get_world_3d().direct_space_state.intersect_ray(query)
+	fwd = battle.projectiles.spread_dir(fwd, spread)
+	battle.projectiles.fire("ball", from, fwd * BALL_SPEED, self)
 	var hit := false
-	if not result.is_empty():
-		var collider: Object = result["collider"]
-		if collider != null and collider.has_method("take_damage"):
-			collider.call("take_damage", 100.0, self) # shields don't stop musket balls
-			hit = true
 
 	var right := camera.global_transform.basis.x
 	if rig != null:
@@ -455,10 +514,28 @@ func _fire() -> void:
 	fired.emit(hit)
 
 
+## Called by the projectile system when one of your balls hits someone.
+func on_projectile_hit(u: Node3D) -> void:
+	var kind = u.get("rig_kind")
+	if kind == "lizard":
+		shot_hit.emit()
+	elif kind == "soldier":
+		friendly_fire.emit(true)
+
+
+## A ball or a blast: can't be parried.
+func take_shot(amount: float, from: Node3D = null) -> void:
+	_shot = true
+	take_damage(amount, from)
+	_shot = false
+	if from != null and is_instance_valid(from) and from != self and from.is_in_group("friendlies"):
+		friendly_fire.emit(false)
+
+
 func take_damage(amount: float, from: Node3D = null) -> void:
 	if not alive:
 		return
-	if blocking and from != null and is_instance_valid(from):
+	if blocking and not _shot and from != null and is_instance_valid(from):
 		var to := from.global_position - global_position
 		to.y = 0.0
 		if rad_to_deg(_flat_forward().angle_to(to)) <= BLOCK_ARC:
