@@ -45,7 +45,13 @@ const PRIME := [Vector3(0.1, 1.05, -0.42), Vector3(-0.3, 0.22, -1)]
 
 # The pistol: held out at the ready, arm straight to aim, muzzle up to load.
 const P_READY := [Vector3(0.21, 1.36, -0.5), Vector3(-0.05, 0.14, -1)]
-const P_AIM := [Vector3(0.1, 1.47, -0.74), Vector3(-0.04, 0.04, -1)]
+## Aiming the pistol, the 1800s way: turned side-on so the right shoulder
+## faces the target, arm out straight at eye level, left hand in the small
+## of the back. P_AIM is in the aiming frame (-Z at the target): the sights
+## sit just under your eye line, so the front blade is on the crosshair.
+const P_AIM := [Vector3(0.0, 1.52, -0.72), Vector3(0, 0.035, -1)]
+const P_TURN := 1.15 # radians side-on
+const P_BACK_HAND := Vector3(-0.06, 1.0, 0.24) # body space: behind you
 const P_LOAD := [Vector3(0.1, 1.12, -0.32), Vector3(-0.05, 1, -0.25)]
 const P_HOLSTER := Vector3(0.12, 1.02, -0.17)
 # The sabre: guard, a high parry, and one-handed cuts from each side.
@@ -101,6 +107,8 @@ func _pose() -> void:
 	rig.bayonet_in_hand = false
 	rig.t_lean = 0.0
 	rig.hand_item = player.weapon if player.weapon in ["pistol", "saber"] else ""
+	rig.t_turn = 0.0
+	rig.t_twist = 0.0
 
 	if player.is_throwing():
 		# Musket dropped to the left hand; the right hand winds back over the
@@ -232,7 +240,15 @@ func _pistol_pose() -> void:
 	if player.pistol_loaded:
 		var a: float = player.aim_amount
 		var k := a * a * (3.0 - 2.0 * a)
-		_apply_pose([(P_READY[0] as Vector3).lerp(P_AIM[0], k), (P_READY[1] as Vector3).lerp(P_AIM[1], k)], 30.0)
+		var turn := P_TURN * k
+		rig.t_turn = turn
+		# Poses are in body space; the body has turned, so turn them back.
+		var b := Basis(Vector3.UP, -turn)
+		var pos: Vector3 = (P_READY[0] as Vector3).lerp(P_AIM[0], k)
+		var dir: Vector3 = (P_READY[1] as Vector3).lerp(P_AIM[1], k)
+		_apply_pose([b * pos, b * dir], 26.0)
+		if k > 0.3:
+			rig.t_hand_l = P_BACK_HAND
 		return
 	var rp: float = player.pistol_reload_progress()
 	if rp < 0.06:
@@ -254,18 +270,82 @@ func _pistol_pose() -> void:
 		rig.t_hand_l = muzzle + Vector3(0, 0.03 + 0.12 * ram, 0)
 
 
+## Sabre cuts as keyframes: [time 0..1 through the cut, hand, blade
+## direction, upper-body twist, lean]. The first key is the wind-up: the arm
+## raised high and back, the body twisted away; the cut sweeps the hand
+## through the middle and down past the other side, the body unwinding
+## into it.
+const S_CUTS := {
+	0: [ # overhead: arm up and back over the head, then straight down
+		[0.0, Vector3(0.2, 1.98, 0.1), Vector3(0.05, 0.35, 1.0), 0.0, -0.18],
+		[0.3, Vector3(0.22, 1.9, -0.3), Vector3(0.0, 1.0, -0.35), 0.0, -0.05],
+		[0.6, Vector3(0.16, 1.5, -0.62), Vector3(0.0, -0.1, -1.0), 0.0, 0.25],
+		[1.0, Vector3(0.1, 0.98, -0.45), Vector3(0.0, -1.0, -0.35), 0.0, 0.45],
+	],
+	1: [ # from your left: blade back over the left shoulder, cut across to the right
+		[0.0, Vector3(-0.38, 1.8, 0.0), Vector3(-0.75, 0.55, 0.45), 0.55, -0.05],
+		[0.35, Vector3(-0.2, 1.6, -0.55), Vector3(-0.7, 0.2, -0.7), 0.3, 0.1],
+		[0.65, Vector3(0.2, 1.4, -0.68), Vector3(0.5, -0.05, -0.85), -0.15, 0.25],
+		[1.0, Vector3(0.58, 1.15, -0.25), Vector3(0.9, -0.3, 0.25), -0.5, 0.3],
+	],
+	2: [ # from your right: blade raised behind the right shoulder, cut across to the left
+		[0.0, Vector3(0.6, 1.85, 0.12), Vector3(0.65, 0.65, 0.45), -0.55, -0.05],
+		[0.35, Vector3(0.42, 1.62, -0.5), Vector3(0.75, 0.2, -0.65), -0.3, 0.1],
+		[0.65, Vector3(0.0, 1.4, -0.68), Vector3(-0.45, -0.05, -0.9), 0.15, 0.25],
+		[1.0, Vector3(-0.4, 1.08, -0.35), Vector3(-0.9, -0.35, 0.1), 0.5, 0.3],
+	],
+	3: [ # thrust: drawn back at the hip, then lunging straight out
+		[0.0, Vector3(0.3, 1.32, 0.12), Vector3(0.0, 0.08, -1.0), -0.35, -0.1],
+		[0.5, Vector3(0.2, 1.38, -0.35), Vector3(0.0, 0.03, -1.0), -0.1, 0.15],
+		[1.0, Vector3(0.08, 1.42, -0.85), Vector3(0.0, 0.0, -1.0), 0.2, 0.35],
+	],
+}
+
+
+func _saber_key(keys: Array, t: float) -> Array:
+	for i in range(1, keys.size()):
+		var k1: Array = keys[i]
+		if t <= float(k1[0]) or i == keys.size() - 1:
+			var k0: Array = keys[i - 1]
+			var u := clampf((t - float(k0[0])) / maxf(float(k1[0]) - float(k0[0]), 0.001), 0.0, 1.0)
+			u = u * u * (3.0 - 2.0 * u)
+			return [(k0[1] as Vector3).lerp(k1[1], u), (k0[2] as Vector3).lerp(k1[2], u).normalized(),
+				lerpf(k0[3], k1[3], u), lerpf(k0[4], k1[4], u)]
+	return keys[0].slice(1)
+
+
 func _saber_pose() -> void:
 	var dir: int = player.swing_dir
+	var keys: Array = S_CUTS[dir if dir >= 0 else 3]
 	match player.swing_phase:
 		"windup":
-			_apply_pose(S_WINDUP[dir if dir >= 0 else 3], 12.0)
+			# Raise the arm into the wind-up (the arm can change sides freely).
+			var w: Array = keys[0]
+			_apply_pose([w[1], w[2]], 11.0)
+			rig.t_twist = w[3]
+			rig.t_lean = w[4]
 		"strike":
-			_apply_pose(S_STRIKE[dir], 46.0)
-			rig.t_lean = 0.14
+			# Follow the cut through its keys; the rig chases them fast.
+			var p: float = clampf(player.phase_time / player.strike_time(), 0.0, 1.0)
+			var s := _saber_key(keys, p)
+			_apply_pose([s[0], s[1]], 70.0)
+			rig.t_twist = s[2]
+			rig.t_lean = s[3]
 		"recover":
-			_apply_pose(S_STRIKE[dir] if player.phase_time < 0.05 else S_IDLE, 14.0)
+			# Follow-through, then back to guard.
+			var q: float = clampf(player.phase_time / player.recover_time(), 0.0, 1.0)
+			var last: Array = keys[keys.size() - 1]
+			var u := q * q * (3.0 - 2.0 * q)
+			_apply_pose([(last[1] as Vector3).lerp(S_IDLE[0], u), (last[2] as Vector3).lerp(S_IDLE[1], u).normalized()], 30.0)
+			rig.t_twist = lerpf(last[3], 0.0, u)
+			rig.t_lean = lerpf(last[4], 0.0, u)
 		_:
 			_apply_pose(S_BLOCK if player.blocking else S_IDLE, 22.0 if player.blocking else 14.0)
+	# The free hand: on the hip in guard, swinging out for balance in a cut.
+	if player.swing_phase == "idle":
+		rig.t_hand_l = Vector3(-0.24, 1.0, 0.02)
+	else:
+		rig.t_hand_l = Vector3(-0.35, 1.15, 0.05) if dir != 1 else Vector3(-0.3, 1.05, 0.15)
 
 
 ## Right-hand waypoints relative to the current target pose.

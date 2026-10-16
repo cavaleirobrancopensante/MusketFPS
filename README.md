@@ -417,9 +417,15 @@ weapon in hand is gold, and an unloaded gun's button fills as it reloads.
   behind your target too).
 - **The pistol:** one quick shot, wild beyond close range, through one body
   at most; it only reloads while in your hand, from the same cartridge box.
-- **The sabre:** the same four directional cuts and block as the bayonet,
-  but quicker (about 30% faster to strike and recover), a little shorter,
-  and made for cutting: the thrust is weaker. Its damage follows your
+  AIM takes the duellist's stance of the period: turned side-on, right arm
+  straight out, left hand in the small of the back, the front sight on your
+  crosshair.
+- **The sabre:** a truly curved blade (and scabbard), the same four
+  directional cuts and block as the bayonet, recovering faster, a little
+  shorter, and made for cutting: the thrust is weaker. Each cut is a full
+  movement: the arm raised high and back with the body twisted away, then
+  swept through and down past the other side as the body unwinds; the free
+  hand rests on the hip and swings out for balance. Damage follows your
   Strength and Bladework.
 
 ### Real projectiles
