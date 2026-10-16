@@ -159,6 +159,8 @@ func _ready() -> void:
 			s.frames = soldier_frames
 			s.record = rec
 			soldiers.append(s)
+	elif Settings.playground:
+		waves = [] # nobody comes until you send for them
 	elif Settings.mixed:
 		# A skirmish with a mixed company: muskets in the line, spears in
 		# front, bows behind (they loft over), crossbows on the wings.
@@ -308,6 +310,8 @@ func wave_count() -> int:
 
 ## The HUD's status line.
 func status_line() -> String:
+	if Settings.playground:
+		return "Weapon range   Lizards %d   Your kills %d" % [enemies.size(), player.kills]
 	var tail := "Company %d   Loaded %d" % [soldiers.size(), loaded_count()]
 	if player != null and player.ammo >= 0:
 		tail += "   Your shot %d" % player.ammo
@@ -728,6 +732,31 @@ func on_out_of_ammo(s) -> void:
 		hud.show_message("%s is out of %s!" % [s.display_name, {"arrow": "arrows", "bolt": "bolts"}.get(s.missile, "cartridges")], 1.8)
 
 
+## The weapon range: send lizards to shoot at. `still` ones stand where they
+## land (targets); the others come for you.
+func playground_spawn(n: int, still: bool) -> void:
+	var f := _player_forward()
+	var right := f.cross(Vector3.UP).normalized()
+	var p: Vector3 = player.global_position
+	for i in n:
+		var d := randf_range(12.0, 40.0) if still else randf_range(35.0, 55.0)
+		var x := randf_range(-14.0, 14.0) if still else randf_range(-20.0, 20.0)
+		var l = LizardScript.new()
+		l.battle = self
+		l.frames = lizard_frames
+		l.still = still
+		var at := p + f * d + right * x
+		l.position = Vector3(at.x, 0, at.z)
+		enemies.append(l)
+		add_child(l)
+	hud.show_message("%d %s" % [n, "targets" if still else "lizards coming!"], 1.2)
+
+
+func playground_clear() -> void:
+	for e2 in enemies.duplicate():
+		e2.take_shot(9999.0, null)
+
+
 ## The skirmish's company (records that aren't on any roll).
 func _mixed_company() -> Array:
 	var kits := []
@@ -851,6 +880,9 @@ func _process(delta: float) -> void:
 	_update_lines(delta)
 	if not _spawn_queue.is_empty():
 		_spawn_some()
+	if Settings.playground:
+		game_state = "playground"
+		player.hp = player.max_hp # nobody dies on the range
 	if prologue:
 		_prologue_process(delta)
 	match game_state:

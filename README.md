@@ -658,6 +658,21 @@ aftermath node.
 | `scripts/sound_factory.gd` | Synthesises the sound effects |
 | `scripts/look.gd` | The look of the land: sky, ground, grass, trees, bushes, far hills, quality levels |
 
+### Tests (on the main menu)
+
+**Tests** opens a list of fights outside the campaign:
+
+- **Weapon range**: you alone with every weapon (musket, bayonet, pistol,
+  sabre, **bow**, **crossbow**, and 99 grenades), and you can't die. Down the
+  left: +1 TARGET and +5 TARGETS (lizards that stand still at 12 to 40 m),
+  +5 and +20 CHARGING, and CLEAR. The bow: AIM draws it to your cheek (the
+  bow arm out, canted clear of your sight), FIRE looses, and you nock the
+  next arrow from the quiver over your shoulder in under two seconds. The
+  crossbow: sight along the stock, then nose down and wind the windlass for
+  seven seconds.
+- **Skirmish**: the mixed company against three waves.
+- **Stress test**: 50 against 200, with a frame counter.
+
 ### Performance: big battles on a phone
 
 The menu's **STRESS TEST** starts 50 musketeers against 200 lizardmen with an

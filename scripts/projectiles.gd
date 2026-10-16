@@ -30,7 +30,7 @@ const KINDS := {
 	# stay stuck in the ground a while; a raised shield catches them.
 	"arrow": {"gravity": 9.8, "drag": 0.02, "life": 6.0, "damage": 45.0, "player_damage": 22.0,
 		"shield_stops": true, "tracer": false, "shaft": 0.75},
-	"bolt": {"gravity": 9.8, "drag": 0.04, "life": 4.0, "damage": 72.0, "player_damage": 32.0,
+	"bolt": {"gravity": 9.8, "drag": 0.04, "life": 4.0, "damage": 85.0, "player_damage": 36.0,
 		"shield_stops": true, "tracer": false, "shaft": 0.4},
 	# Ready for the lizard skirmishers: a heavy, slow, arcing throw.
 	"javelin": {"gravity": 9.8, "drag": 0.05, "life": 5.0, "damage": 70.0, "player_damage": 35.0,

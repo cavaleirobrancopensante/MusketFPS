@@ -17,6 +17,10 @@ var stress := false
 ## the campaign, from the main menu.
 var mixed := false
 
+## The weapon range: you alone with every weapon (musket, bayonet, pistol,
+## sabre, bow, crossbow, grenades), lizards sent on demand, no dying.
+var playground := false
+
 ## The save slot in use (1..SLOTS); remembered for CONTINUE.
 var slot := 1
 

@@ -30,6 +30,14 @@ const PISTOL_RELOAD := 5.0
 const PISTOL_SPEED := 260.0
 const PISTOL_SPREAD := 0.034
 const PISTOL_AIM_SPREAD := 0.012
+## A war bow and a crossbow (the weapon range, or if your kit has them):
+## [reload seconds, launch speed, hip spread, aimed spread, projectile, damage].
+## The bow nocks fast and you draw it by aiming; the crossbow is spanned
+## with a windlass, slow, and shoots flat and hard.
+const MISSILE := {
+	"bow": [1.8, 55.0, 0.035, 0.008, "arrow", 1.3],
+	"crossbow": [7.0, 72.0, 0.025, 0.004, "bolt", 1.2],
+}
 const DRAW_TIME := 0.55 # a pistol from the belt or a sabre from the scabbard
 ## How each blade swings, relative to the bayonet the swings were tuned for:
 ## [damage x, reach x, strike speed x, recovery speed x].
@@ -84,6 +92,12 @@ var weapon := "musket" # "musket", "melee" (bayonet fixed), "pistol" or "saber"
 # The sidearms you carry (from your kit).
 var has_pistol := true
 var has_saber := true
+var has_bow := false
+var has_crossbow := false
+## Bow and crossbow: nocked/spanned, and how long until they are again.
+var m_loaded := {"bow": true, "crossbow": true}
+var m_left := {"bow": 0.0, "crossbow": 0.0}
+var _crank_t := 0.0
 var pistol_loaded := true
 var pistol_reload_left := 0.0
 var _last_pistol_p := 1.0
@@ -156,6 +170,12 @@ func _ready() -> void:
 	if Company.active:
 		_apply_sheet()
 		rig.gear = Company.officer.get("gear", {})
+	if Settings.playground:
+		# The weapon range: everything, and shot to spare.
+		has_bow = true
+		has_crossbow = true
+		grenades = 99
+		rig.gear = {"bow": "war_bow", "crossbow": "crossbow"}
 	rig.manual = true
 	add_child(rig)
 	var ctrl := PlayerBody.new()
@@ -218,7 +238,7 @@ func is_aiming() -> bool:
 
 ## A firearm in hand (musket or pistol), or a blade (bayonet or sabre).
 func is_gun() -> bool:
-	return weapon == "musket" or weapon == "pistol"
+	return weapon in ["musket", "pistol", "bow", "crossbow"]
 
 
 func is_melee() -> bool:
@@ -227,7 +247,20 @@ func is_melee() -> bool:
 
 ## The weapon in hand is loaded (for the HUD's FIRE button).
 func is_loaded() -> bool:
+	if MISSILE.has(weapon):
+		return bool(m_loaded[weapon])
 	return pistol_loaded if weapon == "pistol" else loaded
+
+
+## 0..1 through reloading the weapon in hand (1 when ready).
+func reload_progress_of(w: String) -> float:
+	if MISSILE.has(w):
+		if bool(m_loaded[w]):
+			return 1.0
+		return 1.0 - float(m_left[w]) / float(MISSILE[w][0])
+	if w == "pistol":
+		return pistol_reload_progress()
+	return reload_progress()
 
 
 ## The weapons you can take up, in the order of the buttons along the bottom.
@@ -237,6 +270,10 @@ func weapons() -> Array:
 		out.append("pistol")
 	if has_saber:
 		out.append("saber")
+	if has_bow:
+		out.append("bow")
+	if has_crossbow:
+		out.append("crossbow")
 	return out
 
 
@@ -350,7 +387,7 @@ func switch_to(w: String) -> void:
 	elif w == "melee":
 		switch_total = DRAW_TIME + FIX_TIME * 0.8 # musket off the shoulder, then the bayonet
 	else:
-		switch_total = DRAW_TIME + (0.25 if weapon in ["pistol", "saber"] else 0.0)
+		switch_total = DRAW_TIME + (0.25 if weapon in ["pistol", "saber", "bow", "crossbow"] else 0.0)
 	switch_left = switch_total
 	_bayonet_sound_done = false
 
@@ -468,6 +505,8 @@ func _physics_process(delta: float) -> void:
 				_fire()
 			elif weapon == "pistol" and switch_left <= 0.0 and throw_left <= 0.0:
 				_fire_pistol()
+			elif MISSILE.has(weapon) and switch_left <= 0.0 and throw_left <= 0.0:
+				_loose()
 
 		_reprime = maxf(0.0, _reprime - delta)
 		# You need both hands on the musket to reload it (and a cartridge).
@@ -495,6 +534,18 @@ func _physics_process(delta: float) -> void:
 			if pistol_reload_left <= 0.0:
 				pistol_loaded = true
 				_last_pistol_p = 1.0
+		# Bow and crossbow: nock an arrow, or wind the crossbow back.
+		if MISSILE.has(weapon) and not bool(m_loaded[weapon]) and switch_left <= 0.0:
+			m_left[weapon] = float(m_left[weapon]) - delta
+			if weapon == "crossbow":
+				_crank_t -= delta
+				if _crank_t <= 0.0 and float(m_left[weapon]) > 0.6:
+					_crank_t = 0.55
+					battle.play_sound_ui("crank", -12.0)
+			if float(m_left[weapon]) <= 0.0:
+				m_loaded[weapon] = true
+				if weapon == "crossbow":
+					battle.play_sound_ui("crack", -18.0) # the bolt clicks into place
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -545,7 +596,7 @@ func _update_switch(delta: float) -> void:
 	switch_left -= delta
 	# Time the scrape-and-click so the click lands as the bayonet locks on.
 	var click_at := 0.46 if switch_target == "melee" else 0.05
-	if switch_target in ["saber", "pistol"]:
+	if switch_target in ["saber", "pistol", "bow", "crossbow"]:
 		click_at = 0.5
 	if not _bayonet_sound_done and switch_progress() >= click_at:
 		_bayonet_sound_done = true
@@ -553,6 +604,8 @@ func _update_switch(delta: float) -> void:
 			battle.play_sound_ui("swish", -8.0) # the blade rasps out
 		elif switch_target == "pistol":
 			battle.play_sound_ui("crack", -22.0) # the hammer pulled back
+		elif switch_target in ["bow", "crossbow"]:
+			battle.play_sound_ui("swish", -14.0) # off your back
 		else:
 			battle.play_sound_ui("bayonet", -6.0)
 	if switch_left <= 0.0:
@@ -722,6 +775,27 @@ func _fire_pistol() -> void:
 		battle.spawn_smoke(muzzle + fwd * 0.6, 0.5)
 		battle.spawn_flash(muzzle + fwd * 0.05, 0.7)
 	_shake = maxf(_shake, 0.25)
+	fired.emit(false)
+
+
+## Loose an arrow or a bolt along your line of sight. A drawn bow (aiming)
+## is steady; a quick loose from the hip scatters.
+func _loose() -> void:
+	if not bool(m_loaded[weapon]):
+		return
+	var spec: Array = MISSILE[weapon]
+	m_loaded[weapon] = false
+	m_left[weapon] = float(spec[0])
+	_crank_t = 0.4
+	battle.play_sound_ui("bow" if weapon == "bow" else "crossbow", -2.0)
+	var from := camera.global_position
+	var fwd := -camera.global_transform.basis.z
+	var to_me := global_position + Vector3.UP * 1.5 - from
+	from += fwd * maxf(0.4, to_me.dot(fwd))
+	fwd = battle.projectiles.spread_dir(fwd, lerpf(float(spec[2]), float(spec[3]), aim_amount) * spread_mult)
+	var p: Dictionary = battle.projectiles.fire(String(spec[4]), from, fwd * float(spec[1]), self)
+	p["dmg_mult"] = float(spec[5])
+	battle.missile_spent(String(spec[4]))
 	fired.emit(false)
 
 
