@@ -20,6 +20,8 @@ var _wagon: VBoxContainer
 var _kg: ProgressBar
 var _space: ProgressBar
 var _load_l: Label
+var _done_b: Button
+var _confirm := false # DONE tapped once with our fallen's kit still on the field
 
 
 func _ready() -> void:
@@ -56,9 +58,9 @@ func _ready() -> void:
 	var all := _button("TAKE EVERYTHING THAT FITS", _take_all)
 	all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.add_child(all)
-	var done := _button("DONE", _done)
-	done.custom_minimum_size.x = 220
-	br.add_child(done)
+	_done_b = _button("DONE", _done)
+	_done_b.custom_minimum_size.x = 260
+	br.add_child(_done_b)
 	_refresh()
 	if "--loottest" in OS.get_cmdline_user_args():
 		_self_test.call_deferred()
@@ -151,8 +153,12 @@ func _refresh() -> void:
 		if room <= 0:
 			sub += "   ·   no room"
 		var desc := _what(id)
-		_field.add_child(_row("%s ×%d" % [Company.item_label(id), int(l["n"])], sub + desc,
-			[["TAKE", _take.bind(i, 1), room <= 0], ["ALL", _take.bind(i, 99999), room <= 0]]))
+		var ours := bool(l.get("ours", false))
+		var r := _row("%s ×%d%s" % [Company.item_label(id), int(l["n"]), "   (our fallen)" if ours else ""], sub + desc,
+			[["TAKE", _take.bind(i, 1), room <= 0], ["ALL", _take.bind(i, 99999), room <= 0]])
+		if ours:
+			(r.get_child(0).get_child(0) as Label).add_theme_color_override("font_color", GOLD)
+		_field.add_child(r)
 	var rows: Array = []
 	for k in Company.CONSUMABLES:
 		if int(Company.stores.get(k, 0)) > 0:
@@ -164,6 +170,8 @@ func _refresh() -> void:
 		var step := 10 if String(r[0]) in ["rations", "water", "ammo", "rum"] else 1
 		_wagon.add_child(_row("%s ×%d" % [Company.item_label(r[0]), int(r[1])], "%.1f kg, %.1f space" % [w[0], w[1]],
 			[["DROP", _drop.bind(String(r[0]), step)]]))
+	_confirm = false
+	_done_b.text = "DONE"
 	var load := Company.wagon_load()
 	_load_l.text = "%d / %d kg     space %.1f / %.0f     %d crowns" % [int(load[0]), int(Company.WAGON_KG), load[1],
 		Company.WAGON_SPACE, Company.money]
@@ -196,19 +204,21 @@ func _drop(id: String, n: int) -> void:
 
 ## Load the most valuable things (for their weight) first, as far as they fit.
 func _take_all() -> void:
-	var order: Array = range(Company.loot.size())
-	order.sort_custom(func(a, b): return _worth(Company.loot[a]["id"]) > _worth(Company.loot[b]["id"]))
-	var ids: Array = order.map(func(k): return Company.loot[k]["id"])
-	for id in ids:
-		for i in Company.loot.size():
-			if Company.loot[i]["id"] == id:
-				Company.take_loot(i, 99999)
-				break
+	var order: Array = Company.loot.duplicate()
+	order.sort_custom(func(a, b): return _worth(a) > _worth(b))
+	for e in order:
+		var i: int = Company.loot.find(e)
+		if i >= 0:
+			Company.take_loot(i, 99999)
 	Company.save()
 	_refresh()
 
 
-static func _worth(id: String) -> float:
+## Our own dead's muskets and kit come right after powder and money.
+static func _worth(e: Dictionary) -> float:
+	var id := String(e["id"])
+	if bool(e.get("ours", false)) and id not in ["crowns", "ammo"]:
+		return 1e5 + _worth({"id": id})
 	match id:
 		"crowns": return 1e9
 		"ammo": return 1e6 # powder is beyond price in this land
@@ -220,6 +230,11 @@ static func _worth(id: String) -> float:
 
 
 func _done() -> void:
+	var left := Company.ours_left()
+	if left > 0 and not _confirm:
+		_confirm = true
+		_done_b.text = "LEAVE %d OF OUR KIT?" % left
+		return
 	Company.loot = []
 	Company.save()
 	get_tree().change_scene_to_file(CAMP)

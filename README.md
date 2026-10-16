@@ -194,10 +194,14 @@ things.
 **The kit of the dead comes home.** When a man falls in a fight you win, his
 comrades carry everything he had (musket, bayonet, hat, coat, cartridges,
 rations, water) back to the wagon, ready to arm the next man, a native
-recruit in time. The camp lists it under "Their kit, back in the wagon";
-anything that won't fit goes on the loot pile, where you can make room for
-it. A man who dies of hunger, thirst or sickness in camp leaves his kit in
-the wagon too. Lose the fight and the dead are left on the field with their
+recruit in time. The camp lists it under "Their kit, back in the wagon".
+If the wagon is full, whatever doesn't fit stays on the field: it heads the
+loot screen in gold, marked "(our fallen)", so you can DROP something from
+the wagon and take it. TAKE EVERYTHING THAT FITS takes it right after powder
+and money, and DONE asks once before you leave any of it behind. A man who
+dies of hunger, thirst or sickness in camp leaves his kit in the wagon too,
+or, if it's full, by his grave (CAMP, then LOOT THE FIELD) until you march
+on. Lose the fight and the dead are left on the field with their
 muskets; men drowned or lost on the march, or lost scouting, are gone with
 theirs; deserters and mutineers take theirs with them.
 

@@ -345,9 +345,10 @@ func apply_battle(result: Dictionary) -> void:
 			summary["fallen"].append(title(m))
 			if recover:
 				# His comrades carry his kit back to the wagon.
-				var back := recover_kit(m, true)
-				if back != "":
-					summary.get_or_add("kit_home", []).append("%s: %s" % [title(m), back])
+				var back := recover_kit(m)
+				if back[0] != "":
+					summary.get_or_add("kit_home", []).append("%s: %s" % [title(m), back[0]])
+				summary["kit_left"] = int(summary.get("kit_left", 0)) + int(back[1])
 			continue
 		var gained := XP_SURVIVE + XP_KILL * int(r["kills"]) + (XP_VICTORY if won else 0)
 		var old_level := Men.level(m)
@@ -450,11 +451,12 @@ func _after_prologue(summary: Dictionary) -> void:
 
 
 ## A dead man's kit and pack go back to the wagon, to arm the next man
-## (a native recruit, say). Whatever won't fit goes on the loot pile when
-## there is one (after a won fight, where you can make room), or is left
-## behind. Returns what was stowed, e.g. "musket, bayonet, hat, 18 cartridges".
-func recover_kit(m: Dictionary, overflow_to_loot := false) -> String:
+## (a native recruit, say). Whatever won't fit stays on the loot pile, marked
+## as ours, so you can choose what to throw out of the wagon to make room
+## (the loot screen). Returns [what was stowed, how many things were left].
+func recover_kit(m: Dictionary) -> Array:
 	var got: Array = []
+	var left := 0
 	var gear: Dictionary = m.get("gear", {})
 	for slot in SLOTS:
 		var id := String(gear.get(slot, ""))
@@ -462,8 +464,9 @@ func recover_kit(m: Dictionary, overflow_to_loot := false) -> String:
 			continue
 		if stow(id, 1) == 1:
 			got.append(item_name(id).to_lower())
-		elif overflow_to_loot:
-			_add_loot(id, 1)
+		else:
+			_add_loot(id, 1, true)
+			left += 1
 		gear[slot] = ""
 	var pack: Dictionary = m.get("pack", {})
 	for k in ["water", "rations", "ammo"]:
@@ -473,10 +476,11 @@ func recover_kit(m: Dictionary, overflow_to_loot := false) -> String:
 		var k_in := stow(k, n)
 		if k_in > 0:
 			got.append(("water for %d day%s" % [k_in, "" if k_in == 1 else "s"]) if k == "water" else "%d %s" % [k_in, {"rations": "rations", "ammo": "cartridges"}[k]])
-		if k_in < n and overflow_to_loot:
-			_add_loot(k, n - k_in)
+		if k_in < n:
+			_add_loot(k, n - k_in, true)
+			left += 1
 		pack[k] = 0
-	return ", ".join(got)
+	return [", ".join(got), left]
 
 
 ## What the slain left behind: their weapons, hides and charms, and now and
@@ -496,12 +500,28 @@ func _loot_from(enemy: String, slain: int) -> void:
 				_add_loot(String(row[0]), 1)
 
 
-func _add_loot(id: String, n: int) -> void:
+## `ours`: the kit of our own dead, kept apart from the enemy's leavings and
+## shown first on the loot screen.
+func _add_loot(id: String, n: int, ours := false) -> void:
 	for l in loot:
-		if l["id"] == id:
+		if l["id"] == id and bool(l.get("ours", false)) == ours:
 			l["n"] = int(l["n"]) + n
 			return
-	loot.append({"id": id, "n": n})
+	var e := {"id": id, "n": n}
+	if ours:
+		e["ours"] = true
+		loot.insert(0, e)
+	else:
+		loot.append(e)
+
+
+## How much of our own dead's kit is still on the pile.
+func ours_left() -> int:
+	var n := 0
+	for l in loot:
+		if bool(l.get("ours", false)):
+			n += int(l["n"])
+	return n
 
 
 func _strip_to_stores(m: Dictionary) -> void:
@@ -749,6 +769,7 @@ func buy(key: String) -> void:
 ## "clean", "foul", or "" (a dry day).
 func _road_day(water := "random") -> Dictionary:
 	var day_notes := {"thirsty": 0, "hungry": 0, "sick": 0, "died": [], "unfair": false, "grog": 0, "dry": 0}
+	loot = [] # marching on leaves whatever you didn't take where it lay
 	# Water on the road today? Refill the barrels (and maybe they're foul).
 	if water == "random":
 		water = ("foul" if randf() < FOUL_WATER_CHANCE else "clean") if randf() < WATER_DAY_CHANCE else ""
@@ -823,7 +844,12 @@ func _road_day(water := "random") -> Dictionary:
 			fallen.append({"name": m["name"], "rank": RANKS[int(m["rank"])], "day": day,
 				"battles": m["battles"], "kills": m["kills"], "cause": cause})
 			var back := recover_kit(m)
-			day_notes["died"].append("%s (%s)%s" % [title(m), cause, "; his kit is in the wagon" if back != "" else ""])
+			var where := ""
+			if int(back[1]) > 0:
+				where = "; no room in the wagon for all his kit: CAMP, then LOOT THE FIELD"
+			elif back[0] != "":
+				where = "; his kit is in the wagon"
+			day_notes["died"].append("%s (%s)%s" % [title(m), cause, where])
 			roster.erase(m)
 	return day_notes
 
