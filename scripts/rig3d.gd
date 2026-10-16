@@ -59,6 +59,7 @@ var t_hand_l = null # Vector3, or null = on the forestock
 var t_lean := 0.0
 var t_jaw := 0.0
 var aim_pitch := 0.0 # manual only: upper body follows the camera's pitch
+var pitch_pivot := Vector3(0.1, 1.45, 0.0) # what the upper body tilts around
 var pose_rate := 14.0
 var bayonet_on := true
 var bayonet_in_hand := false
@@ -234,6 +235,8 @@ func _build_musket() -> void:
 	_part(musket, _box_mesh(Vector3(0.04, 0.05, 0.75)), WOOD, Vector3(0, -0.01, -0.36)) # forestock
 	_part(musket, _cyl_mesh(0.013, 0.013, MUZZLE), STEEL, Vector3(0, 0.018, -MUZZLE * 0.5), Vector3(90, 0, 0))
 	_part(musket, _box_mesh(Vector3(0.02, 0.05, 0.08)), STEEL, Vector3(0.028, 0.01, -0.02)) # lock
+	_part(musket, _box_mesh(Vector3(0.007, 0.022, 0.02)), BLACK, Vector3(0, 0.038, -MUZZLE + 0.04)) # front sight
+	_part(musket, _box_mesh(Vector3(0.03, 0.012, 0.012)), BLACK, Vector3(0, 0.034, -0.08)) # rear notch
 	bayonet = Node3D.new()
 	bayonet.position = Vector3(0, 0.018, -MUZZLE)
 	musket.add_child(bayonet)
@@ -343,7 +346,7 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	var grip := _grip
 	var wdir := _wdir
 	var pitch := Basis(Vector3.RIGHT, aim_pitch)
-	var pivot := Vector3(0.1, 1.45, 0.0)
+	var pivot := pitch_pivot
 	if aim_pitch != 0.0:
 		grip = pivot + pitch * (grip - pivot)
 		wdir = pitch * wdir

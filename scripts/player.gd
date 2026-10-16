@@ -24,8 +24,12 @@ const SPEED := 5.0
 const GRAVITY := 20.0
 const RELOAD_TIME := 3.5
 const RANGE := 90.0
-const SPREAD := 0.012 # radians of random error per shot
+const SPREAD := 0.018 # radians of random error per shot from the hip
+const AIM_SPREAD := 0.005 # ...and sighting down the barrel
 const LOOK_SENS := 0.005 # radians per pixel of drag
+const FOV := 72.0
+const AIM_FOV := 48.0 # aiming down the sights zooms in
+const AIM_TIME := 0.22 # seconds to bring the musket up to your cheek
 
 const FIX_TIME := 1.1 # draw the bayonet from its scabbard and lock it on
 const UNFIX_TIME := 0.9
@@ -71,6 +75,9 @@ var strike_charge := 0.0
 var blocking := false
 var block_held := false
 
+var aim_wanted := false
+var aim_amount := 0.0 # 0 = hip, 1 = fully sighted
+
 var _want_fire := false
 var _last_reload_p := 1.0
 var _bayonet_sound_done := false
@@ -92,7 +99,7 @@ func _ready() -> void:
 
 	camera = Camera3D.new()
 	camera.position = Vector3(0, 1.6, 0)
-	camera.fov = 72.0
+	camera.fov = FOV
 	camera.near = 0.03 # so your own musket doesn't clip in first person
 	camera.far = 400.0
 	add_child(camera)
@@ -117,9 +124,26 @@ func toggle_view() -> void:
 		third_person = not third_person
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if alive:
+		# Raise or lower the musket smoothly; the view zooms with it.
+		var target := 1.0 if is_aiming() else 0.0
+		aim_amount = move_toward(aim_amount, target, delta / AIM_TIME)
+		var k := aim_amount * aim_amount * (3.0 - 2.0 * aim_amount)
+		camera.fov = lerpf(FOV, AIM_FOV, k)
 		_update_camera()
+
+
+## Toggle aiming down the sights (musket only). The wish is remembered, so
+## the musket comes back up by itself after each reload.
+func toggle_aim() -> void:
+	if weapon == "musket" and switch_left <= 0.0:
+		aim_wanted = not aim_wanted
+
+
+## Actually sighting right now: wanted, loaded, musket in hand.
+func is_aiming() -> bool:
+	return alive and aim_wanted and weapon == "musket" and switch_left <= 0.0 and loaded
 
 
 func _update_camera() -> void:
@@ -142,8 +166,10 @@ func _update_camera() -> void:
 func add_look(drag: Vector2) -> void:
 	if not alive:
 		return
-	rotation.y -= drag.x * LOOK_SENS
-	pitch = clampf(pitch - drag.y * LOOK_SENS, -1.2, 1.2)
+	# Finer turning while aiming, for steady shots.
+	var sens := LOOK_SENS * lerpf(1.0, 0.55, aim_amount)
+	rotation.y -= drag.x * sens
+	pitch = clampf(pitch - drag.y * sens, -1.2, 1.2)
 
 
 func request_fire() -> void:
@@ -153,6 +179,7 @@ func request_fire() -> void:
 func toggle_weapon() -> void:
 	if not alive or switch_left > 0.0 or swing_phase != "idle":
 		return
+	aim_wanted = false
 	switch_target = "melee" if weapon == "musket" else "musket"
 	switch_total = FIX_TIME if switch_target == "melee" else UNFIX_TIME
 	switch_left = switch_total
@@ -223,7 +250,7 @@ func _physics_process(delta: float) -> void:
 		var kb := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		if kb != Vector2.ZERO:
 			input = kb
-		var speed := SPEED
+		var speed := SPEED * lerpf(1.0, 0.5, aim_amount)
 		if blocking:
 			speed *= 0.5
 		elif swing_phase != "idle":
@@ -268,6 +295,8 @@ func _physics_process(delta: float) -> void:
 func _keyboard_controls() -> void:
 	if Input.is_action_just_pressed("switch_weapon"):
 		toggle_weapon()
+	if Input.is_action_just_pressed("aim"):
+		toggle_aim()
 	if Input.is_action_just_pressed("toggle_view"):
 		toggle_view()
 	if Input.is_action_just_pressed("block"):
@@ -389,7 +418,8 @@ func _fire() -> void:
 
 	var from := camera.global_position
 	var fwd := -camera.global_transform.basis.z
-	var err := Vector3(randf_range(-SPREAD, SPREAD), randf_range(-SPREAD, SPREAD), randf_range(-SPREAD, SPREAD))
+	var spread := lerpf(SPREAD, AIM_SPREAD, aim_amount)
+	var err := Vector3(randf_range(-spread, spread), randf_range(-spread, spread), randf_range(-spread, spread))
 	fwd = (fwd + err).normalized()
 	# Layer 2 = enemies only (no friendly fire in this prototype).
 	var query := PhysicsRayQueryParameters3D.create(from, from + fwd * RANGE, 2)

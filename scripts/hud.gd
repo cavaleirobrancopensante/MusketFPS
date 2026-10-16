@@ -25,6 +25,9 @@ const THRUST := 3
 # Viewmodel poses: [grip position as a fraction of the screen, angle, scale].
 # The angle is where the muzzle points, in screen space (0 = right, -PI/2 = up).
 const POSE_MUSKET := [Vector2(0.71, 0.82), -2.34, 1.0]
+## Aiming down the sights: musket straight up the middle of the screen,
+## drawn larger (closer), muzzle and front sight just under the crosshair.
+const POSE_AIM := [Vector2(0.5, 1.07), -PI * 0.5, 1.6]
 const POSE_MELEE_IDLE := [Vector2(0.70, 0.88), -2.25, 1.0]
 const POSE_BLOCK := [Vector2(0.55, 0.80), -3.05, 1.0]
 ## Musket upright in front of you, muzzle up: reloading and fixing the bayonet.
@@ -149,6 +152,7 @@ func _buttons() -> Array:
 		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 310, s.y - 280), "r": 52.0, "label": "BLOCK"})
 	else:
 		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": "FIRE"})
+		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": "AIM"})
 	list.append({"id": "weapon", "circle": true, "pos": Vector2(s.x - 58, s.y - 330), "r": 46.0,
 		"label": "MUSKET" if _melee() else "BAYONET"})
 	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": "VOLLEY!"})
@@ -245,6 +249,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 				look_last = p
 		"weapon":
 			player.toggle_weapon()
+		"aim":
+			player.toggle_aim()
 		"block":
 			block_index = idx
 			player.set_block(true)
@@ -297,6 +303,9 @@ func _update_pose(delta: float) -> void:
 			target = POSE_MUSKET if fixing else POSE_MELEE_IDLE
 		else:
 			target = POSE_MELEE_IDLE if fixing else POSE_MUSKET
+	elif not _melee() and player.is_aiming():
+		target = POSE_AIM
+		rate = 16.0
 	elif not _melee() and not player.loaded:
 		var rp: float = player.reload_progress()
 		rate = 10.0
@@ -362,7 +371,10 @@ func _draw() -> void:
 
 	# Crosshair and hit marker.
 	var c := s * 0.5
-	draw_circle(c, 2.5, Color(1, 1, 1, 0.85))
+	# Sighting down the barrel replaces the crosshair dot.
+	var dot_a := 0.85 * (1.0 - clampf(player.aim_amount * 1.5, 0.0, 1.0))
+	if dot_a > 0.01:
+		draw_circle(c, 2.5, Color(1, 1, 1, dot_a))
 	if hit_marker > 0.0:
 		var a := hit_marker / 0.35
 		var col := Color(1, 0.3, 0.2, a)
@@ -461,6 +473,8 @@ func _draw_weapon(s: Vector2) -> void:
 			draw_line(hand + dir * 6 * u, tip, Color(0.75, 0.77, 0.8), 4 * u)
 			draw_circle(hand + dir * 8 * u, 4 * u, Color(0.75, 0.77, 0.8))
 
+	# Front sight: a dark blade on the barrel just behind the muzzle.
+	draw_line(tip - dir * 20 * u, tip - dir * 6 * u, Color(0.12, 0.12, 0.14), 4 * u)
 	match _bayonet_state():
 		"on":
 			_draw_bayonet(tip, dir, u)
@@ -658,7 +672,8 @@ func _draw_button(b: Dictionary) -> void:
 	var label_col := Color(1, 1, 1, 0.95)
 	var active: bool = (id == "follow" and battle.is_following()) \
 		or (id == "hold" and not battle.is_following()) \
-		or (id == "block" and player.blocking)
+		or (id == "block" and player.blocking) \
+		or (id == "aim" and player.aim_wanted)
 	if active:
 		edge = Color(0.95, 0.78, 0.3)
 		label_col = Color(0.95, 0.78, 0.3)

@@ -35,6 +35,7 @@ lizardmen charging from the distance (8, 14, then 20).
 | Left side of screen | Floating joystick: put your thumb down anywhere and drag to walk |
 | Right side of screen | Drag to look around |
 | **FIRE** | Fire your musket. Keep your thumb down and drag to aim, like CoD Mobile. The gold ring is your reload. |
+| **AIM** | Raise the musket and sight down the barrel: the view zooms in, shots are far more accurate, but you move and turn slower. Stays on between shots: the musket comes back up after each reload. |
 | **BAYONET / MUSKET** | Fix or unfix the bayonet (about a second, fully animated). You can't reload with the bayonet out. |
 | **OVER / LEFT / RIGHT / THRUST** (melee) | Four swing buttons replace FIRE, see below |
 | **BLOCK** (melee) | Hold to parry. Stops hacks from the front and makes the lizardman reel back |
@@ -68,7 +69,7 @@ orange** for half a second. Hit them first, step back, or hold BLOCK.
 
 Keyboard for testing on a PC: WASD move, mouse-drag on the right half to look,
 Space fire (in melee: hold to wind up, release to strike), arrow keys pick the
-blow, Q fix/unfix bayonet, E block, V switch view (3D), F volley, 1 follow,
+blow, right mouse button or Z aim, Q fix/unfix bayonet, E block, V switch view (3D), F volley, 1 follow,
 2 hold, 3 toggle fire mode.
 
 ### Your men are not robots
@@ -138,7 +139,7 @@ node.
 
 Most of the feel lives in constants at the top of each script: `WAVES`,
 `LINE_SPACING` and `COMPANY_SIZE` in `battle.gd`; `RELOAD_TIME`, `SPREAD`,
-`FIX_TIME` and the `SWINGS` table (reach, arc, damage, knockback per blow) in
+`AIM_SPREAD`, `AIM_FOV`, `FIX_TIME` and the `SWINGS` table (reach, arc, damage, knockback per blow) in
 `player.gd`; `reload_time`, `RANGE` and the hit-chance formula in
 `soldier.gd`; `speed`, `ATTACK_DAMAGE` and `WINDUP_TIME` in `lizardman.gd`.
 First-person 3D poses are the tables at the top of `player_body.gd`.
