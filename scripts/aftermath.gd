@@ -1,0 +1,276 @@
+extends Control
+## Between battles: the aftermath of the last fight and the company in camp.
+##
+## Left: what happened (slain, bounty, the fallen, the wounded, promotions)
+## and what you can do: hire recruits, march on to the next fight, read the
+## roll of honour. Right: every man in the company with his rank, record,
+## progress to the next rank and whether he's fit to fight.
+
+const BATTLE := "res://scenes/battle.tscn"
+const MENU := "res://scenes/menu.tscn"
+
+const GOLD := Color(0.95, 0.8, 0.45)
+const RED := Color(0.95, 0.42, 0.35)
+const GREEN := Color(0.55, 0.9, 0.55)
+const DIM := Color(0.75, 0.77, 0.82)
+const BG := Color(0.07, 0.09, 0.14)
+const PANEL := Color(0.11, 0.13, 0.2)
+
+var _summary: RichTextLabel
+var _header: Label
+var _sub: Label
+var _list: VBoxContainer
+var _list_title: Label
+var _hire: Button
+var _march: Button
+var _honour: Button
+var _showing_honour := false
+
+
+func _ready() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var bg := ColorRect.new()
+	bg.color = BG
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 22)
+	add_child(margin)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 22)
+	margin.add_child(row)
+
+	# ---- left: what happened, and what to do next
+	var left := VBoxContainer.new()
+	left.custom_minimum_size = Vector2(500, 0)
+	left.add_theme_constant_override("separation", 10)
+	row.add_child(left)
+	_header = _label("", 46, GOLD)
+	left.add_child(_header)
+	_sub = _label("", 20, DIM)
+	left.add_child(_sub)
+	_summary = RichTextLabel.new()
+	_summary.bbcode_enabled = true
+	_summary.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_summary.add_theme_font_size_override("normal_font_size", 21)
+	_summary.add_theme_font_size_override("bold_font_size", 21)
+	left.add_child(_summary)
+	var buttons := GridContainer.new()
+	buttons.columns = 2
+	buttons.add_theme_constant_override("h_separation", 12)
+	buttons.add_theme_constant_override("v_separation", 12)
+	left.add_child(buttons)
+	_march = _button("MARCH ON", _on_march)
+	_hire = _button("", _on_hire)
+	_honour = _button("ROLL OF HONOUR", _on_honour)
+	buttons.add_child(_march)
+	buttons.add_child(_hire)
+	buttons.add_child(_honour)
+	buttons.add_child(_button("SAVE & MENU", _on_menu))
+
+	# ---- right: the company
+	var right := PanelContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = PANEL
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	right.add_theme_stylebox_override("panel", sb)
+	row.add_child(right)
+	var rbox := VBoxContainer.new()
+	rbox.add_theme_constant_override("separation", 8)
+	right.add_child(rbox)
+	_list_title = _label("", 24, GOLD)
+	rbox.add_child(_list_title)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	rbox.add_child(scroll)
+	_list = VBoxContainer.new()
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(_list)
+
+	_refresh()
+
+
+# ---------------------------------------------------------------- building blocks
+
+func _label(text: String, size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+
+func _button(text: String, cb: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(240, 64)
+	b.add_theme_font_size_override("font_size", 22)
+	b.pressed.connect(cb)
+	return b
+
+
+static func _n(n: int, word: String) -> String:
+	return "%d %s%s" % [n, word, "" if n == 1 else "s"]
+
+
+static func _hex(c: Color) -> String:
+	return c.to_html(false)
+
+
+# ---------------------------------------------------------------- content
+
+func _refresh() -> void:
+	var r: Dictionary = Company.last_result
+	var fresh: bool = Company.results_unseen and not r.is_empty()
+	var fit := Company.fit_men().size()
+	var men := Company.roster.size()
+
+	if men == 0 and not Company.can_hire():
+		_header.text = "THE COMPANY IS NO MORE"
+		_header.add_theme_color_override("font_color", RED)
+	elif fresh:
+		_header.text = "VICTORY" if r["won"] else "DEFEAT"
+		_header.add_theme_color_override("font_color", GOLD if r["won"] else RED)
+	else:
+		_header.text = "IN CAMP"
+		_header.add_theme_color_override("font_color", GOLD)
+	_sub.text = "Day %d  ·  %s, %d won  ·  %d crowns  ·  wages %d/wk" % [
+		Company.day, _n(Company.battles, "battle"), Company.victories, Company.money, Company.weekly_wages()]
+
+	var t := ""
+	if fresh:
+		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
+		var pay := int(r["pay"])
+		if pay >= 0:
+			t += "Bounty: [color=#%s]+%d crowns[/color]\n" % [_hex(GOLD), pay]
+		else:
+			t += "Baggage plundered: [color=#%s]%d crowns[/color]\n" % [_hex(RED), pay]
+		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
+		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
+		t += _section("Promoted", r["promoted"], GOLD, "")
+	else:
+		t += "[color=#%s]%s[/color]\n\n" % [_hex(DIM), Company.march_note]
+		t += "%d men, %d fit to fight.\n" % [men, fit]
+		t += "Scouts report about %d lizardmen ahead.\n" % Company.next_enemy_count()
+	if men > 0 and fit == 0:
+		t += "\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]" % _hex(RED)
+	_summary.text = t
+
+	_hire.text = "HIRE RECRUIT (%d)" % Company.RECRUIT_COST
+	_hire.disabled = not Company.can_hire()
+	_march.disabled = men == 0 and not Company.can_hire()
+	_honour.text = "THE COMPANY" if _showing_honour else "ROLL OF HONOUR (%d)" % Company.fallen.size()
+	if _showing_honour:
+		_fill_honour()
+	else:
+		_fill_roster()
+
+
+func _section(title: String, items: Array, col: Color, empty: String) -> String:
+	if items.is_empty():
+		return "\n[b]%s:[/b] %s\n" % [title, empty] if empty != "" else ""
+	return "\n[b]%s:[/b]\n[color=#%s]%s[/color]\n" % [title, _hex(col), "\n".join(items)]
+
+
+func _clear_list() -> void:
+	for c in _list.get_children():
+		c.queue_free()
+
+
+func _fill_roster() -> void:
+	_clear_list()
+	_list_title.text = "THE COMPANY  ·  %d men" % Company.roster.size()
+	var men: Array = Company.roster.duplicate()
+	# Highest rank first, then most experienced.
+	men.sort_custom(func(a, b): return int(a["xp"]) > int(b["xp"]))
+	for m in men:
+		_list.add_child(_man_row(m))
+
+
+func _man_row(m: Dictionary) -> Control:
+	var rank := int(m["rank"])
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	var top := HBoxContainer.new()
+	box.add_child(top)
+	var name_l := _label(Company.title(m), 22, Color.WHITE)
+	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	top.add_child(name_l)
+	var wd := int(m["wounded_days"])
+	var status := _label("WOUNDED %dd" % wd if wd > 0 else "FIT", 18, RED if wd > 0 else GREEN)
+	status.autowrap_mode = TextServer.AUTOWRAP_OFF
+	top.add_child(status)
+	var info := "%s  ·  %s  ·  %s  ·  %s" % [Company.RANKS[rank], _n(int(m["battles"]), "battle"),
+		_n(int(m["kills"]), "kill"), _temper(float(m["steadiness"]))]
+	box.add_child(_label(info, 17, DIM))
+	# Progress to the next rank.
+	if rank < Company.RANK_XP.size() - 1:
+		var bar := ProgressBar.new()
+		bar.min_value = Company.RANK_XP[rank]
+		bar.max_value = Company.RANK_XP[rank + 1]
+		bar.value = int(m["xp"])
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(0, 6)
+		box.add_child(bar)
+	box.add_child(HSeparator.new())
+	return box
+
+
+static func _temper(steadiness: float) -> String:
+	if steadiness > 0.7:
+		return "steady"
+	if steadiness > 0.4:
+		return "dependable"
+	return "jumpy"
+
+
+func _fill_honour() -> void:
+	_clear_list()
+	_list_title.text = "ROLL OF HONOUR  ·  %d fallen" % Company.fallen.size()
+	if Company.fallen.is_empty():
+		_list.add_child(_label("No man of this company has fallen yet.", 20, DIM))
+		return
+	for i in range(Company.fallen.size() - 1, -1, -1):
+		var f: Dictionary = Company.fallen[i]
+		_list.add_child(_label("%s %s" % [f["rank"], f["name"]], 22, Color.WHITE))
+		_list.add_child(_label("Fell on day %d  ·  %s  ·  %s" % [
+			int(f["day"]), _n(int(f["battles"]), "battle"), _n(int(f["kills"]), "kill")], 17, DIM))
+		_list.add_child(HSeparator.new())
+
+
+# ---------------------------------------------------------------- actions
+
+func _on_hire() -> void:
+	var m := Company.hire_recruit()
+	if not m.is_empty():
+		Company.march_note = "%s joins the company." % Company.title(m)
+		Company.results_unseen = false
+		_refresh()
+
+
+func _on_march() -> void:
+	Company.results_unseen = false
+	Company.march_on()
+	get_tree().change_scene_to_file(BATTLE)
+
+
+func _on_honour() -> void:
+	_showing_honour = not _showing_honour
+	_refresh()
+
+
+func _on_menu() -> void:
+	Company.save()
+	get_tree().change_scene_to_file(MENU)

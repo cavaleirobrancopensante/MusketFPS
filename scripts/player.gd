@@ -76,6 +76,7 @@ var strike_charge := 0.0
 var blocking := false
 var block_held := false
 
+var kills := 0
 var aim_wanted := false
 var aim_amount := 0.0 # 0 = hip, 1 = fully sighted
 
@@ -106,16 +107,16 @@ func _ready() -> void:
 	add_child(camera)
 	camera.make_current()
 
-	if Settings.use_3d:
-		third_person = Settings.third_person
-		rig = Rig3D.new()
-		rig.kind = "officer"
-		rig.manual = true
-		add_child(rig)
-		var ctrl := PlayerBody.new()
-		ctrl.player = self
-		ctrl.rig = rig
-		add_child(ctrl)
+	# Your own body: arms and musket in first person, the whole officer in third.
+	third_person = Settings.third_person
+	rig = Rig3D.new()
+	rig.kind = "officer"
+	rig.manual = true
+	add_child(rig)
+	var ctrl := PlayerBody.new()
+	ctrl.player = self
+	ctrl.rig = rig
+	add_child(ctrl)
 	_update_camera()
 
 

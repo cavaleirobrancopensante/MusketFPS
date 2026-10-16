@@ -5,28 +5,36 @@ fantasy world with gunpowder, leading a company of musketeers against hordes
 of lizardmen. Think Mount & Blade: Warband's Napoleonic Wars mod, with the
 mass musket battles of the *Destroyermen* books.
 
-The long-term plan is two layers: a top-down 2D world map, and first-person
-battles. This repo starts with the battle.
+It's growing into a Warband-style sandbox: see [ROADMAP.md](ROADMAP.md).
 
-Built and tested with **Godot 4.7.1**. No art or audio files: every sprite,
-model, animation and sound is generated in code.
+Built and tested with **Godot 4.7.1**. No art or audio files: every model,
+sprite, animation and sound is generated in code.
 
-## Two versions, one game
+## The campaign
 
-The main menu lets you pick how the battle looks. Everything else (AI,
-combat, orders, sounds) is shared, so they can be compared like for like.
+**NEW CAMPAIGN** musters your company: eight men, a few of whom have seen a
+fight. Between battles you're in camp:
 
-| | **2D sprites** | **3D models** |
-|---|---|---|
-| Soldiers & lizardmen | Doom-style pixel sprites with front, side and back views | Low-poly 3D bodies with procedural animation |
-| Your weapon | Hand-drawn first-person musket and arms (2D overlay) | Your own 3D body: arms and musket in first person, the whole officer in third |
-| Camera | First person | First person or third person (over the shoulder), switch with **VIEW** |
-| Cost on a phone | Very cheap | More draw calls (each body is ~25 small meshes) |
+- **Every soldier is a person**: a name, his own reaction, pace and
+  steadiness, experience, rank (Recruit, Musketeer, Veteran, Sergeant),
+  battles fought and kills. Each rank makes a man steadier, quicker to react
+  and reload, and harder with the bayonet.
+- **Battles have consequences.** A man who goes down is either wounded (out
+  for 3 to 10 days) or killed. The dead go on the **roll of honour**.
+- **Aftermath:** lizardmen slain, the bounty, the fallen, the wounded and
+  promotions.
+- **Camp:** hire recruits (25 crowns, raw and shaky), then **MARCH ON**.
+  Marching takes days: wounds heal, and wages fall due every week. Unpaid men
+  may desert. Each warband is bigger than the last.
+- **Falling in battle** isn't the end: your men carry you off the field, but
+  a beaten company loses a quarter of its purse.
+- The campaign saves itself after every battle and march; **CONTINUE** picks
+  it up.
 
 ## The battle
 
-A flat field, you in the centre of a line of 8 musketeers, and three waves of
-lizardmen charging from the distance (8, 14, then 20).
+A flat field, you in the centre of your line, and a lizard warband charging
+from the distance, sometimes in two groups.
 
 ### Touch controls
 
@@ -44,8 +52,8 @@ lizardmen charging from the distance (8, 14, then 20).
 | **HOLD** | The line forms where you are, facing where you look, and stays put |
 | **CHARGE** | Break ranks: every man picks his own fight, fires if he has a shot, and falls back to you when badly wounded. With no enemies left they regroup on you. |
 | **ON COMMAND / AT WILL** | Toggle whether your men wait for your volley order or fire on their own |
-| **MENU** | Back to the main menu |
-| **1ST / 3RD PERSON** | 3D only: switch camera |
+| **MENU** | Back to the main menu (in a campaign, the battle isn't counted) |
+| **1ST / 3RD PERSON** | Switch camera: your arms and musket, or the whole officer over the shoulder |
 
 ### Melee: Mount & Blade swings on a touchscreen
 
@@ -76,7 +84,7 @@ balls.
 
 Keyboard for testing on a PC: WASD move, mouse-drag on the right half to look,
 Space fire (in melee: hold to wind up, release to strike), arrow keys pick the
-blow, right mouse button or Z aim, Q fix/unfix bayonet, E block, V switch view (3D), F volley, 1 follow,
+blow, right mouse button or Z aim, Q fix/unfix bayonet, E block, V switch view, F volley, 1 follow,
 2 hold, 3 toggle fire mode, 4 charge.
 
 ### Your men are not robots
@@ -115,14 +123,16 @@ the same dictionary key.
 
 ## How it's built
 
-Everything is created in code; the scenes are just a menu node and a battle
-node.
+Everything is created in code; the scenes are just a menu, a battle and an
+aftermath node.
 
-- **3D world in both versions.** Only the characters differ: billboard
-  sprites (2D) or primitive-mesh bodies (3D). Trees are drawn with MultiMesh.
-- **Units drive a swappable "visual".** AI code only sets a facing and an
-  animation name (`walk`, `aim`, `reload`...). In 2D that picks a sprite frame
-  for the right view; in 3D the rig turns it into a pose.
+- **Bodies are low-poly 3D** built from primitives; far away they swap to
+  pixel-art sprites as cheap stand-ins. Trees are drawn with MultiMesh.
+- **Units drive their look indirectly.** AI code only sets a facing and an
+  animation name (`walk`, `aim`, `reload`...); the rig turns it into a pose,
+  or the stand-in sprite picks the frame for the right view.
+- **The campaign lives in an autoload** (`company.gd`): the battle reads the
+  fit men from it and reports casualties, kills and the result back.
 - **3D rig (`rig3d.gd`):** the musket (or cleaver hand) is posed in body space
   and eased toward the target pose every frame; arms reach it with two-bone
   IK; legs run a walk cycle from movement speed.
@@ -135,24 +145,26 @@ node.
 
 | File | Purpose |
 |---|---|
-| `scripts/menu.gd` | Main menu: pick 2D or 3D |
-| `scripts/settings.gd` | `Settings` autoload: which version, camera mode |
+| `scripts/menu.gd` | Main menu: continue, new campaign, stress test |
+| `scripts/settings.gd` | `Settings` autoload: camera mode, stress test |
+| `scripts/company.gd` | `Company` autoload: the men, money, calendar, results, saving |
+| `scripts/aftermath.gd` | Between battles: results, the company, hiring, marching on |
 | `scripts/battle.gd` | The battle: world, waves, the company's line and orders, smoke, sound playback |
 | `scripts/player.gd` | Movement, looking, camera, musket, melee and blocking |
-| `scripts/player_body.gd` | 3D: poses your own officer's body from your actions |
+| `scripts/player_body.gd` | Poses your own officer's body from your actions |
 | `scripts/unit.gd` | Shared base for soldiers and lizardmen: visual, animation state, damage, death |
 | `scripts/soldier.gd` | A musketeer: hold slot, load, fire, bayonet |
 | `scripts/lizardman.gd` | A lizardman: charge, telegraphed hack, stagger |
 | `scripts/rig3d.gd` | 3D bodies (soldier, officer, lizardman) and their animation |
 | `scripts/batcher.gd` | Draws every unit in a few instanced batches (3D parts, sprite atlases) |
-| `scripts/hud.gd` | Multi-touch controls, swing joystick, 2D viewmodel and arms, status |
-| `scripts/sprite_factory.gd` | Generates the pixel-art sprite frames |
+| `scripts/hud.gd` | Multi-touch controls, swing buttons, status and messages |
+| `scripts/sprite_factory.gd` | Generates the pixel-art frames used as far stand-ins |
 | `scripts/sound_factory.gd` | Synthesises the sound effects |
 
 ### Performance: big battles on a phone
 
-The menu's **STRESS TEST 2D / 3D** buttons start 50 musketeers against 200
-lizardmen with an FPS counter, so you can see what your own phone handles.
+The menu's **STRESS TEST** starts 50 musketeers against 200 lizardmen with an
+FPS counter, so you can see what your own phone handles.
 
 What makes large battles affordable:
 
@@ -166,23 +178,21 @@ What makes large battles affordable:
 - **Level of detail** (`rig3d.gd`): bodies within 12 m re-pose every frame,
   to 25 m every 2nd frame, beyond that every 4th, off-screen every 8th; small
   details (faces, buttons, teeth) are skipped beyond 16 m.
-- **Far stand-ins** (`unit.gd`): in 3D, units beyond 40 m are drawn as their
-  sprite and switch back to the full model as you approach.
+- **Far stand-ins** (`unit.gd`): units beyond 40 m are drawn as their sprite
+  and switch back to the full model as you approach.
 
 Measured on the 50 vs 200 stress test (game logic per frame on a desktop
 CPU; a phone is roughly 2–3× slower; draw calls with real rendering):
 
-| | Logic before | Logic after | Draw calls before | Draw calls after |
-|---|---|---|---|---|
-| 2D | 17.7 ms | 6.2 ms | 233 | 78 |
-| 3D | 33.9 ms | 12.7 ms | 5,739 | 42 |
-
-Most remaining 2D draw calls are musket smoke puffs.
+| Logic before | Logic after | Draw calls before | Draw calls after |
+|---|---|---|---|
+| 33.9 ms | 12.7 ms | 5,739 | 42 |
 
 ### Tuning knobs
 
-Most of the feel lives in constants at the top of each script: `WAVES`,
-`LINE_SPACING` and `COMPANY_SIZE` in `battle.gd`; `RELOAD_TIME`, `SPREAD`,
+Most of the feel lives in constants at the top of each script: ranks,
+experience, wages, recruit cost and wound chance in `company.gd`;
+`LINE_SPACING` in `battle.gd`; `RELOAD_TIME`, `SPREAD`,
 `AIM_SPREAD`, `AIM_FOV`, `FIX_TIME` and the `SWINGS` table (reach, arc, damage, knockback per blow) in
 `player.gd`; `reload_time`, `RANGE` and the hit-chance formula in
 `soldier.gd`; `speed`, `ATTACK_DAMAGE` and `WINDUP_TIME` in `lizardman.gd`.
@@ -190,13 +200,13 @@ First-person 3D poses are the tables at the top of `player_body.gd`.
 
 ### Headless smoke test
 
-`godot --headless --path . --fixed-fps 60 -- --autotest` plays the 2D battle
-with automatic volleys, bayonet fighting and blocking, and prints the result.
-Add `--3d` for the 3D version, and `--tp` for third person. This catches
-script errors without a phone.
+`godot --headless --path . --fixed-fps 60 -- --autotest` plays a stand-alone
+battle with automatic volleys, bayonet fighting and blocking, and prints the
+result. Add `--campaign` to play four linked campaign battles (hiring and
+marching in between), `--stress` for the 50 vs 200 battle, or `--tp` for
+third person. This catches script errors without a phone.
 
 ## What's next
 
-See [ROADMAP.md](ROADMAP.md): a Warband-style sandbox, 3D only, built in
-playable milestones (persistent company, campaign map, towns, battle variety,
-enemy types, backgrounds, a living world).
+See [ROADMAP.md](ROADMAP.md). Done: M0 (3D only) and M1 (a company that
+remembers). Next: M2, the campaign map.

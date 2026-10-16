@@ -1,20 +1,29 @@
 extends Control
-## Main menu: pick the 2D (sprites) or 3D (models) version of the battle.
+## Main menu: start a new campaign, continue the saved one, or run the stress
+## test (50 musketeers against 200 lizardmen with an FPS counter).
 ## Built in code like the rest of the game.
 
 const BATTLE := "res://scenes/battle.tscn"
+const CAMP := "res://scenes/aftermath.tscn"
 
 var _tp_check: CheckButton
+var _new_btn: Button
+var _confirm_new := false
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Headless test runs skip the menu: `-- --autotest [--3d]`.
+	# Headless test runs skip the menu:
+	#   -- --autotest [--stress] [--tp]   a stand-alone battle
+	#   -- --autotest --campaign          a new campaign, battle after battle
 	var args := OS.get_cmdline_user_args()
 	if "--autotest" in args or "--shots" in args:
-		Settings.use_3d = "--3d" in args
 		Settings.third_person = "--tp" in args
 		Settings.stress = "--stress" in args
+		if "--campaign" in args:
+			Company.new_campaign()
+		else:
+			Company.active = false
 		get_tree().change_scene_to_file.call_deferred(BATTLE)
 		return
 
@@ -27,7 +36,7 @@ func _ready() -> void:
 	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.add_theme_constant_override("separation", 22)
+	box.add_theme_constant_override("separation", 18)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(box)
 
@@ -39,51 +48,62 @@ func _ready() -> void:
 	box.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "Hold the line against the lizardmen"
+	sub.text = "Lead your company against the lizardmen"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 24)
 	sub.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	box.add_child(sub)
 
-	box.add_child(_button("PLAY  —  2D SPRITES", false))
-	box.add_child(_button("PLAY  —  3D MODELS", true))
+	var cont := _button("CONTINUE", _on_continue)
+	cont.disabled = not Company.has_save()
+	if Company.has_save():
+		box.add_child(cont)
+	_new_btn = _button("NEW CAMPAIGN", _on_new)
+	box.add_child(_new_btn)
 
-	var stress_row := HBoxContainer.new()
-	stress_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	stress_row.add_theme_constant_override("separation", 16)
-	stress_row.add_child(_small_button("STRESS TEST 2D", false))
-	stress_row.add_child(_small_button("STRESS TEST 3D", true))
-	box.add_child(stress_row)
+	var stress := _button("STRESS TEST  (50 vs 200)", _on_stress)
+	stress.custom_minimum_size = Vector2(520, 64)
+	stress.add_theme_font_size_override("font_size", 22)
+	box.add_child(stress)
 
 	_tp_check = CheckButton.new()
-	_tp_check.text = "3D: start in third person"
+	_tp_check.text = "Start battles in third person"
 	_tp_check.button_pressed = Settings.third_person
 	_tp_check.add_theme_font_size_override("font_size", 22)
 	_tp_check.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_tp_check)
 
 
-func _button(text: String, use_3d: bool) -> Button:
+func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(520, 90)
-	b.add_theme_font_size_override("font_size", 32)
-	b.pressed.connect(func(): _start(use_3d))
+	b.custom_minimum_size = Vector2(520, 84)
+	b.add_theme_font_size_override("font_size", 30)
+	b.pressed.connect(cb)
 	return b
 
 
-## 50 musketeers vs 200 lizardmen, with an FPS counter.
-func _small_button(text: String, use_3d: bool) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(252, 64)
-	b.add_theme_font_size_override("font_size", 22)
-	b.pressed.connect(func(): _start(use_3d, true))
-	return b
-
-
-func _start(use_3d: bool, stress := false) -> void:
-	Settings.stress = stress
-	Settings.use_3d = use_3d
+func _on_continue() -> void:
 	Settings.third_person = _tp_check.button_pressed
+	Settings.stress = false
+	if Company.load_campaign():
+		get_tree().change_scene_to_file(CAMP)
+
+
+func _on_new() -> void:
+	# Don't wipe a campaign with one stray tap.
+	if Company.has_save() and not _confirm_new:
+		_confirm_new = true
+		_new_btn.text = "TAP AGAIN: START OVER?"
+		return
+	Settings.third_person = _tp_check.button_pressed
+	Settings.stress = false
+	Company.new_campaign()
+	get_tree().change_scene_to_file(CAMP)
+
+
+func _on_stress() -> void:
+	Settings.third_person = _tp_check.button_pressed
+	Settings.stress = true
+	Company.active = false
 	get_tree().change_scene_to_file(BATTLE)

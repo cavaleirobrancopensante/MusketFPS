@@ -26,13 +26,13 @@ person, and keep your men alive, paid and fed between fights.
 
 Each milestone ends with something playable.
 
-### M0: Clean-up for 3D only
+### M0: Clean-up for 3D only ✅ done
 
 - Remove the 2D game mode and its viewmodel/arms code from the HUD.
 - Keep the sprite atlas only as the far stand-in for 3D units.
 - Menu: New Game / Continue / Stress test.
 
-### M1: A company that remembers
+### M1: A company that remembers ✅ done
 
 The battle becomes a chain of linked fights before the map exists.
 

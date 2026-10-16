@@ -13,6 +13,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Settings="*res://scripts/settings.gd"
+Company="*res://scripts/company.gd"
 
 [display]
 
