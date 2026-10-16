@@ -40,6 +40,7 @@ var eaten := 0 # rations he's already wolfed down (those are gone for good)
 var _dig_t := 0.0
 var _bites := 0 # rations still to eat from the sack in his hands
 var _bite_t := 0.0
+var still := false # a target on the weapon range: stands and takes it
 
 
 func _ready() -> void:
@@ -70,6 +71,11 @@ func _brain(delta: float) -> void:
 		_roar_t = randf_range(5.0, 12.0)
 		battle.play_sound("roar", global_position + Vector3.UP * 1.6, -6.0)
 
+	if still:
+		velocity = Vector3.ZERO
+		face_toward(battle.player.global_position - global_position)
+		set_base_anim("idle")
+		return
 	_watch_player()
 
 	# Staggered: slide back from the blow, can't act.

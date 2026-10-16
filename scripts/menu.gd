@@ -94,6 +94,7 @@ func _ready() -> void:
 		Settings.third_person = "--tp" in args
 		Settings.stress = "--stress" in args
 		Settings.mixed = "--mixed" in args
+		Settings.playground = "--range" in args
 		if "--camp" in args:
 			# A night camp attacked: -- --autotest --camp [--spotted]
 			Company.new_campaign()
@@ -177,20 +178,10 @@ func _ready() -> void:
 	rule_box.add_theme_constant_override("margin_bottom", 8)
 	rule_box.add_child(rule)
 	col.add_child(rule_box)
-	var quick := HBoxContainer.new()
-	quick.add_theme_constant_override("separation", 10)
-	col.add_child(quick)
-	var sk := _button("Skirmish", _on_skirmish)
-	sk.tooltip_text = "A stand-alone fight with muskets, spears, bows and crossbows."
-	sk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	quick.add_child(sk)
-	var stress := _button("Stress test", _on_stress)
-	stress.tooltip_text = "50 musketeers against 200 lizardmen, with a frame counter."
-	stress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	quick.add_child(stress)
-	for b2 in [sk, stress]:
-		b2.custom_minimum_size = Vector2(0, 62)
-		b2.add_theme_font_size_override("font_size", 22)
+	var tests := _button("Tests", _open_tests)
+	tests.custom_minimum_size = Vector2(0, 62)
+	tests.add_theme_font_size_override("font_size", 24)
+	col.add_child(tests)
 
 	var sp := Control.new()
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -228,6 +219,7 @@ func _ready() -> void:
 		Settings.save_prefs()
 		label.call())
 	foot.add_child(gfx)
+	_build_tests()
 	# The music button in the bottom-right corner, away from the menu.
 	MusicBar.attach(self, get_viewport_rect().size - Vector2(84, 84))
 	_build_slots()
@@ -249,6 +241,7 @@ func _on_continue() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	Settings.mixed = false
+	Settings.playground = false
 	Settings.save_prefs()
 	World.is_ready = false # load this slot's land fresh
 	if Company.load_campaign():
@@ -342,6 +335,7 @@ func _on_slot(i: int) -> void:
 		Settings.third_person = _tp_check.button_pressed
 		Settings.stress = false
 		Settings.mixed = false
+		Settings.playground = false
 		Settings.save_prefs()
 		Settings.delete_slot(i)
 		Company.new_campaign()
@@ -362,9 +356,67 @@ func _on_delete(i: int) -> void:
 	_fill_slots()
 
 
+# ---------------------------------------------------------------- tests
+
+var _tests_panel: PanelContainer
+
+
+## Tests: fights outside the campaign, to try things out.
+func _build_tests() -> void:
+	_tests_panel = PanelContainer.new()
+	_tests_panel.add_theme_stylebox_override("panel", UI.box(Color(UI.WOOL, 0.98), 24, 6, 0.3))
+	_tests_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_tests_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_tests_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_tests_panel.custom_minimum_size = Vector2(760, 0)
+	_tests_panel.visible = false
+	add_child(_tests_panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	_tests_panel.add_child(v)
+	v.add_child(UI.heading("Tests", 34))
+	for t in [
+		["Weapon range", "You alone with every weapon: musket, bayonet, pistol, sabre, bow, crossbow and grenades. Send targets or charging lizards when you like. You can't die.", _on_playground],
+		["Skirmish", "A mixed company of muskets, spears, bows and crossbows against three waves.", _on_skirmish],
+		["Stress test", "50 musketeers against 200 lizardmen, with a frame counter, to see what your phone can take.", _on_stress],
+	]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 16)
+		v.add_child(row)
+		var b := _button(t[0], t[2])
+		b.custom_minimum_size = Vector2(230, 66)
+		b.add_theme_font_size_override("font_size", 24)
+		row.add_child(b)
+		var l := Label.new()
+		l.text = t[1]
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		l.add_theme_font_size_override("font_size", 18)
+		l.add_theme_color_override("font_color", UI.SLATE.lightened(0.25))
+		row.add_child(l)
+	var back := _button("Back", func(): _tests_panel.visible = false)
+	back.custom_minimum_size = Vector2(200, 60)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	v.add_child(back)
+
+
+func _open_tests() -> void:
+	_tests_panel.visible = true
+
+
+func _on_playground() -> void:
+	Settings.third_person = _tp_check.button_pressed
+	Settings.stress = false
+	Settings.mixed = false
+	Settings.playground = true
+	Company.active = false
+	Loading.change(BATTLE)
+
+
 func _on_skirmish() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
+	Settings.playground = false
 	Settings.mixed = true
 	Company.active = false
 	Loading.change(BATTLE)
@@ -373,6 +425,7 @@ func _on_skirmish() -> void:
 func _on_stress() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.mixed = false
+	Settings.playground = false
 	Settings.stress = true
 	Company.active = false
 	Loading.change(BATTLE)

@@ -112,6 +112,8 @@ var t_bow_draw := 0.0
 var bow_on_back := false
 var arrow_on := false
 var _sling := false # musket or crossbow slung across the back (an archer's knife fight)
+var _xbow: Node3D # an officer's spare crossbow (the weapon range)
+var t_bow_up := Vector3.ZERO # when set (your own body), how the bow is held
 var _muzzle_z := MUZZLE
 var bayonet_in_hand := false
 var ramrod_on := false
@@ -383,6 +385,12 @@ func _build_soldier() -> void:
 		_leg[side + "_foot"] = _part(body, _box_mesh(Vector3(0.11, 0.07, 0.24)), BLACK, Vector3.ZERO)
 	_build_musket("none" if civ else String(g["primary"]), String(g["secondary"]))
 	if officer:
+		if String(g.get("bow", "")) != "":
+			_build_bow(_bow_owner(), String(g["bow"]))
+		if String(g.get("crossbow", "")) != "":
+			_xbow = Node3D.new()
+			body.add_child(_xbow)
+			_build_crossbow(_xbow, String(g["crossbow"]))
 		if String(g.get("pistol", "pistol")) != "":
 			_build_pistol()
 		if String(g.get("sword", "saber")) != "":
@@ -534,23 +542,37 @@ func _build_missile_weapon(primary: String, secondary: String) -> void:
 	ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 	_p_vis[ramrod] = false
 	if weapon == "crossbow":
-		# Held like a musket: a stock along -Z, the steel prod across the front.
-		var dw := primary == "dwarf_crossbow"
-		var wood := Color(0.3, 0.2, 0.12) if dw else WOOD
 		_muzzle_z = 0.62
-		_part(musket, _box_mesh(Vector3(0.05, 0.08, 0.8)), wood, Vector3(0, -0.02, -0.18)) # stock
-		_part(musket, _box_mesh(Vector3(0.03, 0.03, 0.06)), STEEL, Vector3(0, 0.03, -0.18), Vector3.ZERO, true) # nut
-		for sgn in [-1.0, 1.0]:
-			_part(musket, _box_mesh(Vector3(0.34, 0.03, 0.03)), STEEL if dw else STEEL.darkened(0.2), Vector3(0.16 * sgn, 0.0, -0.56), Vector3(0, -14.0 * sgn, 0))
-		_bow_str_a = _part(musket, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.8, 0.78, 0.7), Vector3.ZERO, Vector3.ZERO, true)
-		_bow_str_b = _part(musket, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.8, 0.78, 0.7), Vector3.ZERO, Vector3.ZERO, true)
-		_place_segment(_bow_str_a, Vector3(0.32, 0.0, -0.48), Vector3(0, 0.03, -0.18))
-		_place_segment(_bow_str_b, Vector3(-0.32, 0.0, -0.48), Vector3(0, 0.03, -0.18))
-		_part(musket, _box_mesh(Vector3(0.12, 0.012, 0.012)), STEEL, Vector3(0, -0.02, -0.62), Vector3.ZERO, true) # stirrup
+		_build_crossbow(musket, primary)
 		return
-	# A bow: two limbs bending back toward the archer from the grip.
+	_build_bow(body, primary)
+
+
+func _bow_owner() -> Node3D:
+	return body
+
+
+## A crossbow on `n` (held like a musket: a stock along -Z, the steel prod
+## across the front, the string spanned back to the nut).
+func _build_crossbow(n: Node3D, primary: String) -> void:
+	var dw := primary == "dwarf_crossbow"
+	var wood := Color(0.3, 0.2, 0.12) if dw else WOOD
+	_part(n, _box_mesh(Vector3(0.05, 0.08, 0.8)), wood, Vector3(0, -0.02, -0.18)) # stock
+	_part(n, _box_mesh(Vector3(0.03, 0.03, 0.06)), STEEL, Vector3(0, 0.03, -0.18), Vector3.ZERO, true) # nut
+	for sgn in [-1.0, 1.0]:
+		_part(n, _box_mesh(Vector3(0.34, 0.03, 0.03)), STEEL if dw else STEEL.darkened(0.2), Vector3(0.16 * sgn, 0.0, -0.56), Vector3(0, -14.0 * sgn, 0))
+	var sa := _part(n, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.8, 0.78, 0.7), Vector3.ZERO, Vector3.ZERO, true)
+	var sb := _part(n, _box_mesh(Vector3(0.008, 0.008, 1.0)), Color(0.8, 0.78, 0.7), Vector3.ZERO, Vector3.ZERO, true)
+	_place_segment(sa, Vector3(0.32, 0.0, -0.48), Vector3(0, 0.03, -0.18))
+	_place_segment(sb, Vector3(-0.32, 0.0, -0.48), Vector3(0, 0.03, -0.18))
+	_part(n, _box_mesh(Vector3(0.12, 0.012, 0.012)), STEEL, Vector3(0, -0.02, -0.62), Vector3.ZERO, true) # stirrup
+
+
+## A bow in its own node under `parent`: two limbs bending back toward the
+## archer from the grip; the string and the arrow are placed every frame.
+func _build_bow(parent: Node3D, primary: String) -> void:
 	_bow = Node3D.new()
-	body.add_child(_bow)
+	parent.add_child(_bow)
 	var war := primary == "war_bow"
 	var limb := 0.8 if war else 0.55
 	var col := Color(0.5, 0.36, 0.2) if war else Color(0.38, 0.27, 0.16)
@@ -590,19 +612,27 @@ static func _basis_yz(y: Vector3, z: Vector3) -> Basis:
 func _update_bow(k: float) -> void:
 	_bow_draw = lerpf(_bow_draw, t_bow_draw, k)
 	var st := spine.transform
-	if bow_on_back:
-		_bow.transform = Transform3D(_basis_yz(st.basis * Vector3(-0.45, 1.0, 0.0), st.basis * Vector3(0, 0, -1)), st * Vector3(0.0, 0.3, 0.2))
+	var on_back := bow_on_back or (weapon != "bow" and hand_item != "bow")
+	if on_back:
+		_bow.transform = Transform3D(_basis_yz(st.basis * Vector3(-0.45, 1.0, 0.0), st.basis * Vector3(0, 0, -1)), st * Vector3(0.0, 0.3, 0.24))
 	else:
 		var up := Vector3(0.12, 1.0, 0.0) if anim in ["aim", "fire"] else Vector3(0.0, 1.0, 0.3)
-		_bow.transform = Transform3D(_basis_yz(up, Vector3(0, 0, 1)), _hand_l)
+		if t_bow_up != Vector3.ZERO:
+			up = t_bow_up
+		var back := Vector3(0, 0, 1)
+		if aim_pitch != 0.0:
+			var pb := Basis(Basis(Vector3.UP, -_turn) * Vector3.RIGHT, aim_pitch)
+			up = pb * up
+			back = pb * back
+		_bow.transform = Transform3D(_basis_yz(up, back), _hand_l)
 	var a := _bow.transform * _bow_tip_up
 	var b := _bow.transform * _bow_tip_dn
 	var rest := (a + b) * 0.5 + _bow.transform.basis.z * 0.02
-	var nock := rest.lerp(_hand_r, _bow_draw) if not bow_on_back else rest
+	var nock := rest.lerp(_hand_r, _bow_draw) if not on_back else rest
 	_place_segment(_bow_str_a, a, nock)
 	_place_segment(_bow_str_b, nock, b)
-	_p_vis[_bow_arrow] = arrow_on and not bow_on_back
-	if arrow_on and not bow_on_back:
+	_p_vis[_bow_arrow] = arrow_on and not on_back
+	if arrow_on and not on_back:
 		var through := _bow.transform.origin - nock
 		var fwd := through.normalized() if through.length() > 0.15 else Vector3(0, 0, -1)
 		var tail := nock if _bow_draw > 0.3 else _hand_r
@@ -885,6 +915,12 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 
 	if _bow != null:
 		_update_bow(k)
+	if _xbow != null:
+		if hand_item == "crossbow":
+			_xbow.transform = Transform3D(_look_basis(wdir), grip)
+		else:
+			# Slung at the back, nose down.
+			_xbow.transform = Transform3D(_look_basis(st.basis * Vector3(0.25, -1.0, 0.15)), st * Vector3(-0.12, 0.25, 0.24))
 	hand_bayonet.visible = bayonet_in_hand
 	if bayonet_in_hand:
 		var hdir := wdir if weapon in ["musket", "pole"] else (_hand_r - spine.transform * _shoulder_r).normalized().lerp(Vector3(0, 0.3, -1).normalized(), 0.5)

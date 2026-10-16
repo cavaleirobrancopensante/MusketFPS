@@ -70,6 +70,18 @@ const S_STRIKE := {
 	2: [Vector3(-0.32, 1.28, -0.42), Vector3(-0.9, -0.1, -0.45)],
 	3: [Vector3(0.12, 1.4, -0.72), Vector3(0, 0, -1)],
 }
+# The bow (held in the left hand; the right draws). Body space.
+const B_GRIP_READY := Vector3(-0.24, 1.12, -0.45)
+const B_GRIP_AIM := Vector3(-0.1, 1.54, -0.66) # bow arm out, just left of your line of sight
+const B_DRAW_READY := Vector3(-0.1, 1.14, -0.36) # fingers on the string, arrow nocked
+const B_DRAW_AIM := Vector3(0.09, 1.49, -0.16) # drawn to the cheek
+const B_QUIVER := Vector3(0.22, 1.72, 0.18) # over your right shoulder
+const B_UP_READY := Vector3(0.55, 1.0, 0.1)
+const B_UP_AIM := Vector3(-0.38, 1.0, 0.0) # canted, so the upper limb leans clear of the sight
+# The crossbow: held like the musket, butt to the cheek to aim; nose down to span.
+const X_READY := [Vector3(0.18, 1.32, -0.42), Vector3(-0.04, 0.05, -1)]
+const X_AIM := [Vector3(0.0, 1.5, -0.34), Vector3(0, 0.05, -1)]
+const X_SPAN := [Vector3(0.1, 1.08, -0.42), Vector3(0, -0.75, -0.6)]
 const FIX_PATH := [[0.0, "A"], [0.1, "A"], [0.3, "H"], [0.55, "F"], [0.72, "E"], [0.85, "E"], [1.0, "A"]]
 const UNFIX_PATH := [[0.0, "A"], [0.2, "E"], [0.4, "F"], [0.7, "H"], [1.0, "A"]]
 
@@ -106,7 +118,10 @@ func _pose() -> void:
 	rig.ramrod_on = false
 	rig.bayonet_in_hand = false
 	rig.t_lean = 0.0
-	rig.hand_item = player.weapon if player.weapon in ["pistol", "saber"] else ""
+	rig.hand_item = player.weapon if player.weapon in ["pistol", "saber", "bow", "crossbow"] else ""
+	rig.t_bow_draw = 0.0
+	rig.arrow_on = false
+	rig.t_bow_up = Vector3.ZERO
 	rig.t_turn = 0.0
 	rig.t_twist = 0.0
 
@@ -128,7 +143,7 @@ func _pose() -> void:
 		rig.pose_rate = 30.0
 		return
 
-	if player.is_switching() and (player.switch_target in ["pistol", "saber"] or player.switch_from in ["pistol", "saber"]):
+	if player.is_switching() and (player.switch_target in ["pistol", "saber", "bow", "crossbow"] or player.switch_from in ["pistol", "saber", "bow", "crossbow"]):
 		_draw_pose(player.switch_progress())
 		return
 
@@ -185,6 +200,12 @@ func _pose() -> void:
 	if player.weapon == "saber":
 		_saber_pose()
 		return
+	if player.weapon == "bow":
+		_bow_pose()
+		return
+	if player.weapon == "crossbow":
+		_xbow_pose()
+		return
 
 	rig.bayonet_on = true
 	var dir: int = player.swing_dir
@@ -208,18 +229,21 @@ func _draw_pose(sp: float) -> void:
 	var to: String = player.switch_target
 	var first := sp < 0.5
 	var item := from if first else to
-	rig.hand_item = item if item in ["pistol", "saber"] else ""
+	rig.hand_item = item if item in ["pistol", "saber", "bow", "crossbow"] else ""
 	rig.bayonet_on = item == "melee"
 	var stash := func(w: String) -> Vector3:
 		match w:
 			"pistol": return P_HOLSTER
 			"saber": return S_HILT
+			"bow": return Vector3(-0.1, 1.55, 0.2) # over your back
+			"crossbow": return Vector3(-0.1, 1.1, 0.25)
 		return Vector3(0.22, 1.5, 0.12) # over the shoulder for the musket
 	var ready := func(w: String) -> Array:
 		match w:
 			"pistol": return P_READY
 			"saber": return S_IDLE
 			"melee": return MELEE_IDLE
+			"crossbow": return X_READY
 		return READY
 	var k: float = smoothstep(0.0, 0.5, sp) if first else smoothstep(0.5, 1.0, sp)
 	if first:
@@ -234,6 +258,13 @@ func _draw_pose(sp: float) -> void:
 	if rig.hand_item == "":
 		# Musket coming off (or going over) the shoulder: both hands on it.
 		rig.t_hand_l = null
+	elif rig.hand_item == "bow":
+		# The bow comes off your back in the left hand.
+		var bw: Vector3 = stash.call("bow")
+		rig.t_hand_l = bw.lerp(B_GRIP_READY, k) if not first else B_GRIP_READY.lerp(bw, k)
+		rig.t_hand_r = Vector3(0.25, 1.0, -0.05)
+	elif rig.hand_item == "crossbow":
+		rig.t_hand_l = (rig.t_grip as Vector3) + (rig.t_dir as Vector3).normalized() * 0.32
 
 
 func _pistol_pose() -> void:
@@ -346,6 +377,60 @@ func _saber_pose() -> void:
 		rig.t_hand_l = Vector3(-0.24, 1.0, 0.02)
 	else:
 		rig.t_hand_l = Vector3(-0.35, 1.15, 0.05) if dir != 1 else Vector3(-0.3, 1.05, 0.15)
+
+
+## The bow: nocked and held low at the ready; aiming draws it to your cheek
+## (the bow arm out, canted so the limb is clear of your sight). After a shot
+## the drawing hand flies back, reaches over your shoulder for an arrow and
+## brings it to the string.
+func _bow_pose() -> void:
+	_apply_pose([Vector3(0.2, 0.7, 0.1), Vector3(0, 1, 0)], 14.0) # (the musket is slung; this is unused)
+	if player.is_loaded():
+		var a: float = player.aim_amount
+		var k := a * a * (3.0 - 2.0 * a)
+		rig.t_hand_l = B_GRIP_READY.lerp(B_GRIP_AIM, k)
+		rig.t_hand_r = B_DRAW_READY.lerp(B_DRAW_AIM, k)
+		rig.t_bow_up = B_UP_READY.lerp(B_UP_AIM, k)
+		rig.t_bow_draw = 0.15 + 0.85 * k
+		rig.arrow_on = true
+		rig.pose_rate = 18.0
+		return
+	var rp: float = player.reload_progress_of("bow")
+	rig.t_bow_up = B_UP_READY
+	rig.t_hand_l = B_GRIP_READY
+	if rp < 0.12:
+		rig.t_hand_l = B_GRIP_AIM
+		rig.t_bow_up = B_UP_AIM
+		rig.t_hand_r = B_DRAW_AIM + Vector3(0.1, 0.0, 0.12) # loosed: the hand flies back
+		rig.pose_rate = 30.0
+	elif rp < 0.5:
+		rig.t_hand_r = B_QUIVER
+		rig.pose_rate = 10.0
+	else:
+		rig.t_hand_r = B_QUIVER.lerp(B_DRAW_READY, smoothstep(0.5, 0.9, rp))
+		rig.arrow_on = true
+		rig.pose_rate = 10.0
+
+
+## The crossbow: held like a musket and sighted along the stock; after a
+## shot, nose down to span it again, the right hand winding the windlass.
+func _xbow_pose() -> void:
+	if player.is_loaded():
+		var a: float = player.aim_amount
+		var k := a * a * (3.0 - 2.0 * a)
+		_apply_pose([X_READY[0].lerp(X_AIM[0], k), X_READY[1].lerp(X_AIM[1], k)], 30.0)
+		rig.t_hand_l = (rig.t_grip as Vector3) + (rig.t_dir as Vector3).normalized() * 0.32 + Vector3(0, -0.04, 0)
+		return
+	var rp: float = player.reload_progress_of("crossbow")
+	if rp < 0.05:
+		_apply_pose([X_READY[0] + Vector3(0, 0.03, 0.06), X_READY[1] + Vector3(0, 0.1, 0)], 30.0)
+		rig.t_hand_l = (X_READY[0] as Vector3) + (X_READY[1] as Vector3).normalized() * 0.32
+		return
+	_apply_pose(X_SPAN, 9.0)
+	var d: Vector3 = (X_SPAN[1] as Vector3).normalized()
+	rig.t_hand_l = (X_SPAN[0] as Vector3) + d * 0.3
+	var ang := rp * 40.0
+	rig.t_hand_r = (X_SPAN[0] as Vector3) + Vector3(0.1 + 0.06 * cos(ang), 0.08 + 0.06 * sin(ang), 0.06)
 
 
 ## Right-hand waypoints relative to the current target pose.
