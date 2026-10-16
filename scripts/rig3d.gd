@@ -26,6 +26,7 @@ const STEEL := Color(0.62, 0.64, 0.68)
 const GOLD := Color(0.85, 0.68, 0.2)
 const RED := Color(0.58, 0.1, 0.1)
 const PACK := Color(0.3, 0.2, 0.12)
+const HAIR := Color(0.28, 0.18, 0.1)
 const ROLL := Color(0.55, 0.55, 0.5)
 const HIDE := Color(0.3, 0.5, 0.22)
 const HIDE_DARK := Color(0.18, 0.31, 0.13)
@@ -87,6 +88,8 @@ var bayonet: Node3D
 var hand_bayonet: Node3D
 var ramrod: MeshInstance3D
 var cleaver: Node3D
+var shield: Node3D
+var _shield_turn := 0.9 # radians the shield faces off to the left
 var _arm := {} # name -> MeshInstance3D
 var _leg := {}
 var _tail: Array = []
@@ -191,6 +194,9 @@ func _build_soldier() -> void:
 	_part(spine, _box_mesh(Vector3(0.4, 0.3, 0.22)), coat, Vector3(0, -0.08, 0.02))
 	if officer:
 		_part(spine, _box_mesh(Vector3(0.44, 0.04, 0.26)), RED, Vector3(0, 0.02, 0)) # sash
+		_part(spine, _box_mesh(Vector3(0.17, 0.42, 0.02)), WHITE, Vector3(0, 0.32, -0.125)) # lapels
+		_part(spine, _box_mesh(Vector3(0.03, 0.42, 0.025)), GOLD, Vector3(0, 0.32, -0.13)) # buttons
+		_part(spine, _cyl_mesh(0.085, 0.09, 0.07), RED, Vector3(0, 0.6, 0)) # high collar
 		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0))
 		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0))
 	else:
@@ -204,9 +210,21 @@ func _build_soldier() -> void:
 	spine.add_child(head)
 	_part(head, _cyl_mesh(0.06, 0.06, 0.08), SKIN, Vector3(0, -0.02, 0))
 	_part(head, _sphere_mesh(0.11), SKIN, Vector3(0, 0.1, 0))
+	# Face: eyes and nose, hair at the back and sideburns.
+	_part(head, _box_mesh(Vector3(0.025, 0.02, 0.01)), BLACK, Vector3(0.042, 0.125, -0.104))
+	_part(head, _box_mesh(Vector3(0.025, 0.02, 0.01)), BLACK, Vector3(-0.042, 0.125, -0.104))
+	_part(head, _box_mesh(Vector3(0.028, 0.045, 0.035)), SKIN.darkened(0.08), Vector3(0, 0.09, -0.112))
+	_part(head, _box_mesh(Vector3(0.21, 0.13, 0.09)), HAIR, Vector3(0, 0.12, 0.065))
+	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(0.105, 0.08, -0.01))
+	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(-0.105, 0.08, -0.01))
 	if officer:
-		_part(head, _box_mesh(Vector3(0.42, 0.12, 0.1)), BLACK, Vector3(0, 0.22, 0)) # bicorne
-		_part(head, _box_mesh(Vector3(0.05, 0.05, 0.02)), GOLD, Vector3(0.0, 0.25, -0.05))
+		# Bicorne worn side to side: a crescent, tallest in the middle.
+		_part(head, _cyl_mesh(0.118, 0.118, 0.05), BLACK, Vector3(0, 0.19, 0))
+		_part(head, _box_mesh(Vector3(0.27, 0.15, 0.05)), BLACK, Vector3(-0.115, 0.26, 0), Vector3(0, 0, 20))
+		_part(head, _box_mesh(Vector3(0.27, 0.15, 0.05)), BLACK, Vector3(0.115, 0.26, 0), Vector3(0, 0, -20))
+		_part(head, _box_mesh(Vector3(0.5, 0.012, 0.055)), GOLD, Vector3(0, 0.196, 0)) # gold edging
+		_part(head, _cyl_mesh(0.035, 0.035, 0.012), RED, Vector3(-0.07, 0.28, -0.032), Vector3(90, 0, 0)) # cockade
+		_part(head, _cyl_mesh(0.016, 0.016, 0.014), GOLD, Vector3(-0.07, 0.28, -0.036), Vector3(90, 0, 0))
 	else:
 		_part(head, _cyl_mesh(0.115, 0.105, 0.22), BLACK, Vector3(0, 0.28, 0)) # shako
 		_part(head, _box_mesh(Vector3(0.2, 0.02, 0.08)), BLACK, Vector3(0, 0.18, -0.12))
@@ -293,6 +311,12 @@ func _build_lizard() -> void:
 	_segment("l_fore", 0.1, HIDE, _arm)
 	_arm["r_hand"] = _part(body, _sphere_mesh(0.06), HIDE_DARK, Vector3.ZERO)
 	_arm["l_hand"] = _part(body, _box_mesh(Vector3(0.12, 0.06, 0.12)), BONE, Vector3.ZERO)
+	# Round shield on the left arm.
+	shield = Node3D.new()
+	body.add_child(shield)
+	_part(shield, _cyl_mesh(0.32, 0.32, 0.03), STEEL, Vector3(0, 0, 0.012), Vector3(90, 0, 0))
+	_part(shield, _cyl_mesh(0.3, 0.3, 0.045), WOOD, Vector3.ZERO, Vector3(90, 0, 0))
+	_part(shield, _sphere_mesh(0.07), STEEL, Vector3(0, 0, -0.025))
 	cleaver = Node3D.new()
 	body.add_child(cleaver)
 	_part(cleaver, _box_mesh(Vector3(0.035, 0.035, 0.32)), WOOD, Vector3(0, 0, -0.12))
@@ -390,6 +414,11 @@ func _update_lizard(delta: float, kh: float) -> void:
 	var fdir := (_hand_r - er).normalized()
 	cleaver.transform = Transform3D(_look_basis(fdir), _hand_r)
 	jaw.rotation.x = _jaw * 0.6
+	# Shield faces off to the side normally, square to the front when raised.
+	var turn_target := 0.15 if anim == "shield" else 0.95
+	_shield_turn = lerpf(_shield_turn, turn_target, 1.0 - exp(-12.0 * delta))
+	var sdir := Basis(Vector3.UP, _shield_turn) * Vector3.FORWARD
+	shield.transform = Transform3D(_look_basis(sdir), _hand_l + sdir * 0.06)
 	# Tail: hangs back from the hips and sways as he runs.
 	var base := Vector3(0, _hip_y + 0.05, 0.18)
 	var sway := sin(anim_time * 9.0) * clampf(move_speed / 4.0, 0.15, 1.0)
@@ -471,6 +500,13 @@ func _npc_pose() -> void:
 				t_hand_r = Vector3(0.6, 1.5, 0.2)
 				t_hand_l = Vector3(-0.6, 1.5, 0.2)
 				t_jaw = 0.8
+			"shield":
+				# Hunched behind the shield, cleaver drawn back.
+				t_lean = 0.35
+				t_hand_l = Vector3(-0.08, 1.22, -0.5)
+				t_hand_r = Vector3(0.42, 1.05, 0.08)
+				t_jaw = 0.3
+				pose_rate = 18.0
 		return
 
 	t_lean = 0.0
@@ -501,6 +537,12 @@ func _npc_pose() -> void:
 			t_dir = Vector3(0, 0.05, -1)
 			t_lean = 0.25
 			pose_rate = 30.0
+		"block":
+			# Musket held crosswise high, catching the blow on the stock.
+			t_grip = Vector3(0.32, 1.48, -0.34)
+			t_dir = Vector3(-1, 0.15, -0.1)
+			t_lean = -0.08
+			pose_rate = 22.0
 
 
 # ---------------------------------------------------------------- geometry

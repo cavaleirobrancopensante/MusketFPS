@@ -12,6 +12,7 @@ extends CharacterBody3D
 signal fired(hit: bool)
 signal melee_hit(count: int)
 signal blocked
+signal struck_shield # your blow landed on a lizardman's shield
 signal hurt
 signal died
 
@@ -390,6 +391,7 @@ func _apply_melee() -> void:
 	var knock: float = data["knock"] * (1.0 + strike_charge * 0.5)
 	var right := global_transform.basis.x
 	var count := 0
+	var shielded := 0
 	for c in candidates:
 		if count >= int(data["targets"]):
 			break
@@ -401,10 +403,20 @@ func _apply_melee() -> void:
 			push = (push + right * 0.6).normalized()
 		elif swing_dir == Swing.RIGHT:
 			push = (push - right * 0.6).normalized()
-		e.take_damage(damage, self)
-		e.stagger(push * knock, 0.35 + 0.25 * strike_charge)
+		# A charged blow (70%+) smashes through a raised shield.
+		var result: String = e.receive_blow(damage, self, strike_charge >= 0.7)
+		if result == "blocked":
+			shielded += 1
+			continue
+		if result == "hit":
+			e.stagger(push * knock, 0.35 + 0.25 * strike_charge)
 		count += 1
-	battle.play_sound_ui("stab" if count > 0 else "swish", -2.0 if count > 0 else -6.0)
+	if count > 0:
+		battle.play_sound_ui("stab", -2.0)
+	elif shielded == 0:
+		battle.play_sound_ui("swish", -6.0)
+	if shielded > 0:
+		struck_shield.emit()
 	melee_hit.emit(count)
 
 
@@ -428,7 +440,7 @@ func _fire() -> void:
 	if not result.is_empty():
 		var collider: Object = result["collider"]
 		if collider != null and collider.has_method("take_damage"):
-			collider.call("take_damage", 100.0, self)
+			collider.call("take_damage", 100.0, self) # shields don't stop musket balls
 			hit = true
 
 	var right := camera.global_transform.basis.x

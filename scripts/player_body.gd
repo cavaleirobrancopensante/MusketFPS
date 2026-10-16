@@ -14,7 +14,7 @@ const Rig3D := preload("res://scripts/rig3d.gd")
 const READY := [Vector3(0.19, 1.34, -0.46), Vector3(-0.04, 0.05, -1)]
 ## Sighting: stock at the cheek, barrel straight down your line of sight, so
 ## the front sight sits just under the crosshair. Grip x 0 = centred on the eye.
-const AIM := [Vector3(0.0, 1.5, -0.42), Vector3(0, 0.09, -1)]
+const AIM := [Vector3(0.0, 1.52, -0.42), Vector3(0, 0.07, -1)]
 const EYE := Vector3(0, 1.64, 0.02) # matches the first-person camera
 const UPRIGHT := [Vector3(0.02, 0.98, -0.56), Vector3(0, 1, -0.25)]
 const MELEE_IDLE := [Vector3(0.16, 1.28, -0.3), Vector3(0, 0.28, -1)]
@@ -98,6 +98,11 @@ func _pose() -> void:
 			if a > 0.0:
 				var k := a * a * (3.0 - 2.0 * a)
 				_apply_pose([READY[0].lerp(AIM[0], k), READY[1].lerp(AIM[1], k)], 40.0)
+				if k > 0.5:
+					# Left hand cupped under the forestock, close to the lock,
+					# so the barrel and front sight stay clear.
+					var d: Vector3 = (AIM[1] as Vector3).normalized()
+					rig.t_hand_l = AIM[0] + d * 0.2 + Vector3(0, -0.065, 0)
 			else:
 				_apply_pose(READY, 14.0)
 			return

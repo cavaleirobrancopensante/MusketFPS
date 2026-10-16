@@ -145,6 +145,9 @@ func _update_sprite_frame() -> void:
 	if n > 1:
 		idx = int(anim_time * float(ANIM_FPS.get(anim, 6.0))) % n
 	var key := "%s_%s_%d" % [view, anim, idx]
+	if not frames.has(key):
+		# No dedicated frames (e.g. a soldier's block): use the guard pose.
+		key = "%s_guard_0" % view if frames.has("%s_guard_0" % view) else "%s_idle_0" % view
 	if key != _tex_key and frames.has(key):
 		_tex_key = key
 		sprite.texture = frames[key]

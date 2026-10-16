@@ -17,7 +17,7 @@ const MENU := "res://scenes/menu.tscn"
 const MAX_SOUNDS := 24
 
 enum FireMode { ON_COMMAND, AT_WILL }
-enum Order { FOLLOW, HOLD }
+enum Order { FOLLOW, HOLD, CHARGE }
 
 const COMPANY_SIZE := 8
 const LINE_SPACING := 1.5 # metres between men in the line
@@ -94,6 +94,13 @@ func order_follow() -> void:
 	hud.show_message("Company — follow me!", 1.5)
 
 
+## Break ranks: every man picks his own fight (see soldier.gd). With no
+## enemies left they regroup on you as if following.
+func order_charge() -> void:
+	order = Order.CHARGE
+	hud.show_message("CHARGE! At them, lads!", 1.5)
+
+
 func order_hold() -> void:
 	order = Order.HOLD
 	_snap_line_to_player() # the line forms where you're looking, then stays
@@ -124,6 +131,14 @@ func is_at_will() -> bool:
 
 func is_following() -> bool:
 	return order == Order.FOLLOW
+
+
+func is_holding() -> bool:
+	return order == Order.HOLD
+
+
+func is_charging() -> bool:
+	return order == Order.CHARGE
 
 
 func loaded_count() -> int:
@@ -268,7 +283,7 @@ func on_enemy_died(e) -> void:
 # ---------------------------------------------------------------- loop
 
 func _physics_process(_delta: float) -> void:
-	if order == Order.FOLLOW and player.alive:
+	if order != Order.HOLD and player.alive:
 		var p: Vector3 = player.global_position
 		var pf := _player_forward()
 		if rad_to_deg(pf.angle_to(line_forward)) > REALIGN_ANGLE:
@@ -286,6 +301,8 @@ func _process(delta: float) -> void:
 		order_follow()
 	if Input.is_action_just_pressed("order_hold"):
 		order_hold()
+	if Input.is_action_just_pressed("order_charge"):
+		order_charge()
 	if Input.is_action_just_pressed("toggle_fire_mode"):
 		toggle_fire_mode()
 
@@ -338,13 +355,14 @@ func _on_player_died() -> void:
 ## player's musket on a timer so every code path runs without a human.
 var _at_swing_t := 0.0
 var _at_dir := 0
-var _at_stats := {"swings": 0, "hits": 0, "blocks": 0}
+var _at_stats := {"swings": 0, "hits": 0, "blocks": 0, "shielded": 0}
 
 
 func _run_autotest(delta: float) -> void:
 	if _at_stats["swings"] == 0 and not player.melee_hit.is_connected(_at_on_hit):
 		player.melee_hit.connect(_at_on_hit)
 		player.blocked.connect(func(): _at_stats["blocks"] += 1)
+		player.struck_shield.connect(func(): _at_stats["shielded"] += 1)
 	_autotest_timer += delta
 	if _autotest_timer > 1.5:
 		_autotest_timer = 0.0
@@ -352,6 +370,8 @@ func _run_autotest(delta: float) -> void:
 		player.request_fire()
 		if wave == 2 and not is_at_will():
 			toggle_fire_mode()
+		if wave == 3 and not is_charging():
+			order_charge()
 
 	# Melee: face the nearest lizardman, bayonet when close, cycle all four blows.
 	var near := nearest_enemy(player.global_position, 6.0)
@@ -438,6 +458,7 @@ func _setup_input() -> void:
 	_add_key("swing_right", KEY_RIGHT)
 	_add_key("swing_down", KEY_DOWN)
 	_add_key("order_follow", KEY_1)
+	_add_key("order_charge", KEY_4)
 	_add_key("order_hold", KEY_2)
 	_add_key("toggle_fire_mode", KEY_3)
 
