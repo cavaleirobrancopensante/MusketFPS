@@ -150,6 +150,11 @@ func _ready() -> void:
 	await Loading.step(f[5], "Fog over the unknown...")
 	_update_fog(true)
 	_update_camera()
+	if World.pending_rest > 0.0:
+		# Resting in the town you just left.
+		World.waiting = true
+		_rest_until = World.hours + World.pending_rest
+		World.pending_rest = 0.0
 	Loading.done(self)
 
 
@@ -912,7 +917,9 @@ func _tap(screen: Vector2) -> void:
 			_follow = true
 			return
 	for st in World.gen.settlements:
-		if bool(World.places[int(st["id"])]["known"]) and tap.distance_to(Vector2(st["x"], st["y"])) < 4.0:
+		var reach: float = World.SETTLEMENT_REACH.get(st["kind"], 3.5) + 1.0
+		var seen: bool = bool(World.places[int(st["id"])]["known"]) or World.explored[Gen.idx(int(st["x"]), int(st["y"]))] == 1
+		if seen and tap.distance_to(Vector2(st["x"], st["y"])) < reach:
 			World.go_to(Vector2i(st["x"], st["y"]), {"kind": "settlement", "id": int(st["id"])})
 			_follow = true
 			return
@@ -1009,6 +1016,12 @@ func _visit(st: Dictionary) -> void:
 	elif World.is_raided(id):
 		text = "Burned. The lizards have been here; the people who are left have nothing to sell."
 		buttons.append(["LEAVE", _popup_close])
+	elif not _test:
+		# Into the town itself: on foot the first time, its menu after that.
+		World.stop()
+		Company.visiting = id
+		_go("res://scenes/town.tscn")
+		return
 	else:
 		match kind:
 			"village":
