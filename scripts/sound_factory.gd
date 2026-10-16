@@ -41,6 +41,9 @@ static func build_all() -> Dictionary:
 		"storm": storm(),
 		"surf": surf(),
 		"crack": crack(),
+		"bow": bow(),
+		"crossbow": crossbow(),
+		"crank": crank(),
 	}
 
 
@@ -200,6 +203,44 @@ static func thud() -> AudioStreamWAV:
 		var t := float(i) / RATE
 		lp += 0.1 * (_noise() - lp)
 		b[i] = lp * exp(-t / 0.03) + sin(TAU * 90.0 * t) * exp(-t / 0.04) * 0.5
+	return _to_wav(b)
+
+
+## A bowstring let go: a low twang that dies fast, and the hiss of the shaft.
+static func bow() -> AudioStreamWAV:
+	var b := _buf(0.45)
+	var lp := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var f := 110.0 + 40.0 * exp(-t / 0.02)
+		var twang := (sin(TAU * f * t) + 0.5 * sin(TAU * f * 2.01 * t) + 0.25 * sin(TAU * f * 3.03 * t)) * exp(-t / 0.07)
+		lp += 0.3 * (_noise() - lp)
+		var hiss := (_noise() - lp) * exp(-pow((t - 0.05) / 0.04, 2.0)) * 0.35
+		b[i] = twang + hiss + _noise() * exp(-t / 0.003) * 0.5
+	return _to_wav(b)
+
+
+## A crossbow's release: the hard snap of the steel prod and a wooden thunk.
+static func crossbow() -> AudioStreamWAV:
+	var b := _buf(0.4)
+	var lp := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		lp += 0.12 * (_noise() - lp)
+		var snap := _noise() * exp(-t / 0.004)
+		var thunk := sin(TAU * (180.0 - 150.0 * t) * t) * exp(-t / 0.05)
+		var ring := sin(TAU * 640.0 * t) * exp(-t / 0.09) * 0.3
+		b[i] = snap * 0.9 + thunk + lp * exp(-t / 0.03) * 2.0 + ring
+	return _to_wav(b)
+
+
+## A windlass winding a crossbow back: a run of ratchet clicks.
+static func crank() -> AudioStreamWAV:
+	var b := _buf(0.5)
+	for i in b.size():
+		var t := float(i) / RATE
+		var ph := fmod(t, 0.07)
+		b[i] = (_noise() * 0.6 + sin(TAU * 2900.0 * t) * 0.4) * exp(-ph / 0.006)
 	return _to_wav(b)
 
 

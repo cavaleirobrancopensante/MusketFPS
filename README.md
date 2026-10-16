@@ -145,6 +145,9 @@ Where every man stands when a fight starts. The tactical map fills the left
 and centre of the screen: you are the star, the enemy's side is at the top,
 every man is a dot in his tag's colour, the wagon is a box. On the right:
 
+- **MIXED** (with ONE LINE and PIKES AHEAD): spears and pikes two paces in
+  front, muskets in the line with crossbows on its wings, bows in a rank
+  behind (they shoot over the line).
 - **Tags**: a dropdown of groups (Musketeers and Pikes to begin with); **NEW**
   makes another (Ranged 2, Reserve, whatever you like). Tap a man's tag
   button to put him in the selected tag.
@@ -289,7 +292,52 @@ story, a rumour that marks a nest or a town on your map, or a task (bring
 food for a hungry family, pay a debt, fight the lizards who took a brother).
 Now and then something else happens (a child, a dog, a guard, a drink).
 Win enough trust, or help with what they need, and they **join you**: a real
-recruit with a spear, under the Natives tag.
+recruit with the weapon they brought from home (see below).
+
+### Natives: spears, bows and crossbows
+
+What a recruit brings depends on their trade and people:
+
+- **Hunters, herders, woodcutters** bring a **hunting bow** (the Vellish a
+  tall **war bow**) and a hatchet or long knife. Tag: Bows.
+- **The town watch** brings a **crossbow**, a padded jack and a kettle hat
+  (Vellish guards, war bows). Tag: Crossbows.
+- **Dwarves** fight with **dwarf crossbows** and spears, never bows.
+- **Everyone else** brings a **spear** and a wool tunic. Tag: Spears.
+
+They're cheaper and weaker than your musketeers, but there are more of them
+and their arrows can be bought. In battle:
+
+- **Bows** loose every 2 to 3 seconds out to 36 m (war bows 46 m, harder
+  hitting). With a comrade in the way, an archer **arcs his arrow over the
+  line** instead of holding fire, so bows can stand behind the muskets.
+  Arrows show in flight and stay stuck in the ground. A raised lizard shield
+  catches them.
+- **Crossbows** take longer to span than a musket (nose down, winding the
+  windlass), shoot flat and hit hard, and wait for a clear line like a musket.
+- **Spears** fight like the pikes: in front, long reach.
+- Up close, archers and crossbowmen fight with the knife or hatchet.
+- After a win, about half the arrows and bolts can be picked up again (they
+  go on the loot pile).
+
+Each man's pouch holds what his weapon shoots: cartridges, arrows or bolts.
+SHARE EVENLY gives each kind to the men who use it. Change a man's weapon on
+the Company screen and his old ammunition goes back to the wagon.
+
+### Powder and lead
+
+Nobody in this land sells cartridges. You **make them**: 1 lb of powder and
+3 lb of lead make 40 (MAKE CARTRIDGES in the wagon's logistics, and in a
+town's menu). **Lead** is sold in towns, cities and holds. **Powder** is sold
+only by the **dwarves**, who blast their mines with it, and it's dear.
+You start with a pound of powder and a little lead saved from the wreck.
+
+### Markets
+
+A town's MARKET sells food and rum, arrows (villages and towns), bolts and
+lead (towns and holds), bows, spears, crossbows, padded jacks and kettle
+hats (towns), war bows (Vellish towns), and powder and dwarf crossbows (dwarf
+holds). Your Trade skill lowers every price.
 
 ### Your character sheet (YOU)
 
@@ -488,8 +536,10 @@ when a comrade is in the way (steadier men are more careful). Aimed shots
 are tight, hip shots scatter. Lizard shields don't stop balls, but they will
 stop thrown javelins once the skirmishers arrive.
 
-All of it lives in `projectiles.gd`: a new weapon (arrow, javelin, round
-shot) is one row in its `KINDS` table.
+All of it lives in `projectiles.gd`: a new weapon is one row in its `KINDS`
+table. Arrows and bolts are there now: drawn as shafts with pale
+fletching, arcing (an archer works out the angle, and a high arc to clear
+the line), stuck in the ground for a while after they land.
 
 ### Your men are not robots
 
@@ -591,7 +641,9 @@ aftermath node.
 ### Performance: big battles on a phone
 
 The menu's **STRESS TEST** starts 50 musketeers against 200 lizardmen with an
-FPS counter, so you can see what your own phone handles.
+FPS counter, so you can see what your own phone handles. (**SKIRMISH** on
+the menu is a smaller stand-alone fight with a mixed company: muskets,
+spears, bows and crossbows against three waves.)
 
 What makes large battles affordable:
 
@@ -610,6 +662,14 @@ What makes large battles affordable:
   few draw calls; grass fades out by distance instead of popping.
 - **Far stand-ins** (`unit.gd`): units beyond 40 m are drawn as their sprite
   and switch back to the full model as you approach.
+- **Time-sliced thinking** (`unit.gd`): a unit decides every 2nd physics
+  frame (a lizard far from the fight every 4th), each on its own beat so the
+  work spreads evenly; walking still happens every rendered frame, so it
+  looks smooth.
+- **Waves arrive over several frames** (`battle.gd`): 16 bodies a frame, so
+  200 lizards don't freeze the game for a moment when they appear.
+- **Cheap far bodies** (`batcher.gd`): beyond 16 m, body parts are plain
+  boxes (12 triangles) instead of rounded ones (about 100).
 
 Measured on the 50 vs 200 stress test (game logic per frame on a desktop
 CPU; a phone is roughly 2–3× slower; draw calls with real rendering):
@@ -617,6 +677,10 @@ CPU; a phone is roughly 2–3× slower; draw calls with real rendering):
 | Logic before | Logic after | Draw calls before | Draw calls after |
 |---|---|---|---|
 | 33.9 ms | 12.7 ms | 5,739 | 42 |
+
+The speed pass (time-slicing, staggered waves, cheap far bodies) took the
+200-lizard wave from 7.3 to 4.6 ms a frame on the same desktop, and its
+worst frame (the wave appearing) from 40 to 9 ms.
 
 ### Tuning knobs
 
@@ -633,7 +697,8 @@ First-person 3D poses are the tables at the top of `player_body.gd`.
 `godot --headless --path . --fixed-fps 60 -- --autotest` plays a stand-alone
 battle with automatic volleys, bayonet fighting and blocking, and prints the
 result. Add `--campaign` to play the beach prologue and then four
-linked campaign battles (buying, sharing out and marching in between), `--stress` for the 50 vs 200 battle, or `--tp` for
+linked campaign battles (buying, sharing out and marching in between), `--stress` for the 50 vs 200 battle, `--mixed` for the
+skirmish with a mixed company (muskets, spears, bows, crossbows), or `--tp` for
 third person. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a
@@ -647,5 +712,6 @@ stash nest, slipping away from (or fighting) warbands on the way.
 See [ROADMAP.md](ROADMAP.md): castaways in a huge unknown land, a
 Warband-style map under fog of war, lizards, two human nations at war,
 dwarves, and the edge your muskets give you. Done: M0, M1, projectiles, kit
-and logistics, the shipwreck prologue, and the first playable map. Next:
-recruiting natives, then the stash.
+and logistics, the shipwreck prologue, the first playable map, settlements,
+and M3 (native spearmen, archers and crossbowmen, powder and lead). Next: the
+stash (M4).

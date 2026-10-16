@@ -475,8 +475,19 @@ func _fill_kit(m: Dictionary) -> void:
 		var spec: Dictionary = Company.PACK[key]
 		var n := int(pack[key])
 		var l: Label = _pack_rows[key]
-		l.text = "%s   %d / %d %s%s" % [spec["name"], n, int(spec["max"]), spec["unit"], "" if n == 1 else "s"]
-		l.add_theme_color_override("font_color", RED if n == 0 else Color.WHITE)
+		var nm := String(spec["name"])
+		var unit := String(spec["unit"])
+		var warn_empty := n == 0
+		if key == "ammo":
+			# What's in his pouch depends on his weapon.
+			var sk := Company.shot_key(m)
+			nm = {"ammo": "Cartridges", "arrows": "Arrows", "bolts": "Bolts", "": "Shot"}[sk]
+			unit = {"ammo": "cartridge", "arrows": "arrow", "bolts": "bolt", "": "shot"}[sk]
+			if sk == "":
+				warn_empty = false
+				nm = "Shot (pike: none needed)"
+		l.text = "%s   %d / %d %s%s" % [nm, n, int(spec["max"]), unit, "" if n == 1 else "s"]
+		l.add_theme_color_override("font_color", RED if warn_empty else Color.WHITE)
 	_doll.queue_redraw()
 
 
@@ -492,7 +503,12 @@ static func _effect(id: String, slot: String) -> String:
 		bits.append("turns %d%% of a hack" % int(float(it["armour"]) * 100))
 	if it.has("pace"):
 		bits.append("%+d%% pace" % int(float(it["pace"]) * 100))
-	if it.has("spread"):
+	if it.has("missile"):
+		bits.append({"arrow": "shoots arrows, %d m" % int(it.get("range", 40)), "bolt": "shoots bolts, %d m" % int(it.get("range", 40))}.get(String(it["missile"]), ""))
+		if it.has("dmg"):
+			bits.append("+%d%% damage" % int((float(it["dmg"]) - 1.0) * 100))
+		bits.append("quick to loose" if float(it["reload"]) < 0.8 else "slow to span")
+	elif it.has("spread"):
 		if float(it["spread"]) < 1.0:
 			bits.append("accurate, slow to load")
 		elif float(it["spread"]) > 1.0:
@@ -627,13 +643,16 @@ func _fill_list() -> void:
 		b.add_theme_font_size_override("font_size", 16)
 		var status := "wounded %dd" % wd if wd > 0 else ("sick" if int(m["sick"]) > 0 else "fit")
 		var warn := ""
-		if int(pack["ammo"]) == 0:
-			warn = " · NO SHOT"
+		var shot := Company.shot_key(m)
+		if int(pack["ammo"]) == 0 and shot != "":
+			warn = " · NO %s" % Company.shot_word(m).to_upper()
 		elif int(pack["rations"]) == 0:
 			warn = " · NO FOOD"
 		var pts := "  [+%d]" % int(m["points"]) if int(m["points"]) > 0 else ""
-		b.text = "%s%s\n%s · morale %d · %d shot · %d food%s" % [Company.title(m), pts, status, int(m["morale"]),
-			int(pack["ammo"]), int(pack["rations"]), warn]
+		var role: String = {"musket": "", "pike": " · pike", "bow": " · bow", "crossbow": " · crossbow"}[Company.role_of(m)]
+		var shot_txt := ("%d %s · " % [int(pack["ammo"]), Company.shot_word(m)]) if shot != "" else ""
+		b.text = "%s%s%s\n%s · morale %d · %s%d food%s" % [Company.title(m), pts, role, status, int(m["morale"]),
+			shot_txt, int(pack["rations"]), warn]
 		if wd > 0 or warn != "":
 			b.add_theme_color_override("font_color", RED if warn != "" else Color(1, 0.75, 0.45))
 		b.custom_minimum_size = Vector2(0, 58)

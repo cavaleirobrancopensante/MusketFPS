@@ -694,7 +694,7 @@ static func _ask_join(p: Dictionary, s: Dictionary, roll: int, trust: int, words
 	if words:
 		score += 5
 	if score >= 0:
-		r["see"] = ["{nm} looks at your men, at the musket, at the road. Then {he} nods once.", "{nm} says something to a neighbour, picks up a spear from the doorway and comes to stand by you.", "{nm} clasps your forearm, soldier-fashion."][roll % 3]
+		r["see"] = ["{nm} looks at your men, at the musket, at the road. Then {he} nods once.", "{nm} says something to a neighbour, fetches {his} weapon from the doorway and comes to stand by you.", "{nm} clasps your forearm, soldier-fashion."][roll % 3]
 		r["say"] = ["yes", "i", "go", "fight", "we"]
 		r["joined"] = true
 		r["dt"] = 10
@@ -757,20 +757,63 @@ static func finish_task(p: Dictionary) -> String:
 	return ""
 
 
-## They join the company: a real man (or woman) on the roll, with a spear.
+## What a recruit brings from home, by trade and people: hunters and
+## herders come with bows, the town watch with crossbows (the Vellish with
+## war bows), smiths and miners with a spear and a padded jack, and most
+## others with a spear. Returns {"gear", "ammo", "tag"}.
+static func native_kit(p: Dictionary) -> Dictionary:
+	var job := String(p.get("job", "farmer"))
+	var fac := String(p.get("faction", "aurest"))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("kit:%s:%s:%s" % [p.get("name", ""), p.get("family", ""), job])
+	var head := String(p.get("hat", ""))
+	if not head in ["cap", "tricorne", "hood", "kettle_hat"]:
+		head = "hood" if rng.randf() < 0.4 else ""
+	var g := {"head": head, "torso": "tunic", "primary": "war_spear", "secondary": ""}
+	var role := "spear"
+	if job in ["hunter", "shepherd", "woodcutter", "charcoal burner", "eel-catcher", "herder"]:
+		role = "bow"
+	elif job == "guard":
+		role = "bow" if fac == "vell" else "crossbow"
+	elif fac == "dwarves" and job in ["smith", "miner", "stonecutter"] and rng.randf() < 0.5:
+		role = "crossbow"
+	elif rng.randf() < (0.35 if fac == "vell" else 0.2):
+		role = "bow"
+	if fac == "dwarves" and role == "bow":
+		role = "crossbow" # dwarves don't hold with bows
+	match role:
+		"bow":
+			g["primary"] = "war_bow" if fac == "vell" and (job in ["hunter", "guard", "woodcutter"] or rng.randf() < 0.3) else "hunting_bow"
+			g["secondary"] = "hatchet" if job in ["woodcutter", "charcoal burner"] or rng.randf() < 0.4 else "long_knife"
+		"crossbow":
+			g["primary"] = "dwarf_crossbow" if fac == "dwarves" else "crossbow"
+			g["secondary"] = "long_knife"
+	if job in ["guard", "smith", "miner", "stonecutter", "mason"]:
+		g["torso"] = "jack"
+		if job == "guard" or fac == "dwarves":
+			g["head"] = "kettle_hat"
+	var ammo: int = {"bow": 24, "crossbow": 16}.get(role, 0)
+	var tag: String = {"bow": "Bows", "crossbow": "Crossbows"}.get(role, "Spears")
+	return {"gear": g, "ammo": ammo, "tag": tag}
+
+
+## They join the company: a real man (or woman) on the roll, with the
+## weapon they brought from home (see native_kit).
 static func recruit(p: Dictionary) -> Dictionary:
 	var s := state(p)
 	s["joined"] = true
 	var m: Dictionary = Company.make_recruit()
 	m["name"] = "%s %s" % [p["name"], p["family"]]
-	m["gear"] = {"head": String(p["hat"]) if String(p["hat"]) in ["cap", "tricorne"] else "", "torso": "shirt", "primary": "spear", "secondary": ""}
-	m["pack"] = {"water": 1, "rations": 2, "ammo": 0}
+	var kit := native_kit(p)
+	m["gear"] = kit["gear"]
+	m["pack"] = {"water": 1, "rations": 2, "ammo": int(kit["ammo"])}
 	m["native"] = p["faction"]
 	m["tongue"] = p["lang"]
 	m["morale"] = 60
-	if not "Natives" in Company.tags:
-		Company.tags.append("Natives")
-	m["tag"] = "Natives"
+	var tag := String(kit["tag"])
+	if not tag in Company.tags:
+		Company.tags.append(tag)
+	m["tag"] = tag
 	Company.roster.append(m)
 	town(int(p["sid"]))["rep"] = int(town(int(p["sid"]))["rep"]) + 1
 	Company.save()

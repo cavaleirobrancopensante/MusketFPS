@@ -75,7 +75,13 @@ var spread_mult := 1.0
 var parry_bonus := 0.0 # strength
 var melee_rate := 1.0 # fitness: how soon he strikes again
 var misfire_chance := MISFIRE_CHANCE
-var ammo := -1 # cartridges in his pack; -1 = as many as he likes (stand-alone battles)
+var ammo := -1 # cartridges (or arrows, bolts) in his pack; -1 = as many as he likes (stand-alone battles)
+## What he shoots: "ball" (musket), "arrow" (bow), "bolt" (crossbow), or ""
+## (a pole arm). Bows loose fast and can arc their arrows over the heads of
+## the line; crossbows are slow to span, flat and hard-hitting.
+var missile := "ball"
+var fire_range := RANGE
+var dmg_mult := 1.0
 var ammo_used := 0
 var _told_empty := false
 
@@ -131,9 +137,13 @@ func _ready() -> void:
 		melee_rate = float(st["melee_rate"])
 		hp = float(st["hp"])
 		ammo = int(record["pack"]["ammo"])
+		missile = String(st.get("missile", "ball"))
+		fire_range = float(st.get("range", RANGE))
+		dmg_mult = float(st.get("dmg", 1.0))
 		if not bool(st["gun"]):
 			pike = true
 			ammo = 0
+			missile = ""
 			reach = float(st["reach"])
 			engage = reach + 1.6
 		loaded = ammo > 0
@@ -188,9 +198,10 @@ func _brain(delta: float) -> void:
 	if not loaded and ammo != 0:
 		reload_left -= delta
 		_ram_sound_t -= delta
-		if _ram_sound_t <= 0.0 and reload_left > 0.8:
+		if _ram_sound_t <= 0.0 and reload_left > 0.8 and missile != "arrow":
 			_ram_sound_t = 0.8 / pace
-			battle.play_sound("ramrod", global_position + Vector3.UP * 1.4, -14.0)
+			# A ramrod in the barrel, or the click of a crossbow's windlass.
+			battle.play_sound("ramrod" if missile == "ball" else "crank", global_position + Vector3.UP * 1.4, -14.0 if missile == "ball" else -12.0)
 		if reload_left <= 0.0:
 			loaded = true
 	_reprime_left -= delta
@@ -198,7 +209,7 @@ func _brain(delta: float) -> void:
 	retarget_timer -= delta
 	if retarget_timer <= 0.0 or not is_valid_target(target):
 		retarget_timer = 0.4
-		target = battle.nearest_enemy(global_position, RANGE)
+		target = battle.nearest_enemy(global_position, fire_range)
 
 	if porter >= 0 and _wagon_duty(delta):
 		return
@@ -239,7 +250,7 @@ func _brain(delta: float) -> void:
 		shot_timer -= delta
 		if shot_timer < 0.0:
 			_shoot()
-	elif loaded and _reprime_left <= 0.0 and (ally or battle.is_at_will()) and dist_t <= RANGE and gap < 1.5:
+	elif loaded and _reprime_left <= 0.0 and (ally or battle.is_at_will()) and dist_t <= fire_range and gap < 1.5:
 		# Shaky men fire sooner and from further out; steady men wait.
 		shot_timer = randf_range(0.3, 1.2) + steadiness * 1.5
 
@@ -432,7 +443,7 @@ func volley() -> void:
 	if not alive or not loaded or _reprime_left > 0.0:
 		return
 	if not is_valid_target(target):
-		target = battle.nearest_enemy(global_position, RANGE)
+		target = battle.nearest_enemy(global_position, fire_range)
 	if is_valid_target(target):
 		# He hears the order, presents, takes aim: a ragged ripple, not a crack.
 		shot_timer = 0.15 + reaction * 0.4 + randf_range(0.0, 0.25) + steadiness * 0.2
@@ -443,8 +454,11 @@ func _shoot() -> void:
 	if not alive or not loaded:
 		return
 	if not is_valid_target(target):
-		target = battle.nearest_enemy(global_position, RANGE)
+		target = battle.nearest_enemy(global_position, fire_range)
 	if not is_valid_target(target):
+		return
+	if missile != "ball":
+		_loose()
 		return
 	var to_t := target.global_position - global_position
 	var d := to_t.length()
@@ -484,6 +498,80 @@ func _shoot() -> void:
 	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult
 	var v: Vector3 = battle.projectiles.spread_dir(aim_point - muzzle, spread) * BALL_SPEED
 	battle.projectiles.fire("ball", muzzle, v, self)
+
+
+const ARROW_SPEED := 48.0
+const BOLT_SPEED := 66.0
+const LOFT := deg_to_rad(28.0) # an arrow arced over the line
+
+
+## A bow or a crossbow. Arrows go low and fast at an open target; with a
+## comrade in the way an archer lofts his arrow over the line instead of
+## holding fire. Crossbows shoot flat, so they wait for a clear line.
+func _loose() -> void:
+	var to_t := target.global_position - global_position
+	face_toward(to_t)
+	var from := global_position + Vector3.UP * 1.5 + to_t.normalized() * 0.4
+	if rig != null and rig.visible:
+		from = rig.muzzle_global()
+	var aim := target.global_position + Vector3.UP * 1.1
+	var tv: Vector3 = target.get("velocity") if target.get("velocity") != null else Vector3.ZERO
+	var speed := ARROW_SPEED if missile == "arrow" else BOLT_SPEED
+	var blocked: bool = battle.projectiles.line_blocked(from, aim, self)
+	var lofted := false
+	if blocked:
+		if missile != "arrow":
+			if randf() < 0.25 + 0.7 * steadiness:
+				shot_timer = randf_range(0.3, 0.7)
+				return
+		else:
+			lofted = true
+	# Lead a moving target by the time of flight (twice: the aim point moves).
+	var v := Vector3.ZERO
+	for i in 2:
+		v = _ballistic(from, aim, speed, lofted)
+		var flat := Vector2(v.x, v.z).length()
+		var t := Vector2(aim.x - from.x, aim.z - from.z).length() / maxf(flat, 0.1)
+		aim = target.global_position + Vector3.UP * 1.1 + tv * t
+	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult
+	v = battle.projectiles.spread_dir(v, spread) * v.length()
+	loaded = false
+	ammo_used += 1
+	if ammo > 0:
+		ammo -= 1
+		if ammo == 0:
+			battle.on_out_of_ammo(self)
+	reload_left = reload_time * randf_range(0.9, 1.15)
+	_ram_sound_t = 0.6
+	play_oneshot("fire", 0.3)
+	battle.play_sound("bow" if missile == "arrow" else "crossbow", from, -6.0)
+	var p: Dictionary = battle.projectiles.fire(missile, from, v, self)
+	p["dmg_mult"] = dmg_mult
+	battle.missile_spent(missile)
+
+
+## Launch velocity to hit `to` from `from`: the flat (fast) solution, or a
+## fixed high arc for a lofted arrow (speed found to land on the target).
+static func _ballistic(from: Vector3, to: Vector3, speed: float, lofted: bool) -> Vector3:
+	var g := 9.8
+	var d := Vector2(to.x - from.x, to.z - from.z)
+	var dh := maxf(d.length(), 0.5)
+	var dy := to.y - from.y
+	var dir := Vector3(d.x, 0, d.y) / dh
+	var ang := 0.0
+	if lofted:
+		ang = LOFT
+		var c := cos(ang)
+		var den := 2.0 * c * c * (dh * tan(ang) - dy)
+		var v := sqrt(g * dh * dh / maxf(den, 0.01))
+		return (dir * c + Vector3.UP * sin(ang)) * v
+	var v2 := speed * speed
+	var disc := v2 * v2 - g * (g * dh * dh + 2.0 * dy * v2)
+	if disc < 0.0:
+		ang = PI * 0.25 # out of reach: the furthest it'll go
+	else:
+		ang = atan((v2 - sqrt(disc)) / (g * dh))
+	return (dir * cos(ang) + Vector3.UP * sin(ang)) * speed
 
 
 ## The fight is won: a cheer, then each man finds something to do, a

@@ -1092,9 +1092,25 @@ func _build_menu() -> void:
 	sc.add_child(_menu_box)
 
 
-func _fill_menu(people := false) -> void:
+func _fill_menu(people := false, market := false) -> void:
 	for c in _menu_box.get_children():
 		c.queue_free()
+	if market:
+		_menu_box.add_child(_label("THE MARKET  ·  %d crowns" % Company.money, 20, GOLD))
+		var load := Company.wagon_load()
+		_menu_box.add_child(_label("Wagon %d / %d kg" % [int(load[0]), int(Company.wagon_kg())], 15, DIM))
+		for o in Company.market_offers(kind, fac):
+			var cr := Company.price(int(o[2]))
+			var have := int(Company.stores.get(o[0], 0)) if Company.CONSUMABLES.has(o[0]) else Company.item_count(String(o[0]))
+			var b := _button("%s  ·  %d cr   (have %d)" % [o[3], cr, have], func():
+				var why := Company.buy_offer(o)
+				_show_toast(why if why != "" else "Bought %s." % o[3])
+				_fill_menu(false, true))
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.disabled = Company.money < cr
+			_menu_box.add_child(b)
+		_menu_box.add_child(_button("BACK", func(): _fill_menu()))
+		return
 	if people:
 		_menu_box.add_child(_label("THE PEOPLE OF %s" % String(st["name"]).to_upper(), 20, GOLD))
 		var met: Array = []
@@ -1117,31 +1133,14 @@ func _fill_menu(people := false) -> void:
 		_menu_box.add_child(_button("BACK", func(): _fill_menu()))
 		return
 	_menu_box.add_child(_label(String(st["name"]).to_upper(), 24, GOLD))
-	_menu_box.add_child(_label("%d crowns  ·  food %d  ·  rum %d" % [Company.money, int(Company.stores["rations"]), int(Company.stores["rum"])], 16, DIM))
+	_menu_box.add_child(_label("%d crowns  ·  food %d  ·  rum %d  ·  cartridges %d  ·  powder %d lb" % [Company.money, int(Company.stores["rations"]), int(Company.stores["rum"]), int(Company.stores["ammo"]), int(Company.stores.get("powder", 0))], 16, DIM))
 	_menu_box.add_child(_button("TALK TO SOMEONE", func(): _fill_menu(true)))
-	var prices := {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}
-	var pr: Array = [prices[kind][0], Company.price(prices[kind][1])]
-	_menu_box.add_child(_button("BUY FOOD: %d rations for %d crowns" % [pr[0], pr[1]], func():
-		if Company.room_for("rations") < int(pr[0]):
-			_show_toast("The wagon is full.")
-		elif Company.money >= int(pr[1]):
-			Company.money -= int(pr[1])
-			Company.stores["rations"] = int(Company.stores["rations"]) + int(pr[0])
-			Company.save()
-			_show_toast("Bought %d rations." % int(pr[0]))
-		else:
-			_show_toast("Not enough crowns.")
-		_fill_menu()))
-	if kind != "village":
-		var rum_cr := Company.price(6)
-		_menu_box.add_child(_button("BUY RUM: 10 tots for %d crowns" % rum_cr, func():
-			if Company.room_for("rum") < 10:
-				_show_toast("The wagon is full.")
-			elif Company.money >= rum_cr:
-				Company.money -= rum_cr
-				Company.stores["rum"] = int(Company.stores["rum"]) + 10
-				Company.save()
-				_show_toast("Bought 10 tots of rum.")
+	var sells := "food, arrows, spears" if kind == "village" else ("powder, lead, bolts, crossbows" if kind == "hold" else "food, rum, lead, bolts, bows, crossbows")
+	_menu_box.add_child(_button("MARKET  (%s)" % sells, func(): _fill_menu(false, true)))
+	if Company.cartridge_batches() > 0:
+		_menu_box.add_child(_button("MAKE %d CARTRIDGES (1 lb powder, 3 lb lead)" % Company.CARTRIDGE_BATCH, func():
+			var n := Company.make_cartridges(1)
+			_show_toast("The men roll %d cartridges by the fire." % n)
 			_fill_menu()))
 	var gv := Company.goods_value(kind)
 	if gv > 0:
@@ -1389,7 +1388,7 @@ func _on_action(a: String) -> void:
 		World._reveal(Vector2(o["x"], o["y"]), 4.0)
 	if bool(r["joined"]):
 		var m := Folk.recruit(p)
-		_log("[color=#8fe08f][b]%s joins your company[/b] (with a spear; the Natives tag).[/color]" % m["name"])
+		_log("[color=#8fe08f][b]%s joins your company[/b] with %s (the %s tag).[/color]" % [m["name"], Company.item_name(String(m["gear"]["primary"])).to_lower(), m["tag"]])
 		_conv_with.walk_off(_gate + Vector3(4, 0, 2))
 		_finish_conv()
 		return

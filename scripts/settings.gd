@@ -13,6 +13,10 @@ var third_person := false
 ## counter, to see what your phone can handle.
 var stress := false
 
+## A skirmish with a mixed company (muskets, spears, bows, crossbows) outside
+## the campaign, from the main menu.
+var mixed := false
+
 ## The save slot in use (1..SLOTS); remembered for CONTINUE.
 var slot := 1
 

@@ -125,6 +125,9 @@ func _ready() -> void:
 	var pk := _button("PIKES AHEAD", _preset_pikes, 0)
 	pk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.add_child(pk)
+	var mx := _button("MIXED", _preset_mixed, 0)
+	mx.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	br.add_child(mx)
 	var done := _button("FIGHT!" if _fighting else "DONE", _on_done, 0)
 	done.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.add_child(done)
@@ -228,7 +231,7 @@ func _refresh() -> void:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 4)
 		var name_b := Button.new()
-		name_b.text = Company.surname_title(m) + (" (pike)" if String(m["gear"]["primary"]) in ["pike", "spear"] else "")
+		name_b.text = Company.surname_title(m) + {"musket": "", "pike": " (pike)", "bow": " (bow)", "crossbow": " (xbow)"}[Company.role_of(m)]
 		name_b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		name_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_b.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
@@ -383,7 +386,7 @@ func _form_line(tag: String, a: Vector2, b: Vector2) -> void:
 func _preset_line() -> void:
 	# Everyone in one line through you, pikes in the middle; the wagon behind.
 	var men := _placed()
-	men.sort_custom(func(m1, m2): return int(m1["tag"] == "Pikes") > int(m2["tag"] == "Pikes"))
+	men.sort_custom(func(m1, m2): return int(Company.role_of(m1) == "pike") > int(Company.role_of(m2) == "pike"))
 	var order: Array = []
 	for i in men.size():
 		order.insert(order.size() / 2 if i % 2 == 0 else (order.size() + 1) / 2, men[i])
@@ -398,10 +401,19 @@ func _preset_line() -> void:
 		_refresh()
 
 
+## Spears and pikes in front, muskets in the line with crossbows on its wings,
+## bows in a rank behind it (they loft their arrows over it).
+func _preset_mixed() -> void:
+	Company.mixed_places(_placed())
+	Company.wagon_plan = [0.0, -12.0]
+	Company.save()
+	_refresh()
+
+
 func _preset_pikes() -> void:
 	# Pikes a few paces ahead in the centre, muskets on the wings and behind.
-	var pikes := _placed().filter(func(m): return String(m["gear"]["primary"]) in ["pike", "spear"])
-	var muskets := _placed().filter(func(m): return not String(m["gear"]["primary"]) in ["pike", "spear"])
+	var pikes := _placed().filter(func(m): return Company.role_of(m) == "pike")
+	var muskets := _placed().filter(func(m): return Company.role_of(m) != "pike")
 	for i in pikes.size():
 		pikes[i]["plan"] = [(i - (pikes.size() - 1) * 0.5) * 1.3, 3.0]
 	var half := muskets.size() / 2

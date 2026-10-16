@@ -91,6 +91,35 @@ const ITEMS := {
 		"desc": "A curved, single-edged blade. Quicker than a bayonet, made for cutting."},
 	"cutlass": {"name": "Ship's cutlass", "slot": "sword", "melee": 40.0, "kg": 1.4, "space": 0.4, "value": 8,
 		"desc": "Short, broad and heavy. A sailor's blade."},
+	# The land's own weapons: what native recruits bring (folk.gd), and what
+	# markets sell. "missile" says what it shoots (and so which store refills
+	# his pack: ammo = cartridges, arrows, bolts); "range" how far he'll loose.
+	"hunting_bow": {"name": "Hunting bow", "slot": "primary", "missile": "arrow", "spread": 1.5, "reload": 0.42, "misfire": 0.0,
+		"range": 36.0, "kg": 1.0, "space": 1.0, "value": 6,
+		"desc": "A short bow of horn and wood. Quick to shoot, light arrows; it can loose over the heads of the line."},
+	"war_bow": {"name": "War bow", "slot": "primary", "missile": "arrow", "spread": 1.25, "reload": 0.5, "misfire": 0.0,
+		"range": 46.0, "dmg": 1.3, "kg": 1.2, "space": 1.2, "value": 14,
+		"desc": "A Vellish longbow, taller than the man. Long range and a heavy shaft, if he has the arms for it."},
+	"crossbow": {"name": "Crossbow", "slot": "primary", "missile": "bolt", "spread": 0.8, "reload": 1.15, "misfire": 0.01,
+		"range": 40.0, "kg": 3.5, "space": 1.2, "value": 20,
+		"desc": "Steel prod and a windlass. Slow to span, flat and hard-hitting: a bolt goes through a lizard's hide."},
+	"dwarf_crossbow": {"name": "Dwarf crossbow", "slot": "primary", "missile": "bolt", "spread": 0.6, "reload": 1.25, "misfire": 0.01,
+		"range": 44.0, "dmg": 1.25, "kg": 4.5, "space": 1.3, "value": 40,
+		"desc": "Dwarf-forged: a prod like a cart spring and a lock that never slips. Worth its weight."},
+	"war_spear": {"name": "Spear", "slot": "primary", "melee": 36.0, "reach": 2.5, "kg": 2.2, "space": 1.3, "value": 5,
+		"desc": "Ash shaft, iron head. The village militia's weapon: cheap, long, and good in a line."},
+	"hatchet": {"name": "Hatchet", "slot": "secondary", "melee": 26.0, "kg": 0.9, "space": 0.3, "value": 2,
+		"desc": "A woodsman's axe. What an archer fights with when they get too close."},
+	"long_knife": {"name": "Long knife", "slot": "secondary", "melee": 22.0, "kg": 0.4, "space": 0.2, "value": 2,
+		"desc": "A hunting knife as long as a forearm."},
+	"tunic": {"name": "Wool tunic", "slot": "torso", "pace": 0.03, "kg": 0.8, "space": 0.4, "value": 1,
+		"desc": "Homespun wool, the colour of the hills."},
+	"jack": {"name": "Padded jack", "slot": "torso", "armour": 0.15, "pace": -0.02, "kg": 2.5, "space": 0.8, "value": 6,
+		"desc": "Layers of quilted linen. Turns a slash, if not a thrust."},
+	"hood": {"name": "Hood", "slot": "head", "kg": 0.3, "space": 0.2, "value": 1,
+		"desc": "A woollen hood and short cape."},
+	"kettle_hat": {"name": "Kettle hat", "slot": "head", "steady": 0.04, "armour": 0.05, "kg": 1.5, "space": 0.6, "value": 7,
+		"desc": "A broad-brimmed iron helmet, the town watch's hat."},
 	# Goods: no use to us, but worth something to someone.
 	"lizard_shield": {"name": "Lizard shield", "slot": "goods", "kg": 4.0, "space": 1.2, "value": 6,
 		"desc": "Hide stretched over a wicker frame. Collectors in the towns pay for them."},
@@ -100,7 +129,17 @@ const ITEMS := {
 		"desc": "Carved bone strung on sinew. The locals think they're lucky, or cursed."},
 }
 ## Weight (kg) and space of a unit of each kind of store.
-const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01]}
+const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01],
+	"arrows": [0.06, 0.005], "bolts": [0.08, 0.005], "powder": [1.0, 0.02], "lead": [1.0, 0.008]}
+## Stores that refill a man's pack "ammo" by what his weapon shoots.
+const SHOT_STORE := {"ball": "ammo", "arrow": "arrows", "bolt": "bolts"}
+const SHOT_WORD := {"ammo": "cartridges", "arrows": "arrows", "bolts": "bolts"}
+## Nobody here makes cartridges: you roll your own from powder and lead.
+## A pound of powder makes CARTRIDGES_PER_POWDER; each takes a lead ball
+## (BALLS_PER_LEAD to the pound).
+const CARTRIDGES_PER_POWDER := 40
+const BALLS_PER_LEAD := 14
+const CARTRIDGE_BATCH := 40 # one evening's work: 1 lb of powder, 3 lb of lead
 const WAGON_KG := 900.0 # before your Logistics skill (see wagon_kg())
 const WAGON_SPACE := 60.0
 ## What each kind of slain enemy may leave behind: [item id, chance per body].
@@ -153,7 +192,8 @@ var fallen: Array = [] # the roll of honour
 var officer := {"kills": 0, "battles": 0, "rank": "Ensign"}
 ## The baggage wagon: spare gear by item id, water (and whether it's foul),
 ## rations, cartridges, rum, and whether the water is served as grog.
-var stores := {"items": {}, "water": 0, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true}
+var stores := {"items": {}, "water": 0, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true,
+	"arrows": 0, "bolts": 0, "powder": 0, "lead": 0}
 var prologue := false # the opening battle is still to be fought
 ## The ship's stores the lizards carried off (muskets, cartridges, guns,
 ## rum): recovering them is the first great objective. Empty once recovered.
@@ -193,7 +233,8 @@ func new_campaign() -> void:
 	results_unseen = false
 	# Captain Harrow's company at full strength, before the battle: a sergeant,
 	# some veterans, mostly musketeers, a few green recruits. All in uniform.
-	stores = {"items": {}, "water": WATER_CART, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true}
+	stores = {"items": {}, "water": WATER_CART, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true,
+		"arrows": 0, "bolts": 0, "powder": 0, "lead": 0}
 	for i in PROLOGUE_MEN:
 		var m := make_recruit()
 		var rank := 3 if i == 0 else (2 if i < 4 else (1 if i < 13 else 0))
@@ -267,10 +308,38 @@ static func item_name(id: String) -> String:
 	return String(ITEMS[id]["name"]) if ITEMS.has(id) else "None"
 
 
+## Which store his pack's "ammo" comes from: "ammo" (cartridges), "arrows",
+## "bolts", or "" for a pole arm.
+static func shot_key(m: Dictionary) -> String:
+	var id := String(m.get("gear", {}).get("primary", "musket"))
+	var it: Dictionary = ITEMS.get(id, {})
+	if it.has("reach"):
+		return ""
+	return String(SHOT_STORE.get(String(it.get("missile", "ball")), "ammo"))
+
+
+## What he is in a fight, by his weapon: "musket", "bow", "crossbow", "pike".
+static func role_of(m: Dictionary) -> String:
+	var id := String(m.get("gear", {}).get("primary", "musket"))
+	var it: Dictionary = ITEMS.get(id, {})
+	if it.has("reach"):
+		return "pike"
+	match String(it.get("missile", "ball")):
+		"arrow": return "bow"
+		"bolt": return "crossbow"
+	return "musket"
+
+
+## The word for what's in his pack: "cartridges", "arrows", "bolts".
+static func shot_word(m: Dictionary) -> String:
+	return String(SHOT_WORD.get(shot_key(m), "shot"))
+
+
 ## Everything his gear does for him, in one place (see ITEMS).
 static func gear_stats(m: Dictionary) -> Dictionary:
 	var st := {"steady": 0.0, "pace": 0.0, "armour": 0.0, "spread": 1.0, "reload": 1.0,
-		"misfire": 0.04, "melee": CLUBBED_DAMAGE, "bayonet": false, "gun": true, "reach": 0.0}
+		"misfire": 0.04, "melee": CLUBBED_DAMAGE, "bayonet": false, "gun": true, "reach": 0.0,
+		"missile": "ball", "range": 40.0, "dmg": 1.0}
 	var gear: Dictionary = m.get("gear", REGULAR_GEAR)
 	for slot in SLOTS:
 		var id := String(gear.get(slot, ""))
@@ -284,12 +353,16 @@ static func gear_stats(m: Dictionary) -> Dictionary:
 			st["spread"] = float(it["spread"])
 			st["reload"] = float(it["reload"])
 			st["misfire"] = float(it["misfire"])
+			st["missile"] = String(it.get("missile", "ball"))
+			st["range"] = float(it.get("range", 40.0))
+			st["dmg"] = float(it.get("dmg", 1.0))
 		if it.has("melee"):
 			st["melee"] = maxf(float(st["melee"]), float(it["melee"]))
 			st["bayonet"] = true
 		if it.has("reach"):
 			st["gun"] = false # a pole arm instead of a musket
 			st["reach"] = float(it["reach"])
+			st["missile"] = ""
 	return st
 
 
@@ -420,8 +493,8 @@ func apply_battle(result: Dictionary) -> void:
 	var looted := clampf(float(result.get("wagon_looted", 0.0)), 0.0, 0.8)
 	if looted > 0.01 and not was_prologue:
 		summary["wagon_looted"] = int(looted * 100)
-		for k in ["rations", "ammo", "rum"]:
-			stores[k] = int(int(stores[k]) * (1.0 - looted))
+		for k in ["rations", "ammo", "rum", "arrows", "bolts", "powder", "lead"]:
+			stores[k] = int(int(stores.get(k, 0)) * (1.0 - looted))
 		var its: Dictionary = stores["items"]
 		for id in its.keys():
 			its[id] = int(round(int(its[id]) * (1.0 - looted)))
@@ -434,13 +507,19 @@ func apply_battle(result: Dictionary) -> void:
 		# Pay: a bounty on every lizardman slain.
 		summary["pay"] = 15 + 5 * int(result["slain"])
 		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
+		# Arrows and bolts can be picked up again: about half are whole.
+		for k in ["arrows", "bolts"]:
+			var spent := int(result.get(k + "_spent", 0))
+			var whole := int(round(spent * randf_range(0.4, 0.6)))
+			if whole > 0:
+				_add_loot(k, whole, true)
 		summary["loot"] = loot.size()
 	else:
 		# A beaten company loses a quarter of its purse and half its baggage;
 		# what the men carry on their backs is all that's sure.
 		summary["pay"] = -int(money * 0.25)
-		for k in ["water", "rations", "ammo"]:
-			stores[k] = int(stores[k]) / 2
+		for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"]:
+			stores[k] = int(stores.get(k, 0)) / 2
 		var items: Dictionary = stores["items"]
 		for id in items.keys():
 			var lost := int(ceil(int(items[id]) * 0.5))
@@ -477,7 +556,8 @@ func _after_prologue(summary: Dictionary) -> void:
 	summary["lost_gear"] = dropped
 	money = 40 # the regiment's pay chest, what's left of it
 	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1},
-		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true}
+		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true,
+		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6}
 	summary["pay"] = 0
 
 
@@ -500,15 +580,17 @@ func recover_kit(m: Dictionary) -> Array:
 			left += 1
 		gear[slot] = ""
 	var pack: Dictionary = m.get("pack", {})
+	var sk := shot_key(m)
 	for k in ["water", "rations", "ammo"]:
 		var n := int(pack.get(k, 0))
 		if n <= 0:
 			continue
-		var k_in := stow(k, n)
+		var store: String = k if k != "ammo" else (sk if sk != "" else "ammo")
+		var k_in := stow(store, n)
 		if k_in > 0:
-			got.append(("water for %d day%s" % [k_in, "" if k_in == 1 else "s"]) if k == "water" else "%d %s" % [k_in, {"rations": "rations", "ammo": "cartridges"}[k]])
+			got.append(("water for %d day%s" % [k_in, "" if k_in == 1 else "s"]) if k == "water" else "%d %s" % [k_in, "rations" if k == "rations" else String(SHOT_WORD.get(store, "shot"))])
 		if k_in < n:
-			_add_loot(k, n - k_in, true)
+			_add_loot(store, n - k_in, true)
 			left += 1
 		pack[k] = 0
 	return [", ".join(got), left]
@@ -562,8 +644,9 @@ func _strip_to_stores(m: Dictionary) -> void:
 		if ITEMS.has(id):
 			add_item(id, 1)
 	var pack: Dictionary = m.get("pack", {})
-	for k in ["rations", "ammo"]:
-		stores[k] = int(stores[k]) + int(pack.get(k, 0))
+	stores["rations"] = int(stores["rations"]) + int(pack.get("rations", 0))
+	var sk := shot_key(m)
+	stores[sk if sk != "" else "ammo"] = int(stores.get(sk if sk != "" else "ammo", 0)) + int(pack.get("ammo", 0))
 
 
 static func _rank_for(xp: int) -> int:
@@ -623,11 +706,18 @@ func equip(m: Dictionary, slot: String, id: String) -> bool:
 	var old := String(gear.get(slot, ""))
 	if old == id:
 		return false
+	var before := shot_key(m)
 	if id != "":
 		add_item(id, -1)
 	if old != "":
 		add_item(old, 1)
 	gear[slot] = id
+	if slot == "primary" and shot_key(m) != before:
+		# A different weapon shoots different things: his pouch goes back to the wagon.
+		var pk: Dictionary = m["pack"]
+		var back := before if before != "" else "ammo"
+		stores[back] = int(stores.get(back, 0)) + int(pk.get("ammo", 0))
+		pk["ammo"] = 0
 	save()
 	return true
 
@@ -638,13 +728,21 @@ func pack_move(m: Dictionary, key: String, amount: int) -> int:
 	var pack: Dictionary = m["pack"]
 	var have := int(pack[key])
 	var cap := int(PACK[key]["max"])
+	var store := key
+	if key == "ammo":
+		store = shot_key(m)
+		if store == "":
+			# A pikeman has nothing to shoot: anything in his pouch goes back.
+			stores["ammo"] = int(stores["ammo"]) + have
+			pack[key] = 0
+			return -have
 	var n := 0
 	if amount > 0:
-		n = mini(amount, mini(int(stores[key]), cap - have))
+		n = mini(amount, mini(int(stores.get(store, 0)), cap - have))
 	else:
 		n = -mini(-amount, have)
 	pack[key] = have + n
-	stores[key] = int(stores[key]) - n
+	stores[store] = int(stores.get(store, 0)) - n
 	return n
 
 
@@ -740,6 +838,10 @@ static func item_label(id: String) -> String:
 		"rations": return "Rations"
 		"ammo": return "Cartridges"
 		"rum": return "Rum (tots)"
+		"arrows": return "Arrows"
+		"bolts": return "Crossbow bolts"
+		"powder": return "Powder (lb)"
+		"lead": return "Lead (lb)"
 		"crowns": return "Crowns"
 	return item_name(id)
 
@@ -778,6 +880,107 @@ func sell_goods(kind: String) -> int:
 	money += v
 	save()
 	return v
+
+
+## The mixed order of battle (the plan's MIXED preset): muskets in a line
+## through you, spears and pikes two paces in front of them, crossbows on the
+## wings of the line, bows in a rank behind (they shoot over it). Sets each
+## man's m["plan"].
+static func mixed_places(men: Array) -> void:
+	var by := {"musket": [], "pike": [], "bow": [], "crossbow": []}
+	for m in men:
+		by[role_of(m)].append(m)
+	var line: Array = []
+	var guns: Array = by["musket"]
+	var xb: Array = by["crossbow"]
+	# Crossbows split to the two ends of the musket line.
+	for i in xb.size():
+		if i % 2 == 0:
+			line.push_front(xb[i])
+		else:
+			line.append(xb[i])
+	var mid := (line.size() + 1) / 2
+	for g in guns:
+		line.insert(mid, g)
+	_row(line, 0.0, 1.5, true)
+	_row(by["pike"], 2.6, 1.4, false)
+	_row(by["bow"], -2.8, 1.6, false)
+
+
+static func _row(men: Array, y: float, gap: float, officer_gap: bool) -> void:
+	var n := men.size()
+	for i in n:
+		var x := (i - (n - 1) * 0.5) * gap
+		if officer_gap:
+			x += gap * 0.5 * (1.0 if x >= 0.0 else -1.0)
+		men[i]["plan"] = [x, y]
+
+
+# ---------------------------------------------------------------- markets and cartridges
+
+## What a settlement sells: [store or item id, how many, crowns before your
+## Trade, label]. Food everywhere; rum in towns; arrows where people hunt;
+## bolts, lead and the town watch's kit in towns; and gunpowder only from the
+## dwarves, who blast their mines with it and sell it dear.
+static func market_offers(kind: String, fac: String) -> Array:
+	var out: Array = []
+	var food: Array = {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}.get(kind, [10, 6])
+	out.append(["rations", food[0], food[1], "%d rations" % food[0]])
+	if kind != "village":
+		out.append(["rum", 10, 6, "10 tots of rum"])
+	if kind != "hold":
+		out.append(["arrows", 20, 3 if fac == "vell" else 4, "20 arrows"])
+	if kind != "village":
+		out.append(["bolts", 10, 5 if fac == "dwarves" else 6, "10 crossbow bolts"])
+		out.append(["lead", 5, 6, "5 lb of lead"])
+	if kind == "hold" or fac == "dwarves":
+		out.append(["powder", 1, 24, "1 lb of blasting powder"])
+		out.append(["dwarf_crossbow", 1, 70, "a dwarf crossbow"])
+	elif kind in ["town", "city"]:
+		out.append(["crossbow", 1, 34, "a crossbow"])
+		out.append(["jack", 1, 10, "a padded jack"])
+		out.append(["kettle_hat", 1, 11, "a kettle hat"])
+	if fac == "vell" and kind != "village":
+		out.append(["war_bow", 1, 22, "a war bow"])
+	elif kind != "hold":
+		out.append(["hunting_bow", 1, 9, "a hunting bow"])
+	if kind != "hold":
+		out.append(["war_spear", 1, 7, "a spear"])
+	return out
+
+
+## Buy one lot of an offer. Returns "" or why not.
+func buy_offer(offer: Array) -> String:
+	var id := String(offer[0])
+	var n := int(offer[1])
+	var cr := price(int(offer[2]))
+	if money < cr:
+		return "Not enough crowns."
+	if room_for(id) < n:
+		return "The wagon is full."
+	money -= cr
+	stow(id, n)
+	save()
+	return ""
+
+
+## How many batches of cartridges the wagon's powder and lead make.
+func cartridge_batches() -> int:
+	var lead_per := int(ceil(float(CARTRIDGE_BATCH) / BALLS_PER_LEAD))
+	return mini(int(stores.get("powder", 0)) * CARTRIDGES_PER_POWDER / CARTRIDGE_BATCH, int(stores.get("lead", 0)) / lead_per)
+
+
+## Roll cartridges: melt lead into balls, measure powder into paper tubes.
+## Returns how many were made.
+func make_cartridges(batches := 1) -> int:
+	var b := mini(batches, cartridge_batches())
+	if b <= 0:
+		return 0
+	stores["powder"] = int(stores["powder"]) - b * CARTRIDGE_BATCH / CARTRIDGES_PER_POWDER
+	stores["lead"] = int(stores["lead"]) - b * int(ceil(float(CARTRIDGE_BATCH) / BALLS_PER_LEAD))
+	stores["ammo"] = int(stores["ammo"]) + b * CARTRIDGE_BATCH
+	save()
+	return b * CARTRIDGE_BATCH
 
 
 ## Two men to haul the wagon if nobody has been given the job: the two
@@ -921,28 +1124,41 @@ func days_left(key: String) -> float:
 
 ## Share the wagon's `key` out so every pack ends up as even as possible.
 func share_evenly(key: String) -> void:
-	# Pool what the men carry with the wagon, then deal it back out.
-	var pool := int(stores[key])
-	for m in roster:
+	if key == "ammo":
+		# Each kind of shot goes to the men whose weapon fires it; pikemen
+		# hand theirs in.
+		for m in roster:
+			if shot_key(m) == "":
+				stores["ammo"] = int(stores["ammo"]) + int(m["pack"]["ammo"])
+				m["pack"]["ammo"] = 0
+		for store in SHOT_WORD:
+			_share(key, store, roster.filter(func(mm): return shot_key(mm) == store))
+	else:
+		_share(key, key, roster.duplicate())
+	save()
+
+
+## Pool what `men` carry of pack `key` with the wagon's `store`, then deal it back out.
+func _share(key: String, store: String, men: Array) -> void:
+	var pool := int(stores.get(store, 0))
+	for m in men:
 		pool += int(m["pack"][key])
 		m["pack"][key] = 0
-	stores[key] = pool
+	stores[store] = pool
 	var cap := int(PACK[key]["max"])
-	var men: Array = roster.duplicate()
 	if men.is_empty():
 		return
-	var each := mini(cap, int(stores[key]) / men.size())
+	var each := mini(cap, int(stores[store]) / men.size())
 	for m in men:
 		m["pack"][key] = each
-		stores[key] = int(stores[key]) - each
+		stores[store] = int(stores[store]) - each
 	# The remainder, one each, while it lasts.
 	for m in men:
-		if int(stores[key]) <= 0:
+		if int(stores[store]) <= 0:
 			break
 		if int(m["pack"][key]) < cap:
 			m["pack"][key] = int(m["pack"][key]) + 1
-			stores[key] = int(stores[key]) - 1
-	save()
+			stores[store] = int(stores[store]) - 1
 
 
 ## How uneven the rations are: [the least a man carries, the most].
@@ -1177,7 +1393,7 @@ func load_campaign() -> bool:
 	var items: Dictionary = stores["items"]
 	for id in items:
 		items[id] = int(items[id])
-	for k in ["water", "rations", "ammo"]:
-		stores[k] = int(stores[k])
+	for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"]:
+		stores[k] = int(stores.get(k, 0))
 	active = true
 	return true
