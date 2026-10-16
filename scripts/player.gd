@@ -197,7 +197,8 @@ func is_aiming() -> bool:
 
 ## Throw a grenade: musket in your left hand, wind back, lob it in an arc.
 func throw_grenade() -> void:
-	if not alive or grenades <= 0 or throw_left > 0.0 or switch_left > 0.0 or swing_phase != "idle":
+	if not alive or grenades <= 0 or throw_left > 0.0 or switch_left > 0.0 or swing_phase != "idle" \
+			or asleep_left > 0.0 or wake_left > 0.0:
 		return
 	grenades -= 1
 	throw_left = THROW_TIME

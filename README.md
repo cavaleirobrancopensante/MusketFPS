@@ -268,6 +268,16 @@ Opened with **YOU** on the map, in camp and on the Company screen.
 - **Levels:** experience from every battle, your kills and victories; each
   level gives 1 attribute point and 2 skill points (3 with Wits 7+).
 
+### Loading screen
+
+Going to the map, into a battle or into the shipwreck covers the screen with
+a title, a bar, what's being done ("Raising hills and mountains...",
+"Mustering the company...") and a tip. The heavy scenes build in stages
+and move the bar after each one, weighted by how long that stage takes, so
+it fills at the pace of the wait; a new land is generated phase by phase.
+The battle sounds are synthesised once per run and kept. Run with
+`-- --loadtimes` to print how long each stage took.
+
 ### The Company screen (COMPANY & KIT)
 
 - **Left:** the man himself, a live 3D figure wearing his actual kit (drag to

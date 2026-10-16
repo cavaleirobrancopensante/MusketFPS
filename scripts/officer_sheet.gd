@@ -546,7 +546,7 @@ func _on_pick(id: String) -> void:
 func _on_back() -> void:
 	Company.save()
 	var back := String(get_tree().get_meta("officer_back", CAMP))
-	get_tree().change_scene_to_file(back)
+	Loading.change(back)
 
 
 ## `-- --officer`: spend points, change kit, check the numbers move.

@@ -16,6 +16,7 @@ Settings="*res://scripts/settings.gd"
 Company="*res://scripts/company.gd"
 World="*res://scripts/world.gd"
 Music="*res://scripts/music.gd"
+Loading="*res://scripts/loading.gd"
 
 [display]
 

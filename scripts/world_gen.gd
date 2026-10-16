@@ -66,6 +66,37 @@ func generate(s: int) -> void:
 	_fords()
 
 
+## The same, a phase at a time, calling `report(fraction, what's next)` (and
+## awaiting it) between phases so a loading screen can show progress.
+func generate_staged(s: int, report: Callable) -> void:
+	seed = s
+	_rng.seed = s
+	var n := SIZE * SIZE
+	height.resize(n)
+	terrain.resize(n)
+	moist.resize(n)
+	river.resize(n)
+	road.resize(n)
+	region.resize(n)
+	river.fill(0)
+	road.fill(0)
+	var phases := [
+		[_heights, "Raising hills and mountains..."], [_rivers, "Cutting the rivers..."],
+		[_terrain, "Forests, swamps and plains..."], [_regions, "Drawing the borders..."],
+		[_place_settlements, "Founding villages and towns..."], [_roads, "Laying the roads..."],
+		[_fords, "Finding the fords..."]]
+	# How long each phase takes, roughly (ms on a desktop), so the bar keeps pace.
+	var cost := [550, 270, 50, 180, 120, 250, 10]
+	var total := 0.0
+	for c in cost:
+		total += c
+	var done := 0.0
+	for i in phases.size():
+		await report.call(done / total, phases[i][1])
+		(phases[i][0] as Callable).call()
+		done += cost[i]
+
+
 static func idx(x: int, y: int) -> int:
 	return y * SIZE + x
 

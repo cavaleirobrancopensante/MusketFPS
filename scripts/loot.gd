@@ -237,7 +237,7 @@ func _done() -> void:
 		return
 	Company.loot = []
 	Company.save()
-	get_tree().change_scene_to_file(CAMP)
+	Loading.change(CAMP)
 
 
 ## `-- --loottest`: a pile of loot, take everything, drop some, check the weight.

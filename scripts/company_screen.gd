@@ -604,7 +604,7 @@ func _build_right() -> Control:
 	var you := _button("YOU", 17, func():
 		Company.save()
 		get_tree().set_meta("officer_back", "res://scenes/company.tscn")
-		get_tree().change_scene_to_file("res://scenes/officer.tscn"))
+		Loading.change("res://scenes/officer.tscn"))
 	you.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acts.add_child(you)
 	var back := _button("BACK", 17, _on_back)
@@ -675,7 +675,7 @@ func _on_issue() -> void:
 
 func _on_back() -> void:
 	Company.save()
-	get_tree().change_scene_to_file(CAMP)
+	Loading.change(CAMP)
 
 
 # ---------------------------------------------------------------- headless check

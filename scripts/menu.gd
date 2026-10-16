@@ -157,11 +157,11 @@ func _on_continue() -> void:
 	if Company.load_campaign():
 		# Saved before the prologue was fought: back to the beach.
 		if Company.prologue:
-			get_tree().change_scene_to_file(BATTLE)
+			Loading.change(BATTLE)
 		elif Company.results_unseen or not World.has_save():
-			get_tree().change_scene_to_file(CAMP)
+			Loading.change(CAMP)
 		else:
-			get_tree().change_scene_to_file(MAP) # back on the road
+			Loading.change(MAP) # back on the road
 
 
 # ---------------------------------------------------------------- save slots
@@ -254,7 +254,7 @@ func _on_slot(i: int) -> void:
 		Settings.delete_slot(i)
 		Company.new_campaign()
 		World.reset() # a new land for a new campaign
-		get_tree().change_scene_to_file(INTRO) # the shipwreck, then the beach
+		Loading.change(INTRO) # the shipwreck, then the beach
 	else:
 		Settings.use_slot(i)
 		_on_continue()
@@ -274,4 +274,4 @@ func _on_stress() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = true
 	Company.active = false
-	get_tree().change_scene_to_file(BATTLE)
+	Loading.change(BATTLE)
