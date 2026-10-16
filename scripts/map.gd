@@ -21,6 +21,7 @@ const BATTLE := "res://scenes/battle.tscn"
 const CAMP := "res://scenes/aftermath.tscn"
 const COMPANY_SCREEN := "res://scenes/company.tscn"
 const MENU := "res://scenes/menu.tscn"
+const MusicBar := preload("res://scripts/music_bar.gd")
 
 const CELL := 2.0 # world units per cell
 const HS := 60.0 # height scale
@@ -127,6 +128,7 @@ func _ready() -> void:
 	World.event.connect(_on_event)
 	World.scouts_back.connect(_on_scouts_back)
 	World.revealed.connect(func(): _rebuild_fog())
+	Music.set_context("camp" if World.camping else "map")
 	_target = _world_pos(World.pos)
 	_apply_battle_result()
 	_update_fog(true)
@@ -582,6 +584,7 @@ func _build_hud() -> void:
 	pv.add_child(_popup_buttons)
 	_logistics = LogisticsPopup.new()
 	root.add_child(_logistics)
+	MusicBar.attach(root, Vector2(12, 140))
 
 
 func _panel(col: Color) -> PanelContainer:
@@ -681,6 +684,7 @@ func _push_toast(t: String) -> void:
 # ---------------------------------------------------------------- frame
 
 func _process(delta: float) -> void:
+	Music.set_context("camp" if World.camping else "map")
 	if not _popup.visible and not _logistics.visible and (_scout_panel == null or not _scout_panel.visible):
 		World.tick(delta)
 	if _rest_until > 0.0 and World.hours >= _rest_until:

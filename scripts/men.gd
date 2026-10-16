@@ -32,7 +32,7 @@ const ATTR_HELP := {
 const ATTR_BASE := 5
 const ATTR_MAX := 15
 const LEVEL_XP := 100
-const POINTS_PER_LEVEL := 2
+const POINTS_PER_LEVEL := 1
 
 const MORALE_START := 60
 const MORALE_WORDS := [[80, "Eager"], [60, "Content"], [40, "Grumbling"], [20, "Sullen"], [0, "Mutinous"]]

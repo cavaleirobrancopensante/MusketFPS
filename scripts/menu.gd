@@ -8,6 +8,7 @@ const BATTLE := "res://scenes/battle.tscn"
 const CAMP := "res://scenes/aftermath.tscn"
 const COMPANY := "res://scenes/company.tscn"
 const INTRO := "res://scenes/intro.tscn"
+const MusicBar := preload("res://scripts/music_bar.gd")
 const MAP := "res://scenes/map.tscn"
 
 var _tp_check: CheckButton
@@ -68,6 +69,8 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 18)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(box)
+	Music.set_context("menu")
+	MusicBar.attach(self, Vector2(20, 20))
 
 	var title := Label.new()
 	title.text = "MUSKET FPS"
