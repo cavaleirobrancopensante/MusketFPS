@@ -188,6 +188,8 @@ func _refresh() -> void:
 	elif fresh:
 		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
 		var pay := int(r["pay"])
+		if int(r.get("rations_spoiled", 0)) > 0 and int(r.get("wagon_looted", 0)) == 0:
+			t += "Lizards got into the wagon. You took back what they grabbed, but they'd eaten %d rations before you cut them down.\n" % int(r["rations_spoiled"])
 		if int(r.get("wagon_looted", 0)) > 0:
 			t += "[color=#%s]Lizards plundered the wagon: %d%% of its stores are gone.[/color]\n" % [_hex(RED), int(r["wagon_looted"])]
 		if pay >= 0:

@@ -116,6 +116,8 @@ var _shield_turn := 0.9 # radians the shield faces off to the left
 var _arm := {} # name -> part id
 var _leg := {}
 var _tail: Array = []
+var _sack := -1 # a ration sack (lizards eating from the wagon)
+var _kneel := 0.0 # 0 standing, 1 down on one knee (smoothed)
 
 # --- Part records (parallel arrays, indexed by part id).
 var _nodes: Array = [] # the few Node3Ds parts ride on (body, spine, head...)
@@ -434,6 +436,8 @@ func _build_lizard() -> void:
 	_part(shield, _cyl_mesh(0.32, 0.32, 0.03), STEEL, Vector3(0, 0, 0.012), Vector3(90, 0, 0))
 	_part(shield, _cyl_mesh(0.3, 0.3, 0.045), WOOD, Vector3.ZERO, Vector3(90, 0, 0))
 	_part(shield, _sphere_mesh(0.07), STEEL, Vector3(0, 0, -0.025))
+	_sack = _part(body, _box_mesh(Vector3(0.2, 0.16, 0.14)), Color(0.72, 0.6, 0.4), Vector3.ZERO)
+	_p_vis[_sack] = false
 	cleaver = Node3D.new()
 	body.add_child(cleaver)
 	_part(cleaver, _box_mesh(Vector3(0.035, 0.035, 0.32)), WOOD, Vector3(0, 0, -0.12))
@@ -584,11 +588,21 @@ func _update_lizard(delta: float, kh: float) -> void:
 	var fdir := (_hand_r - er).normalized()
 	cleaver.transform = Transform3D(_look_basis(fdir), _hand_r)
 	jaw.rotation.x = _jaw * 0.6
+	_p_vis[_sack] = anim == "eat"
+	if anim == "eat":
+		_set_pos(_sack, _hand_l + Vector3(0.06, 0.02, -0.05))
 	# Shield faces off to the side normally, square to the front when raised.
 	var turn_target := 0.15 if anim == "shield" else 0.95
 	_shield_turn = lerpf(_shield_turn, turn_target, 1.0 - exp(-12.0 * delta))
 	var sdir := Basis(Vector3.UP, _shield_turn) * Vector3.FORWARD
 	shield.transform = Transform3D(_look_basis(sdir), _hand_l + sdir * 0.06)
+	if anim == "rummage" or anim == "eat":
+		# Both claws busy with the loot: cleaver thrust through the belt at
+		# his right hip, shield slung on his back.
+		var st := spine.transform
+		cleaver.transform = Transform3D(_look_basis(st.basis * Vector3(0.15, -1.0, 0.25)), st * Vector3(0.3, 0.08, 0.05))
+		var back := st.basis * Vector3(0, 0.15, 1.0)
+		shield.transform = Transform3D(_look_basis(back), st * Vector3(0, 0.36, 0.3))
 	# Tail: hangs back from the hips and sways as he runs.
 	var base := Vector3(0, _hip_y + 0.05, 0.18)
 	var sway := sin(anim_time * 9.0) * clampf(move_speed / 4.0, 0.15, 1.0)
@@ -608,6 +622,11 @@ func _update_legs(delta: float) -> void:
 	else:
 		_walk_phase = lerpf(_walk_phase, roundf(_walk_phase / PI) * PI, 1.0 - exp(-8.0 * delta))
 	var amp := clampf(move_speed / 4.0, 0.0, 1.0) * 0.55
+	var want_kneel := 1.0 if (kind != "lizard" and anim in ["kneel", "tend"]) else 0.0
+	_kneel = move_toward(_kneel, want_kneel, delta * 3.0)
+	if _kneel > 0.01:
+		_kneel_legs()
+		return
 	for side in ["l", "r"]:
 		var sgn := 1.0 if side == "l" else -1.0
 		var swing := sin(_walk_phase) * amp * sgn
@@ -634,6 +653,29 @@ func _update_legs(delta: float) -> void:
 			_set_pos(_leg[side + "_foot"], ankle + Vector3(0, -0.0, -0.05))
 	# A little bob in the stride.
 	spine.position.y = _hip_y + absf(cos(_walk_phase)) * amp * 0.06
+
+
+## Down on the right knee: left foot planted ahead, right shin flat behind.
+func _kneel_legs() -> void:
+	var k := _kneel
+	var hy := lerpf(_hip_y, 0.52, k)
+	spine.position.y = hy
+	for side in ["l", "r"]:
+		var sx := _hip_x * (-1.0 if side == "l" else 1.0)
+		var hip := Vector3(sx, hy, 0.0)
+		var stand_knee := Vector3(sx, _hip_y - 0.44, 0.0)
+		var stand_ankle := Vector3(sx, _hip_y - 0.88, 0.0)
+		var knee: Vector3
+		var ankle: Vector3
+		if side == "l":
+			knee = stand_knee.lerp(Vector3(sx, 0.5, -0.42), k)
+			ankle = stand_ankle.lerp(Vector3(sx, 0.06, -0.36), k)
+		else:
+			knee = stand_knee.lerp(Vector3(sx, 0.07, 0.08), k)
+			ankle = stand_ankle.lerp(Vector3(sx, 0.08, 0.5), k)
+		_place_segment(_leg[side + "_thigh"], hip, knee)
+		_place_segment(_leg[side + "_shin"], knee, ankle)
+		_set_pos(_leg[side + "_foot"], ankle + Vector3(0, -0.0, -0.05))
 
 
 ## Poses for the AI-driven units, from the same animation names the 2D
@@ -670,6 +712,21 @@ func _npc_pose() -> void:
 				t_hand_r = Vector3(0.6, 1.5, 0.2)
 				t_hand_l = Vector3(-0.6, 1.5, 0.2)
 				t_jaw = 0.8
+			"rummage":
+				# Bent into the wagon bed, both claws digging through the stores.
+				t_lean = 0.85
+				var r := sin(anim_time * 7.0)
+				t_hand_r = Vector3(0.22, 0.95 + 0.14 * r, -0.8 - 0.1 * r)
+				t_hand_l = Vector3(-0.22, 0.95 - 0.14 * r, -0.8 + 0.1 * r)
+				t_jaw = 0.25
+				pose_rate = 16.0
+			"eat":
+				# A sack held up to the snout, tearing at it.
+				t_lean = 0.25
+				t_hand_l = Vector3(-0.06, 1.42, -0.62)
+				t_hand_r = Vector3(0.12, 1.36 + 0.06 * sin(anim_time * 9.0), -0.58)
+				t_jaw = 0.5 + 0.5 * sin(anim_time * 14.0)
+				pose_rate = 14.0
 			"shield":
 				# Hunched behind the shield, cleaver drawn back.
 				t_lean = 0.35
@@ -707,6 +764,32 @@ func _npc_pose() -> void:
 			t_dir = Vector3(0, 0.05, -1)
 			t_lean = 0.25
 			pose_rate = 30.0
+		"cheer":
+			# Musket held high over his head, shaken at the sky.
+			var b := sin(anim_time * 6.0)
+			t_grip = Vector3(0.2, 1.95 + 0.08 * b, -0.05)
+			t_dir = Vector3(-0.2, 1, 0.05)
+			t_hand_l = Vector3(-0.05, 2.05 + 0.08 * b, -0.02)
+			t_lean = -0.12
+			pose_rate = 12.0
+		"kneel":
+			# Down on one knee going through a dead lizard's things: musket
+			# grounded at his right side, left hand searching.
+			t_grip = Vector3(0.32, 0.45, -0.05)
+			t_dir = Vector3(0, 1, 0.05)
+			t_hand_l = Vector3(-0.12, 0.18 + 0.08 * sin(anim_time * 5.0), -0.55 + 0.06 * cos(anim_time * 3.0))
+			t_lean = 0.45
+			pose_rate = 10.0
+		"tend":
+			# Kneeling by a fallen comrade, musket laid down, both hands
+			# binding a wound.
+			t_grip = Vector3(0.5, 0.06, -0.1)
+			t_dir = Vector3(0, 0, -1)
+			var w := sin(anim_time * 3.5)
+			t_hand_r = Vector3(0.1, 0.22 + 0.06 * w, -0.55)
+			t_hand_l = Vector3(-0.12, 0.22 - 0.06 * w, -0.5)
+			t_lean = 0.55
+			pose_rate = 9.0
 		"block":
 			# Musket held crosswise high, catching the blow on the stock.
 			t_grip = Vector3(0.32, 1.48, -0.34)

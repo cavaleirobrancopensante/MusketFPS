@@ -364,7 +364,12 @@ func apply_battle(result: Dictionary) -> void:
 		survivors.append(m)
 	roster = survivors
 
-	# Lizards that got into the wagon carried off a share of what was in it.
+	# Food the looters ate before they were cut down is gone.
+	var spoiled := mini(int(result.get("rations_spoiled", 0)), int(stores["rations"]))
+	if spoiled > 0 and not was_prologue:
+		stores["rations"] = int(stores["rations"]) - spoiled
+		summary["rations_spoiled"] = spoiled
+	# Looters still alive at the end (a lost fight) carried off their share.
 	var looted := clampf(float(result.get("wagon_looted", 0.0)), 0.0, 0.8)
 	if looted > 0.01 and not was_prologue:
 		summary["wagon_looted"] = int(looted * 100)
