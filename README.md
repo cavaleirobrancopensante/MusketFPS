@@ -195,10 +195,8 @@ with automatic volleys, bayonet fighting and blocking, and prints the result.
 Add `--3d` for the 3D version, and `--tp` for third person. This catches
 script errors without a phone.
 
-## Next steps
+## What's next
 
-1. Play both versions on the phone and decide which way to go.
-2. A sword or sabre as a second melee weapon (faster, no reach).
-3. Directional blocking, if the simple block turns out too easy.
-4. A second rank, and "present arms" before the volley.
-5. The world map layer.
+See [ROADMAP.md](ROADMAP.md): a Warband-style sandbox, 3D only, built in
+playable milestones (persistent company, campaign map, towns, battle variety,
+enemy types, backgrounds, a living world).
