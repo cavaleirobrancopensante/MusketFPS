@@ -22,6 +22,7 @@ const CAMP := "res://scenes/aftermath.tscn"
 const COMPANY_SCREEN := "res://scenes/company.tscn"
 const MENU := "res://scenes/menu.tscn"
 const MusicBar := preload("res://scripts/music_bar.gd")
+const Vignette := preload("res://scripts/vignette.gd")
 const PLAN := "res://scenes/battleplan.tscn"
 
 const CELL := 2.0 # world units per cell
@@ -598,13 +599,19 @@ func _build_hud() -> void:
 	_popup.add_child(pv)
 	_popup_title = _label("", 26, Color(0.95, 0.8, 0.45))
 	pv.add_child(_popup_title)
+	# A little live scene of what's happening (vignette.gd) beside the text.
+	_popup_row = HBoxContainer.new()
+	_popup_row.add_theme_constant_override("separation", 14)
+	pv.add_child(_popup_row)
+	_popup_scene = Control.new()
+	_popup_row.add_child(_popup_scene)
 	_popup_text = RichTextLabel.new()
 	_popup_text.bbcode_enabled = true
 	_popup_text.fit_content = true
 	_popup_text.scroll_active = false
 	_popup_text.custom_minimum_size = Vector2(580, 0)
 	_popup_text.add_theme_font_size_override("normal_font_size", 19)
-	pv.add_child(_popup_text)
+	_popup_row.add_child(_popup_text)
 	_popup_buttons = HBoxContainer.new()
 	_popup_buttons.add_theme_constant_override("separation", 10)
 	pv.add_child(_popup_buttons)
@@ -977,7 +984,31 @@ func _on_arrived(g: Dictionary) -> void:
 
 ## A popup with choices. The clock stops while it's open; `halt` also
 ## cancels the march (arrivals, encounters), otherwise the march resumes.
+var _popup_row: HBoxContainer
+var _popup_scene: Control
+var _next_scene := "" # the vignette for the next pop-up (set just before _popup_open)
+var _next_scene_ctx := {}
+
+
+## Show a little scene of `kind` in the next pop-up.
+func _scene(kind: String, c := {}) -> void:
+	_next_scene = kind
+	_next_scene_ctx = c
+
+
 func _popup_open(title: String, text: String, buttons: Array, halt := true) -> void:
+	for ch in _popup_scene.get_children():
+		ch.queue_free()
+	if _next_scene != "" and not _test:
+		_popup_scene.add_child(Vignette.make(_next_scene, _next_scene_ctx))
+		_popup_scene.custom_minimum_size = Vector2(Vignette.SIZE)
+		_popup_scene.visible = true
+		_popup_text.custom_minimum_size = Vector2(440, 0)
+	else:
+		_popup_scene.visible = false
+		_popup_text.custom_minimum_size = Vector2(580, 0)
+	_next_scene = ""
+	_next_scene_ctx = {}
 	if halt:
 		World.stop()
 	World.waiting = false
@@ -996,6 +1027,8 @@ func _popup_open(title: String, text: String, buttons: Array, halt := true) -> v
 
 func _popup_close() -> void:
 	_popup.visible = false
+	for ch in _popup_scene.get_children():
+		ch.queue_free()
 
 
 ## Arriving at a settlement: what it is, and what you can do there.
@@ -1013,9 +1046,11 @@ func _visit(st: Dictionary) -> void:
 		if id == World.gen.stash_nest:
 			text += "\n\n[color=#f0c060]Through the stakes you can see crates with the %s's mark, the ship's guns, powder kegs. Your stores are here.[/color] You will need a far bigger force to take them back." % Lore.SHIP
 		buttons.append(["LEAVE", _popup_close])
+		_scene("nest")
 	elif World.is_raided(id):
 		text = "Burned. The lizards have been here; the people who are left have nothing to sell."
 		buttons.append(["LEAVE", _popup_close])
+		_scene("burned")
 	elif not _test:
 		# Into the town itself: on foot the first time, its menu after that.
 		World.stop()
@@ -1084,11 +1119,14 @@ func _meet(p: Dictionary) -> void:
 			text = "Country folk on their way to market. They tell you the lizards have been raiding to the south."
 		"traders":
 			text = "Dwarf traders with pack ponies loaded with iron. They ask, very politely, how your guns work."
+	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "traders": "traders",
+		"deserters": "deserters"}.get(String(p["kind"]), "road"), {"faction": p.get("faction", "vell")})
 	_popup_open(World.party_name(p), text, [["LEAVE", _popup_close]])
 
 
 ## 18:00 on the march.
 func _on_dusk() -> void:
+	_scene("dusk", {"time": "dusk"})
 	_popup_open("Dusk", "The light is going. Make camp and sleep until dawn, or march on through the night: slower, half blind, and the men won't thank you.",
 		[["MAKE CAMP", func():
 			_popup_close()
@@ -1102,7 +1140,13 @@ func _on_event(ev: Dictionary) -> void:
 	var buttons: Array = []
 	for o in ev["options"]:
 		buttons.append([o[0], _event_choice.bind(ev, o[1])])
+	_scene(_event_scene(String(ev["id"])))
 	_popup_open(ev["title"], ev["text"], buttons, false)
+
+
+## The little scene for an event on the road.
+static func _event_scene(id: String) -> String:
+	return {"wreckage": "wreck"}.get(id, id)
 
 
 func _event_choice(ev: Dictionary, key: String) -> void:
@@ -1113,6 +1157,7 @@ func _event_choice(ev: Dictionary, key: String) -> void:
 		_on_encounter(r["fight"])
 		return
 	if String(r["text"]) != "":
+		_scene(_event_scene(String(ev["id"])))
 		_popup_open(ev["title"], r["text"], [["CARRY ON", _popup_close]], false)
 
 
@@ -1232,6 +1277,7 @@ func _on_scouts_back(r: Dictionary) -> void:
 	var names: Array = r["names"]
 	if r["lost"].size() == names.size():
 		t = "%s never came back. You wait as long as you dare." % ", ".join(names)
+		_scene("scouts_lost")
 		_popup_open("The scouts are lost", t, [["CARRY ON", _popup_close]], false)
 		return
 	if r["lost"].size() > 0:
@@ -1242,6 +1288,7 @@ func _on_scouts_back(r: Dictionary) -> void:
 		t += "Mostly %s out there.\n" % r["terrain"]
 	t += ("They found: " + ", ".join(r["found"]) + ".\n") if r["found"].size() > 0 else "No towns or villages.\n"
 	t += ("They saw: " + ", ".join(r["parties"]) + ".") if r["parties"].size() > 0 else "Nobody on the move."
+	_scene("scouts_back", {"n": names.size() - (r["lost"] as Array).size()})
 	_popup_open("The scouts are back", t, [["CARRY ON", _popup_close]], false)
 
 
@@ -1267,6 +1314,7 @@ func _on_encounter(p: Dictionary) -> void:
 		buttons.append(["PLAN", _plan_fight.bind(p)])
 	buttons.append(["FIGHT", _fight.bind(p, ambush)])
 	buttons.append(["SLIP AWAY", _slip.bind(p, chance)])
+	_scene("ambush" if ambush else "warband")
 	_popup_open("%s!" % World.party_name(p), text, buttons)
 
 
@@ -1307,11 +1355,13 @@ func _camp_attacked(p: Dictionary) -> void:
 		text += "\n\nAbandon the camp and slip away in the dark? About %d%% chance; fail and you fight anyway, worse placed." % int(100 * (0.35 + Company.Officer.slip_bonus()))
 		buttons.append(["STAND TO!", _camp_fight.bind(p)])
 		buttons.append(["SLIP AWAY", _slip.bind(p, 0.35 + Company.Officer.slip_bonus())])
+		_scene("camp_attack", {"time": "night"})
 		_popup_open("The watch has seen them!", text, buttons)
 	else:
 		text = "Night. %s on watch never saw them come. You wake to screaming: they're already in among the bedrolls, %d of them, and your men are still asleep." % [
 			" and ".join(names), int(p["size"])]
 		buttons.append(["UP! TO ARMS!", _camp_fight.bind(p)])
+		_scene("camp_attack", {"time": "night"})
 		_popup_open("They're in the camp!", text, buttons)
 
 

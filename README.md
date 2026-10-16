@@ -240,6 +240,18 @@ place left off, and drops in battle so the muskets carry. The ♪ button opens
 the player: previous, pause, next, random or in order, Auto, music on/off,
 volume and the track list.
 
+### Scenes in the pop-ups
+
+Pop-ups on the map show a small live 3D scene of what's happening beside
+the text (`scripts/vignette.gd`), on ground matching where you are and lit
+for the time of day, with the camera drifting slowly across it: the warband
+coming at you, the night camp with lizards among the bedrolls, the camp at
+dusk, your scouts running back down the road (or an empty road and a
+dropped hat), merchants' carts, a foreign patrol, dwarf traders with their
+pony, a burned village, the nest, and every event on the road (the column
+wading a ford, a river in flood, wreckage in the surf, a beast with too many
+horns, berries, the wagon in the bog, fever mist, a crag with a man on top).
+
 ### Settlements: walking in, people, languages
 
 Walking anywhere inside a village, town, city or dwarf hold on the map (not
