@@ -91,6 +91,11 @@ var _fp_hide: Array = [] # parts right under your eye (collar, epaulettes): hidd
 ## pack ({water, rations, ammo}); empty means the regulation kit, full pack.
 var gear := {}
 var pack := {}
+# Townsfolk ("civilian"): their own clothes, no musket or pack.
+var cloth := Color(0.5, 0.42, 0.32)
+var trousers := Color(0.32, 0.27, 0.22)
+var female := false
+var dwarf := false
 
 # --- Smoothed state.
 var _grip := Vector3(0.22, 1.12, 0.02)
@@ -239,7 +244,13 @@ func _build_soldier() -> void:
 	var coat := COAT_OFFICER if officer and torso == "officer_coat" else COAT
 	var cuff := RED if officer and torso == "officer_coat" else WHITE
 	var belt := WHITE
-	if torso == "shirt":
+	var civ := kind == "civilian"
+	if civ:
+		coat = cloth
+		cuff = cloth.darkened(0.12)
+		belt = LEATHER
+		torso = "tunic"
+	elif torso == "shirt":
 		coat = SHIRT
 		cuff = SHIRT.darkened(0.08)
 		belt = LEATHER
@@ -250,7 +261,13 @@ func _build_soldier() -> void:
 	spine.position = Vector3(0, _hip_y, 0)
 	# Torso, coat tails (not on a bare shirt), crossbelts, pack.
 	_part(spine, _box_mesh(Vector3(0.42, 0.56, 0.24)), coat, Vector3(0, 0.28, 0))
-	if officer or torso != "shirt":
+	if civ and female:
+		# A long skirt from the waist to the shins.
+		_part(spine, _box_mesh(Vector3(0.44, 0.62, 0.3)), cloth.darkened(0.2), Vector3(0, -0.28, 0.0))
+	elif civ:
+		_part(spine, _box_mesh(Vector3(0.42, 0.2, 0.25)), coat, Vector3(0, -0.04, 0.0)) # tunic skirt
+		_part(spine, _box_mesh(Vector3(0.44, 0.05, 0.27)), LEATHER, Vector3(0, 0.06, 0)) # belt
+	elif officer or torso != "shirt":
 		_part(spine, _box_mesh(Vector3(0.4, 0.3, 0.22)), coat, Vector3(0, -0.08, 0.02))
 	else:
 		_part(spine, _box_mesh(Vector3(0.4, 0.12, 0.22)), coat, Vector3(0, -0.01, 0.0)) # shirt tail
@@ -261,6 +278,8 @@ func _build_soldier() -> void:
 		_fp_hide.append(_part(spine, _cyl_mesh(0.085, 0.09, 0.07), RED, Vector3(0, 0.6, 0))) # high collar
 		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0)))
 		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0)))
+	elif civ:
+		pass
 	else:
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, 38))
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), belt, Vector3(0, 0.28, -0.125), Vector3(0, 0, -38))
@@ -278,6 +297,10 @@ func _build_soldier() -> void:
 	_part(head, _box_mesh(Vector3(0.21, 0.13, 0.09)), HAIR, Vector3(0, 0.12, 0.065))
 	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(0.105, 0.08, -0.01), Vector3.ZERO, true)
 	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(-0.105, 0.08, -0.01), Vector3.ZERO, true)
+	if civ and female:
+		_part(head, _box_mesh(Vector3(0.22, 0.3, 0.1)), HAIR, Vector3(0, 0.02, 0.08)) # long hair
+	if civ and dwarf:
+		_part(head, _box_mesh(Vector3(0.2, 0.26, 0.1)), HAIR.lightened(0.15), Vector3(0, -0.04, -0.1)) # beard
 	if String(g["head"]) == "bicorne":
 		# Bicorne worn side to side: a crescent, tallest in the middle.
 		_part(head, _cyl_mesh(0.118, 0.118, 0.05), BLACK, Vector3(0, 0.19, 0))
@@ -299,11 +322,13 @@ func _build_soldier() -> void:
 	_segment("l_cuff", 0.112, cuff, _arm)
 	# Legs.
 	for side in ["l", "r"]:
-		_segment(side + "_thigh", 0.13, WHITE, _leg)
-		_segment(side + "_shin", 0.115, BLACK, _leg)
+		_segment(side + "_thigh", 0.13, trousers if civ else WHITE, _leg)
+		_segment(side + "_shin", 0.115, trousers.darkened(0.25) if civ else BLACK, _leg)
 		_leg[side + "_foot"] = _part(body, _box_mesh(Vector3(0.11, 0.07, 0.24)), BLACK, Vector3.ZERO)
-	_build_musket(String(g["primary"]), String(g["secondary"]))
-	if not officer:
+	_build_musket("none" if civ else String(g["primary"]), String(g["secondary"]))
+	if civ:
+		bayonet_on = false
+	elif not officer:
 		bayonet_on = String(g["secondary"]) != ""
 
 
@@ -357,6 +382,16 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 	elif primary == "rifle":
 		wood = Color(0.3, 0.16, 0.08)
 		barrel = BROWNED
+	if primary == "none":
+		# Townsfolk: empty hands.
+		bayonet = Node3D.new()
+		musket.add_child(bayonet)
+		hand_bayonet = Node3D.new()
+		body.add_child(hand_bayonet)
+		hand_bayonet.visible = false
+		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
+		_p_vis[ramrod] = false
+		return
 	if primary == "pike" or primary == "spear":
 		# A pole arm: an ash shaft, butt behind the right hand, head far forward.
 		var long := 3.0 if primary == "pike" else 2.2
@@ -758,6 +793,30 @@ func _npc_pose() -> void:
 		return
 
 	t_lean = 0.0
+	if kind == "civilian":
+		# Hands free: swinging at the sides, or talking with them.
+		t_grip = Vector3(0.3, 0.6, 0.05)
+		t_dir = Vector3(0, 1, 0)
+		var mv := clampf(move_speed / 3.0, 0.0, 1.0)
+		t_hand_r = Vector3(0.27, 0.86, -0.02 + 0.16 * swing * mv)
+		t_hand_l = Vector3(-0.27, 0.86, -0.02 - 0.16 * swing * mv)
+		match anim:
+			"talk":
+				var w := sin(anim_time * 4.0)
+				t_hand_r = Vector3(0.22, 1.12 + 0.08 * w, -0.32)
+				t_hand_l = Vector3(-0.2, 1.0 - 0.05 * w, -0.25)
+			"point":
+				t_hand_r = Vector3(0.3, 1.45, -0.6)
+			"work":
+				var k := absf(sin(anim_time * 3.0))
+				t_hand_r = Vector3(0.12, 0.95 - 0.25 * k, -0.45)
+				t_hand_l = Vector3(-0.12, 0.95 - 0.25 * k, -0.45)
+				t_lean = 0.35
+			"fear":
+				t_hand_r = Vector3(0.15, 1.5, -0.25)
+				t_hand_l = Vector3(-0.15, 1.5, -0.25)
+				t_lean = -0.15
+		return
 	match anim:
 		"idle", "walk":
 			t_grip = Vector3(0.22, 1.12, 0.02)

@@ -195,6 +195,7 @@ func ensure() -> void:
 		new_world(_pre_gen.seed if _pre_gen != null else randi() % 1000000)
 
 
+var pending_rest := 0.0 # hours to rest, asked for in a town (map.gd starts it)
 var _pre_gen = null # a land generated ahead by prebuild(), used by _build()
 
 
@@ -423,13 +424,40 @@ func _walk(dh: float) -> void:
 			pos += (target - pos) / d * can
 			left = 0.0
 	update_sight()
+	# Walking into any settlement (inside its fence or walls, not just its
+	# centre) is arriving there, whether or not you were heading for it.
+	var inside := settlement_at(pos)
+	if inside >= 0 and inside != _inside:
+		_inside = inside
+		goal = {}
+		path.clear()
+		_day_water = "clean"
+		places[inside]["known"] = true
+		arrived.emit({"kind": "settlement", "id": inside})
+		return
+	if inside < 0:
+		_inside = -1
 	if path.is_empty() and not goal.is_empty():
 		var g := goal
 		goal = {}
 		if g["kind"] == "settlement":
 			_day_water = "clean"
 			places[int(g["id"])]["known"] = true
+			_inside = int(g["id"])
 		arrived.emit(g)
+
+
+## How far a settlement's ground reaches, in cells (matches the models on the map).
+const SETTLEMENT_REACH := {"village": 3.5, "town": 4.5, "city": 7.0, "hold": 3.5, "nest": 4.0}
+var _inside := -1 # the settlement you're standing in (so it triggers once per visit)
+
+
+func settlement_at(p: Vector2) -> int:
+	for st in gen.settlements:
+		var r: float = SETTLEMENT_REACH.get(st["kind"], 3.5)
+		if p.distance_to(Vector2(st["x"], st["y"]) + Vector2(0.5, 0.5)) <= r:
+			return int(st["id"])
+	return -1
 
 
 ## Rivers and lakes give clean water (unless you drink it in a swamp);

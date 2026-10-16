@@ -159,6 +159,9 @@ var wagon_plan := [0.0, -12.0]
 ## What was left on the field after the last battle: [{"id", "n"}], to pick
 ## through on the loot screen.
 var loot: Array = []
+var tongues := {} # lang -> {"fluency", "words"} (see tongue.gd)
+var towns := {} # settlement id (string) -> {"rep", "npcs", "visits"} (see folk.gd)
+var visiting := -1 # the settlement you've walked into (town.tscn)
 var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
@@ -202,6 +205,9 @@ func new_campaign() -> void:
 	tags = DEFAULT_TAGS.duplicate()
 	wagon_plan = [0.0, -12.0]
 	loot = []
+	tongues = {}
+	towns = {}
+	visiting = -1
 	ensure_wagon_crew()
 	prologue = true
 	stash = {}
@@ -1100,7 +1106,7 @@ func save() -> void:
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
 		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle,
-		"tags": tags, "wagon_plan": wagon_plan, "loot": loot,
+		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
@@ -1135,6 +1141,9 @@ func load_campaign() -> bool:
 	tags = data.get("tags", DEFAULT_TAGS.duplicate())
 	wagon_plan = data.get("wagon_plan", [0.0, -12.0])
 	loot = data.get("loot", [])
+	tongues = data.get("tongues", {})
+	towns = data.get("towns", {})
+	visiting = int(data.get("visiting", -1))
 	for l in loot:
 		l["n"] = int(l["n"])
 	ensure_wagon_crew()

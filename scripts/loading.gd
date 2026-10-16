@@ -132,6 +132,7 @@ func change(path: String) -> void:
 		"map.tscn": title = "On the march"
 		"battle.tscn": title = "To arms!"
 		"intro.tscn": title = "The voyage"
+		"town.tscn": title = "Through the gate"
 	if title == "":
 		get_tree().change_scene_to_file(path)
 	else:
