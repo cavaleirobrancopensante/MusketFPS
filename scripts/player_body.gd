@@ -12,7 +12,7 @@ const Rig3D := preload("res://scripts/rig3d.gd")
 
 # [grip position, musket direction]
 const READY := [Vector3(0.19, 1.34, -0.46), Vector3(-0.04, 0.05, -1)]
-const UPRIGHT := [Vector3(0.06, 1.0, -0.42), Vector3(0, 1, -0.22)]
+const UPRIGHT := [Vector3(0.02, 0.98, -0.56), Vector3(0, 1, -0.25)]
 const MELEE_IDLE := [Vector3(0.16, 1.28, -0.3), Vector3(0, 0.28, -1)]
 const BLOCK := [Vector3(0.32, 1.52, -0.42), Vector3(-1, 0.1, -0.05)]
 # Swing directions: 0 overhead, 1 from left, 2 from right, 3 thrust.
@@ -124,7 +124,7 @@ func _waypoints() -> Dictionary:
 		"A": grip,
 		"B": grip + Vector3(0.07, 0.1, -0.02),
 		"C": muzzle + Vector3(0.03, 0.08, 0.0),
-		"D": muzzle + d * 0.45,
+		"D": muzzle + d * 0.34,
 		"E": muzzle + d * 0.06,
 		"F": muzzle + d * 0.32 + Vector3(0.04, 0, 0),
 		"H": Vector3(0.28, 0.95, 0.05),

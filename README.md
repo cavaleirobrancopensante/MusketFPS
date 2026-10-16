@@ -36,7 +36,7 @@ lizardmen charging from the distance (8, 14, then 20).
 | Right side of screen | Drag to look around |
 | **FIRE** | Fire your musket. Keep your thumb down and drag to aim, like CoD Mobile. The gold ring is your reload. |
 | **BAYONET / MUSKET** | Fix or unfix the bayonet (about a second, fully animated). You can't reload with the bayonet out. |
-| **SWING** (melee) | The FIRE button becomes a swing joystick, see below |
+| **OVER / LEFT / RIGHT / THRUST** (melee) | Four swing buttons replace FIRE, see below |
 | **BLOCK** (melee) | Hold to parry. Stops hacks from the front and makes the lizardman reel back |
 | **VOLLEY!** | Every loaded man in the company fires at once |
 | **FOLLOW** | The line moves with you and wheels when you turn more than 40° |
@@ -47,17 +47,19 @@ lizardmen charging from the distance (8, 14, then 20).
 
 ### Melee: Mount & Blade swings on a touchscreen
 
-In melee mode, press **SWING** to start winding up. Without lifting your thumb,
-drag to choose where the blow comes from, then let go to strike:
+In melee mode, FIRE turns into four buttons in a diamond. The button you press
+is where the blow comes from: press to wind up, hold to charge, release to
+strike. Dragging from the button keeps turning you, so you can track a target
+while you wind up.
 
-| Drag | Blow | Good for |
+| Button | Blow | Good for |
 |---|---|---|
-| Up | **Overhead** chop | Heaviest hit, one target |
-| Left / Right | **Sweep** from that side | Wide arc, can hit two at once |
-| Down (or just tap) | **Thrust** with the bayonet | Longest reach, one target |
+| OVER | **Overhead** chop | Heaviest hit, one target |
+| LEFT / RIGHT | **Sweep** from that side | Wide arc, can hit two at once |
+| THRUST | **Thrust** with the bayonet | Longest reach, one target |
 
-Hold longer before releasing to charge the blow (the ring around the stick
-fills; a full charge kills a lizardman outright). A gold marker by the
+Hold longer before releasing to charge the blow (the ring around the button
+fills, white when full; a full charge kills a lizardman outright). A gold marker by the
 crosshair shows which side the blow will come from. Every hit knocks the
 lizardman back and cancels his attack.
 
@@ -68,6 +70,16 @@ Keyboard for testing on a PC: WASD move, mouse-drag on the right half to look,
 Space fire (in melee: hold to wind up, release to strike), arrow keys pick the
 blow, Q fix/unfix bayonet, E block, V switch view (3D), F volley, 1 follow,
 2 hold, 3 toggle fire mode.
+
+### Your men are not robots
+
+They obey, but each at his own pace. Every soldier has his own reaction time,
+walking pace, steadiness and reload speed. He sees where the line is a moment
+late, so when you wheel or halt the company the movement ripples through it.
+Volleys come out as a ragged ripple as each man presents and takes aim. Shaky
+men fire sooner when firing at will, steady men wait and hit more. Muskets
+occasionally misfire (a flash in the pan) and must be re-primed. Standing men
+glance along the line, and nobody walks or rams in step.
 
 ### Animations
 

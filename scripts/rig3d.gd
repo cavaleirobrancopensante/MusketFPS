@@ -38,6 +38,7 @@ const CREST := Color(0.62, 0.16, 0.1)
 const MUZZLE := 1.05
 const BUTT := 0.45
 const FORESTOCK := 0.3 # where the left hand holds it
+const FP_SHOULDER_DROP := Vector3(0.0, -0.22, -0.04)
 
 static var _materials := {}
 static var _meshes := {}
@@ -89,7 +90,6 @@ var _arm := {} # name -> MeshInstance3D
 var _leg := {}
 var _tail: Array = []
 var _all_meshes: Array = []
-var _fp_hide: Array = [] # hidden in first person
 var _overlay: StandardMaterial3D
 
 var _shoulder_r := Vector3(0.23, 0.5, 0.0) # spine space
@@ -105,6 +105,7 @@ func _ready() -> void:
 	add_child(body)
 	spine = Node3D.new()
 	body.add_child(spine)
+	_walk_phase = randf() * TAU # everyone out of step
 	_overlay = StandardMaterial3D.new()
 	_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -189,8 +190,8 @@ func _build_soldier() -> void:
 	_part(spine, _box_mesh(Vector3(0.4, 0.3, 0.22)), coat, Vector3(0, -0.08, 0.02))
 	if officer:
 		_part(spine, _box_mesh(Vector3(0.44, 0.04, 0.26)), RED, Vector3(0, 0.02, 0)) # sash
-		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0)))
-		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0)))
+		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0))
+		_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0))
 	else:
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), WHITE, Vector3(0, 0.28, -0.125), Vector3(0, 0, 38))
 		_part(spine, _box_mesh(Vector3(0.06, 0.62, 0.02)), WHITE, Vector3(0, 0.28, -0.125), Vector3(0, 0, -38))
@@ -324,11 +325,9 @@ func _update(delta: float, snap: bool) -> void:
 	_lean = lerpf(_lean, t_lean, k)
 	_jaw = lerpf(_jaw, t_jaw, k)
 	spine.rotation.x = -_lean
-	if head != null:
-		head.visible = show_head
-	# First person: hide what would sit right on the lens (epaulettes).
-	for mi in _fp_hide:
-		mi.visible = show_head
+	# First person: hide your own torso, collar and head, so the screen shows
+	# only arms and musket (the arms and legs aren't parented to the spine).
+	spine.visible = show_head
 
 	if kind == "lizard":
 		_update_lizard(delta, kh)
@@ -355,8 +354,11 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	var l_target: Vector3 = grip + wdir * FORESTOCK if t_hand_l == null else _pitched(t_hand_l, pitch, pivot)
 	_hand_r = _hand_r.lerp(r_target, kh)
 	_hand_l = _hand_l.lerp(l_target, kh)
-	_place_arm("r", spine.transform * _shoulder_r, _hand_r, Vector3(1.0, -1.0, 0.4))
-	_place_arm("l", spine.transform * _shoulder_l, _hand_l, Vector3(-1.0, -1.0, 0.4))
+	# First person: anchor the shoulders lower and a touch forward, so the
+	# upper arms rise from below the screen edge instead of beside the lens.
+	var fp_drop := Vector3.ZERO if show_head else FP_SHOULDER_DROP
+	_place_arm("r", spine.transform * _shoulder_r + fp_drop, _hand_r, Vector3(1.0, -1.0, 0.4))
+	_place_arm("l", spine.transform * _shoulder_l + fp_drop, _hand_l, Vector3(-1.0, -1.0, 0.4))
 
 	hand_bayonet.visible = bayonet_in_hand
 	if bayonet_in_hand:
