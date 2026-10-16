@@ -286,6 +286,8 @@ func wave_count() -> int:
 ## The HUD's status line.
 func status_line() -> String:
 	var tail := "Company %d   Loaded %d" % [soldiers.size(), loaded_count()]
+	if player != null and player.ammo >= 0:
+		tail += "   Your shot %d" % player.ammo
 	if prologue:
 		var what := "RETREAT" if story_phase == "retreat" else Lore.BEACH
 		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
@@ -744,7 +746,7 @@ func _end_battle(won: bool) -> void:
 				continue
 			men[int(s.record["id"])] = {"kills": s.kills, "ammo_used": s.ammo_used,
 				"status": "fit" if s.alive else s.down_status, "conduct": s.conduct}
-		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men,
+		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "officer_ammo": player.ammo_used, "men": men,
 			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
 			"enemy": "lizards"})
 	hud.show_restart()

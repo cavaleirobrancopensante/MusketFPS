@@ -544,7 +544,10 @@ func _build_hud() -> void:
 	right.position = Vector2(-170, 12)
 	right.add_theme_constant_override("separation", 8)
 	root.add_child(right)
-	for spec in [["COMPANY", _go.bind(COMPANY_SCREEN)], ["PLAN", _go.bind(PLAN)], ["WAGON", func(): _logistics.open()], ["SCOUTS", _open_scouts],
+	for spec in [["YOU", func():
+				get_tree().set_meta("officer_back", "res://scenes/map.tscn")
+				_go("res://scenes/officer.tscn")],
+			["COMPANY", _go.bind(COMPANY_SCREEN)], ["PLAN", _go.bind(PLAN)], ["WAGON", func(): _logistics.open()], ["SCOUTS", _open_scouts],
 			["CAMP", _go.bind(CAMP)], ["MENU", _go.bind(MENU)]]:
 		right.add_child(_button(spec[0], spec[1]))
 	var br := HBoxContainer.new()
@@ -1001,7 +1004,7 @@ func _visit(st: Dictionary) -> void:
 				text = "A dwarf hold cut into the mountain. The dwarves look at your muskets with great interest."
 		text += "\n\nWater barrels refilled. Recruiting locals comes soon."
 		var prices := {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}
-		var pr: Array = prices[kind]
+		var pr: Array = [prices[kind][0], Company.price(prices[kind][1])]
 		buttons.append(["FOOD +%d (%d cr)" % [pr[0], pr[1]], func():
 			if Company.room_for("rations") < int(pr[0]):
 				_push_toast("The wagon is full.")
@@ -1011,11 +1014,12 @@ func _visit(st: Dictionary) -> void:
 				Company.save()
 				_push_toast("Bought %d rations." % int(pr[0]))])
 		if kind != "village":
-			buttons.append(["RUM +10 (6 cr)", func():
+			var rum_cr := Company.price(6)
+			buttons.append(["RUM +10 (%d cr)" % rum_cr, func():
 				if Company.room_for("rum") < 10:
 					_push_toast("The wagon is full.")
-				elif Company.money >= 6:
-					Company.money -= 6
+				elif Company.money >= rum_cr:
+					Company.money -= rum_cr
 					Company.stores["rum"] = int(Company.stores["rum"]) + 10
 					Company.save()
 					_push_toast("Bought 10 tots of rum.")])
@@ -1218,7 +1222,7 @@ func _on_encounter(p: Dictionary) -> void:
 		return
 	var c := World.cell()
 	var cover: bool = World.gen.t(c.x, c.y) in [T.FOREST, T.SWAMP]
-	var chance := clampf(0.3 + (0.25 if cover else 0.0) + (World.party_pace() - 0.85), 0.1, 0.8)
+	var chance := clampf(0.3 + (0.25 if cover else 0.0) + (World.party_pace() - 0.85) + Company.Officer.slip_bonus(), 0.1, 0.85)
 	var where := "in the trees" if cover else "in the open"
 	# Seen coming, there's time to form up as planned; out of nowhere, there isn't.
 	var ambush := World.hours - float(p.get("seen_at", -99.0)) > 1.5
@@ -1258,7 +1262,7 @@ func _camp_attacked(p: Dictionary) -> void:
 		see -= 0.2 # they creep right up through the trees
 	elif t in [T.HILLS, T.PLAINS, T.BEACH]:
 		see += 0.08
-	see = clampf(see, 0.1, 0.9)
+	see = clampf(see + Company.Officer.watch_bonus(), 0.1, 0.92) # your Tactics: a better-kept watch
 	var spotted := randf() < see
 	var names: Array = watch.map(func(m): return Company.title(m))
 	var ids: Array = watch.map(func(m): return int(m["id"]))
@@ -1270,9 +1274,9 @@ func _camp_attacked(p: Dictionary) -> void:
 	if spotted:
 		text = "Night, by the fire. %s on watch hear something in the dark, then see the eyes catch the firelight, and raise the alarm. The men are throwing off their blankets and reaching for their muskets.\n\n%d of them against %d fit men." % [
 			" and ".join(names), int(p["size"]), fit.size()]
-		text += "\n\nAbandon the camp and slip away in the dark? About 35%% chance; fail and you fight anyway, worse placed."
+		text += "\n\nAbandon the camp and slip away in the dark? About %d%% chance; fail and you fight anyway, worse placed." % int(100 * (0.35 + Company.Officer.slip_bonus()))
 		buttons.append(["STAND TO!", _camp_fight.bind(p)])
-		buttons.append(["SLIP AWAY", _slip.bind(p, 0.35)])
+		buttons.append(["SLIP AWAY", _slip.bind(p, 0.35 + Company.Officer.slip_bonus())])
 		_popup_open("The watch has seen them!", text, buttons)
 	else:
 		text = "Night. %s on watch never saw them come. You wake to screaming: they're already in among the bedrolls, %d of them, and your men are still asleep." % [

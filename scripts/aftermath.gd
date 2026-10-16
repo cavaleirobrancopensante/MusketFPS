@@ -80,6 +80,9 @@ func _ready() -> void:
 			get_tree().change_scene_to_file(LOOT))
 		lb.add_theme_color_override("font_color", GOLD)
 		buttons.add_child(lb)
+	buttons.add_child(_button("YOU", func():
+		get_tree().set_meta("officer_back", "res://scenes/aftermath.tscn")
+		get_tree().change_scene_to_file("res://scenes/officer.tscn")))
 	buttons.add_child(_button("COMPANY & KIT", _on_company))
 	buttons.add_child(_button("WAGON", func(): _logistics.open()))
 	buttons.add_child(_march)

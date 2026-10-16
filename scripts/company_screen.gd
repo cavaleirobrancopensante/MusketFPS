@@ -601,6 +601,12 @@ func _build_right() -> Control:
 	var issue := _button("LOGISTICS", 17, func(): _logistics.open())
 	issue.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acts.add_child(issue)
+	var you := _button("YOU", 17, func():
+		Company.save()
+		get_tree().set_meta("officer_back", "res://scenes/company.tscn")
+		get_tree().change_scene_to_file("res://scenes/officer.tscn"))
+	you.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	acts.add_child(you)
 	var back := _button("BACK", 17, _on_back)
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acts.add_child(back)
@@ -644,7 +650,7 @@ func _refresh_wagon() -> void:
 		names.append("%s ×%d" % [Company.item_name(id), int(s["items"][id])])
 	var load := Company.wagon_load()
 	var t := "[color=#%s][b]THE WAGON[/b][/color]  %d cr · %d/%d kg · tap for logistics\n" % [
-		GOLD.to_html(false), Company.money, int(load[0]), int(Company.WAGON_KG)]
+		GOLD.to_html(false), Company.money, int(load[0]), int(Company.wagon_kg())]
 	t += "Water [b]%d[/b]%s · Food [b]%d[/b] · Shot [b]%d[/b] · Rum [b]%d[/b]\n" % [
 		int(s["water"]), " (foul)" if bool(s["foul"]) else "", int(s["rations"]), int(s["ammo"]), int(s["rum"])]
 	t += "[color=#%s]%s[/color]" % [DIM.to_html(false), ", ".join(names) if spare > 0 else "No spare kit."]

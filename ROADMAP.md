@@ -131,9 +131,12 @@ Who you were before the wreck, chosen at a new game: a gentleman's son who
 bought his commission, a sergeant promoted from the ranks, a ship's officer,
 an engineer... Each starts with different skills and men.
 
-Officer skills that grow with use: Leadership, Tactics, Marksmanship,
-Bladework, Surgery, Logistics, Diplomacy, Engineering (gunpowder and
-fortification).
+Done: your character sheet (YOU): six attributes, nine skills (Marksmanship,
+Bladework, Leadership, Tactics, Surgery, Logistics, Pathfinding, Trade,
+Training), each wired into battle, the march or the company; your own kit
+and cartridge box; levels. Still to come: backgrounds, and Diplomacy and
+Engineering (gunpowder and fortification) once factions and production
+exist.
 
 ### M8: Battle variety
 

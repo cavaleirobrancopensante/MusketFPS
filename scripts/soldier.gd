@@ -142,6 +142,10 @@ func _ready() -> void:
 	# Every rank: steadier, quicker to react and reload, harder with the bayonet.
 	steadiness = minf(1.0, steadiness + 0.1 * rank)
 	reaction *= 1.0 - 0.1 * rank
+	if record != null and not ally:
+		# Your Leadership steadies them; your Tactics drill the orders home.
+		steadiness = minf(1.0, steadiness + Company.Officer.men_steady())
+		reaction *= Company.Officer.reaction_mult()
 	melee_bonus = 5.0 * rank
 	reload_time = randf_range(4.0, 5.6) / pace * (1.0 - 0.06 * rank) * gear_reload
 	tempo = pace

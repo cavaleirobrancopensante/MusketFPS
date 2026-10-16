@@ -25,7 +25,7 @@ func _ready() -> void:
 	#   -- --autotest [--stress] [--tp]   a stand-alone battle
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	var args := OS.get_cmdline_user_args()
-	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest"]:
+	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer"]:
 		if a in args:
 			Settings.slot = 99 # tests never touch the player's saves
 	if "--intro" in args or "--intro-render" in args:
@@ -58,6 +58,11 @@ func _ready() -> void:
 		Company.new_campaign()
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		get_tree().change_scene_to_file.call_deferred("res://scenes/battleplan.tscn")
+		return
+	if "--officer" in args:
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		get_tree().change_scene_to_file.call_deferred("res://scenes/officer.tscn")
 		return
 	if "--company" in args:
 		# Headless check of the Company screen after the prologue.

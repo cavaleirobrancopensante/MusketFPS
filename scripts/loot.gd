@@ -173,11 +173,11 @@ func _refresh() -> void:
 	_confirm = false
 	_done_b.text = "DONE"
 	var load := Company.wagon_load()
-	_load_l.text = "%d / %d kg     space %.1f / %.0f     %d crowns" % [int(load[0]), int(Company.WAGON_KG), load[1],
-		Company.WAGON_SPACE, Company.money]
-	_kg.max_value = Company.WAGON_KG
+	_load_l.text = "%d / %d kg     space %.1f / %.0f     %d crowns" % [int(load[0]), int(Company.wagon_kg()), load[1],
+		Company.wagon_space(), Company.money]
+	_kg.max_value = Company.wagon_kg()
 	_kg.value = load[0]
-	_space.max_value = Company.WAGON_SPACE
+	_space.max_value = Company.wagon_space()
 	_space.value = load[1]
 
 
