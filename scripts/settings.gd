@@ -16,12 +16,24 @@ var stress := false
 ## The save slot in use (1..SLOTS); remembered for CONTINUE.
 var slot := 1
 
+## Graphics quality (see look.gd): "low" (no grass far out, no real shadows),
+## "medium" (grass, soft blob shadows under everyone) or "high" (real sun
+## shadows from men, trees and houses, a little bloom).
+var graphics := "medium"
+const GRAPHICS := ["low", "medium", "high"]
+
 
 func _ready() -> void:
 	var data = JSON.parse_string(FileAccess.get_file_as_string(PREFS)) if FileAccess.file_exists(PREFS) else null
 	if typeof(data) == TYPE_DICTIONARY:
 		slot = clampi(int(data.get("slot", 1)), 1, SLOTS)
 		third_person = bool(data.get("third_person", false))
+		graphics = String(data.get("graphics", "medium"))
+		if not graphics in GRAPHICS:
+			graphics = "medium"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--gfxq="):
+			graphics = a.substr(7)
 	_migrate_old_save()
 
 
@@ -38,7 +50,7 @@ func use_slot(s: int) -> void:
 func save_prefs() -> void:
 	var f := FileAccess.open(PREFS, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"slot": slot, "third_person": third_person}))
+		f.store_string(JSON.stringify({"slot": slot, "third_person": third_person, "graphics": graphics}))
 
 
 ## Saves from before slots existed move into slot 1.

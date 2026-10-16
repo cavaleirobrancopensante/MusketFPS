@@ -10,6 +10,7 @@ const PlayerScript := preload("res://scripts/player.gd")
 const SoldierScript := preload("res://scripts/soldier.gd")
 const LizardScript := preload("res://scripts/lizardman.gd")
 const HudScript := preload("res://scripts/hud.gd")
+const Look := preload("res://scripts/look.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
@@ -1492,72 +1493,47 @@ func _add_key(action: String, key: Key) -> void:
 
 
 func _build_world() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.42, 0.55, 0.72)
-	sky_mat.sky_horizon_color = Color(0.8, 0.8, 0.76)
-	sky_mat.ground_horizon_color = Color(0.55, 0.56, 0.48)
-	sky_mat.ground_bottom_color = Color(0.3, 0.32, 0.25)
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.8
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.76, 0.77, 0.73)
-	env.fog_density = 0.006
-	env.fog_sky_affect = 0.35
-	var world_env := WorldEnvironment.new()
-	world_env.environment = env
-	add_child(world_env)
+	# Sky, light and air (look.gd), for the time of day the fight happens at.
+	var look := _terrain_look()
+	var tod := "night" if night else _battle_time()
+	var env := Look.environment(self, tod, look["haze"], look["fog"])
+	if prologue:
+		env.fog_density = 0.009
+		env.fog_light_color = Color(0.78, 0.8, 0.78)
 
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, 35, 0)
-	sun.light_energy = 1.1
-	sun.shadow_enabled = false # shadows are expensive on phones
-	add_child(sun)
-
-	# Ground: flat field with a noise texture so movement reads.
+	# Ground: flat where you fight (collision), painted with grass, earth and
+	# bare patches.
 	var ground := StaticBody3D.new()
 	ground.collision_layer = 1
 	add_child(ground)
 	var col := CollisionShape3D.new()
 	col.shape = WorldBoundaryShape3D.new()
 	ground.add_child(col)
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(500, 500)
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = plane
-	var noise := FastNoiseLite.new()
-	noise.frequency = 0.06
-	var noise_tex := NoiseTexture2D.new()
-	noise_tex.width = 256
-	noise_tex.height = 256
-	noise_tex.seamless = true
-	noise_tex.noise = noise
-	var ramp := Gradient.new()
-	# The ground matches where on the map the fight is (see _terrain_look).
-	var look := _terrain_look()
-	ramp.set_color(0, look["dark"])
-	ramp.set_color(1, look["light"])
-	env.fog_density = look["fog"]
-	noise_tex.color_ramp = ramp
-	var ground_mat := StandardMaterial3D.new()
-	ground_mat.albedo_texture = noise_tex
-	ground_mat.uv1_scale = Vector3(40, 40, 1)
-	mesh.material_override = ground_mat
-	ground.add_child(mesh)
-
-	if night:
-		_make_night(env, sky_mat, sun)
+	var cols: Dictionary = Look.ground_colours(look["t"])
 	if prologue:
-		env.fog_density = 0.009
-		env.fog_light_color = Color(0.78, 0.8, 0.78)
+		cols = Look.ground_colours(World.Gen.T.BEACH)
+	Look.ground(ground, 500.0, cols)
+
+	if prologue:
 		_build_beach()
 	else:
 		_scatter_trees()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 4242
+		Look.grass(self, Vector3(0, 0, 4), 75.0, float(cols.get("grass", 1.0)), cols, [], rng)
+		Look.far_hills(self, rng, 200.0, (cols["grass_dark"] as Color).lerp(look["haze"], 0.35), 16, int(look["t"]) == World.Gen.T.MOUNTAIN)
+
+
+## Day, or dusk if the fight on the map came at dusk or dawn.
+func _battle_time() -> String:
+	if not Company.active or prologue or not World.is_ready:
+		return "day"
+	var h: float = World.hours_of_day()
+	if h < 5.0 or h >= 21.0:
+		return "night"
+	if h < 7.0 or h >= 18.5:
+		return "dusk"
+	return "day"
 
 
 ## Ground colours, fog and trees for the map terrain the battle is fought on.
@@ -1567,60 +1543,40 @@ func _terrain_look() -> Dictionary:
 		tt = int(Company.next_battle.get("terrain", -1))
 	match tt:
 		3: # forest: trees close all round
-			return {"dark": Color(0.18, 0.28, 0.12), "light": Color(0.32, 0.4, 0.2), "fog": 0.009, "trees": 260, "near": 48.0}
+			return {"t": tt, "haze": Color(0.7, 0.76, 0.72), "fog": 0.008, "trees": 260, "near": 48.0, "kind": "mixed", "bushes": 120}
 		4: # hills
-			return {"dark": Color(0.33, 0.35, 0.2), "light": Color(0.5, 0.48, 0.3), "fog": 0.005, "trees": 50, "near": 90.0}
+			return {"t": tt, "haze": Color(0.8, 0.8, 0.76), "fog": 0.004, "trees": 50, "near": 90.0, "kind": "mixed", "bushes": 70}
 		6: # swamp: dark mud, mist, dead trees
-			return {"dark": Color(0.2, 0.22, 0.14), "light": Color(0.32, 0.33, 0.2), "fog": 0.014, "trees": 140, "near": 55.0}
+			return {"t": tt, "haze": Color(0.72, 0.75, 0.7), "fog": 0.013, "trees": 140, "near": 55.0, "kind": "swamp", "bushes": 90}
 		1: # beach
-			return {"dark": Color(0.6, 0.54, 0.38), "light": Color(0.75, 0.68, 0.5), "fog": 0.006, "trees": 30, "near": 110.0}
-	return {"dark": Color(0.24, 0.34, 0.15), "light": Color(0.42, 0.47, 0.24), "fog": 0.006, "trees": 90, "near": 95.0}
+			return {"t": tt, "haze": Color(0.8, 0.82, 0.84), "fog": 0.005, "trees": 30, "near": 110.0, "kind": "pine", "bushes": 30}
+	return {"t": max(tt, 2), "haze": Color(0.78, 0.8, 0.8), "fog": 0.005, "trees": 90, "near": 95.0, "kind": "mixed", "bushes": 60}
 
 
-## Pines around the edges of the field, drawn with MultiMesh (2 draw calls total).
+## Trees round the edges of the field (pines, broadleaves, or dead trees in
+## the swamp), with bushes and rocks between: a few instanced batches.
 func _scatter_trees() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1725
 	var look := _terrain_look()
-	var count: int = look["trees"]
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.15
-	trunk.bottom_radius = 0.25
-	trunk.height = 2.0
-	var trunk_mat := StandardMaterial3D.new()
-	trunk_mat.albedo_color = Color(0.32, 0.22, 0.13)
-	trunk.material = trunk_mat
-	var crown := CylinderMesh.new()
-	crown.top_radius = 0.0
-	crown.bottom_radius = 1.8
-	crown.height = 5.0
-	crown.radial_segments = 8
-	var crown_mat := StandardMaterial3D.new()
-	crown_mat.albedo_color = Color(0.13, 0.27, 0.15)
-	crown.material = crown_mat
-
-	var trunks := MultiMesh.new()
-	trunks.transform_format = MultiMesh.TRANSFORM_3D
-	trunks.mesh = trunk
-	trunks.instance_count = count
-	var crowns := MultiMesh.new()
-	crowns.transform_format = MultiMesh.TRANSFORM_3D
-	crowns.mesh = crown
-	crowns.instance_count = count
-	for i in count:
+	var spots: Array = []
+	var dead: Array = []
+	for i in int(look["trees"]):
 		var ang := rng.randf() * TAU
 		var dist := rng.randf_range(float(look["near"]), 190.0)
-		var s := rng.randf_range(0.8, 1.6)
-		var pos := Vector3(cos(ang) * dist, 0, sin(ang) * dist)
-		var basis := Basis().scaled(Vector3(s, s, s))
-		trunks.set_instance_transform(i, Transform3D(basis, pos + Vector3(0, 1.0 * s, 0)))
-		crowns.set_instance_transform(i, Transform3D(basis, pos + Vector3(0, 4.2 * s, 0)))
-	var t_inst := MultiMeshInstance3D.new()
-	t_inst.multimesh = trunks
-	add_child(t_inst)
-	var c_inst := MultiMeshInstance3D.new()
-	c_inst.multimesh = crowns
-	add_child(c_inst)
+		var sp := [Vector3(cos(ang) * dist, 0, sin(ang) * dist), rng.randf_range(0.8, 1.5)]
+		if look["kind"] == "swamp" and rng.randf() < 0.5:
+			dead.append(sp)
+		else:
+			spots.append(sp)
+	Look.trees(self, spots, "mixed" if look["kind"] in ["mixed", "swamp"] else String(look["kind"]), rng)
+	Look.trees(self, dead, "dead", rng)
+	var bush: Array = []
+	for i in int(look["bushes"]):
+		var a2 := rng.randf() * TAU
+		var d2 := rng.randf_range(float(look["near"]) * 0.45, 140.0)
+		bush.append([Vector3(cos(a2) * d2, 0, sin(a2) * d2), rng.randf_range(0.5, 1.3)])
+	Look.bushes(self, bush, rng)
 
 
 

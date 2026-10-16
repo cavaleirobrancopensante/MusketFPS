@@ -21,6 +21,7 @@ const Lore := preload("res://scripts/lore.gd")
 const Rig3D := preload("res://scripts/rig3d.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 const Townsfolk := preload("res://scripts/townsfolk.gd")
+const Look := preload("res://scripts/look.gd")
 const MAP := "res://scenes/map.tscn"
 
 const GOLD := Color(0.95, 0.8, 0.45)
@@ -209,7 +210,7 @@ void fragment() { ALBEDO = vec3(0.08, 0.06, 0.05); }"""
 	m.albedo_color = col
 	if unshaded:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	if gfx == "tex" or gfx == "dusk":
+	if gfx == "tex" or gfx == "dusk" or (gfx in ["", "now"] and Look.quality() != "low"):
 		# Plaster, timber, stone and thatch all get a grain, in world space so
 		# it doesn't stretch on big walls.
 		if _grain == null:
@@ -264,9 +265,9 @@ func _solid(size: Vector3, pos: Vector3, rot_y := 0.0) -> void:
 
 
 func _build_env() -> void:
-	var env := Environment.new()
 	var night: bool = World.is_night()
 	if underground:
+		var env := Environment.new()
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = Color(0.03, 0.025, 0.02)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -275,97 +276,53 @@ func _build_env() -> void:
 		env.fog_enabled = true
 		env.fog_light_color = Color(0.08, 0.05, 0.03)
 		env.fog_density = 0.03
-	else:
-		env.background_mode = Environment.BG_SKY
-		var sky := Sky.new()
-		var sm := ProceduralSkyMaterial.new()
-		if night:
-			sm.sky_top_color = Color(0.02, 0.03, 0.07)
-			sm.sky_horizon_color = Color(0.07, 0.08, 0.13)
-			sm.ground_horizon_color = Color(0.05, 0.05, 0.07)
-		else:
-			sm.sky_top_color = Color(0.42, 0.55, 0.72)
-			sm.sky_horizon_color = Color(0.8, 0.8, 0.76)
-			sm.ground_horizon_color = Color(0.55, 0.56, 0.48)
-		sky.sky_material = sm
-		env.sky = sky
-		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-		env.ambient_light_energy = 0.5 if night else 0.8
-		env.fog_enabled = true
-		env.fog_light_color = Color(0.06, 0.07, 0.1) if night else Color(0.76, 0.77, 0.73)
-		env.fog_density = 0.012 if night else 0.004
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, 35, 0) if not night else Vector3(-38, -40, 0)
-	sun.light_energy = 1.1 if not night else 0.4
-	sun.light_color = Color.WHITE if not night else Color(0.55, 0.65, 1.0)
-	if underground:
-		sun.light_energy = 0.15
-	add_child(sun)
-	if gfx in ["lit", "tex", "dusk", "toon", "noshadow"]:
-		sun.shadow_enabled = gfx == "lit" # (real shadows need a phone test: software renderers get them wrong)
-		sun.directional_shadow_max_distance = 90.0
-		sun.shadow_blur = 1.5
-		# (Glow is left off: the phone's renderer and the compatibility one
-		# disagree badly about it, and it washes these pastel towns out.)
-		env.ambient_light_energy = 0.55
-		sun.light_energy = 0.95
-		env.fog_density = 0.0025
-		sun.rotation_degrees = Vector3(-38, 50, 0)
+		env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		var we := WorldEnvironment.new()
+		we.environment = env
+		add_child(we)
+		var lamp := DirectionalLight3D.new()
+		lamp.rotation_degrees = Vector3(-50, 35, 0)
+		lamp.light_energy = 0.15
+		add_child(lamp)
+		return
+	var tod := "night" if night else ("dusk" if gfx == "dusk" else "day")
+	var haze := Color(0.76, 0.78, 0.76)
+	if float(sur["swamp"]) > 0.2:
+		haze = Color(0.66, 0.7, 0.62)
+	elif float(sur["mountain"]) > 0.1:
+		haze = Color(0.74, 0.78, 0.84)
+	var env2 := Look.environment(self, tod, haze, 0.005 if float(sur["swamp"]) > 0.2 else 0.0022)
 	if gfx == "toon":
-		env.adjustment_saturation = 1.3
-		env.ambient_light_energy = 0.45
-	if gfx == "dusk":
-		sun.rotation_degrees = Vector3(-12, 70, 0)
-		sun.light_color = Color(1.0, 0.68, 0.42)
-		sun.light_energy = 1.4
-		var sm2 := (env.sky.sky_material as ProceduralSkyMaterial)
-		sm2.sky_top_color = Color(0.25, 0.3, 0.5)
-		sm2.sky_horizon_color = Color(0.98, 0.62, 0.4)
-		sm2.ground_horizon_color = Color(0.6, 0.45, 0.35)
-		env.fog_light_color = Color(0.9, 0.62, 0.45)
-		env.fog_density = 0.008
-		env.ambient_light_energy = 0.6
+		env2.adjustment_saturation = 1.3
+
+
+## The map's ground here, in Look's colours.
+func _ground_cols() -> Dictionary:
+	var t: int = World.T.PLAINS
+	if underground or float(sur["mountain"]) > 0.25:
+		t = World.T.MOUNTAIN
+	elif float(sur["swamp"]) > 0.2:
+		t = World.T.SWAMP
+	elif float(sur["hills"]) > 0.25:
+		t = World.T.HILLS
+	elif float(sur["forest"]) > 0.3:
+		t = World.T.FOREST
+	var cols: Dictionary = Look.ground_colours(t)
+	if underground:
+		cols = {"grass_dark": Color(0.2, 0.19, 0.18), "grass_light": Color(0.3, 0.28, 0.26), "dirt": Color(0.26, 0.24, 0.22), "dirt_amount": 0.5, "grass": 0.0}
+	else:
+		# Feet and carts wear the ground bare in a town.
+		cols["dirt_amount"] = float(cols.get("dirt_amount", 0.3)) + (0.1 if kind == "village" else 0.2)
+	return cols
 
 
 func _build_ground() -> void:
-	var col := Color(0.36, 0.44, 0.22)
-	if underground:
-		col = Color(0.25, 0.23, 0.22)
-	elif float(sur["swamp"]) > 0.2:
-		col = Color(0.3, 0.33, 0.2)
-	elif float(sur["hills"]) > 0.25:
-		col = Color(0.44, 0.45, 0.28)
-	elif float(sur["forest"]) > 0.3:
-		col = Color(0.26, 0.36, 0.18)
 	var ground := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
 	cs.shape = WorldBoundaryShape3D.new()
 	ground.add_child(cs)
 	add_child(ground)
-	var mi := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(500, 500)
-	mi.mesh = pm
-	var noise := FastNoiseLite.new()
-	noise.frequency = 0.08
-	var nt := NoiseTexture2D.new()
-	nt.width = 128
-	nt.height = 128
-	nt.seamless = true
-	nt.noise = noise
-	var ramp := Gradient.new()
-	ramp.set_color(0, col.darkened(0.15))
-	ramp.set_color(1, col.lightened(0.08))
-	nt.color_ramp = ramp
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = nt
-	m.uv1_scale = Vector3(60, 60, 1)
-	mi.material_override = m
-	ground.add_child(mi)
+	Look.ground(ground, 500.0, _ground_cols())
 	# The edge of the walkable world.
 	for k in 4:
 		var a := PI * 0.5 * k
@@ -714,28 +671,37 @@ func _build_houses() -> void:
 	_spots["door"] = doors
 
 
+## On the beach strip along a coast.
+func _on_sand(p: Vector3) -> bool:
+	return _shore_n != Vector3.ZERO and p.dot(_shore_n) > _shore_d - 8.5
+
+
+func _on_street(p: Vector3, margin: float) -> bool:
+	for st2 in _streets():
+		var d: Vector3 = st2[0]
+		var w: float = st2[1]
+		var side := Vector3(-d.z, 0, d.x)
+		if absf(p.dot(side)) < w * 0.5 + margin and absf(p.dot(d)) < R + 18.0:
+			return true
+	return false
+
+
+func _in_obstacle(p: Vector3, margin: float) -> bool:
+	var q := Vector2(p.x, p.z)
+	for o in _obstacles:
+		var r: Rect2 = o
+		if r.size.x > 100.0 or r.size.y > 100.0:
+			continue # (the edge of the world)
+		if r.grow(margin).has_point(q):
+			return true
+	return false
+
+
 func _build_outside() -> void:
 	if underground:
 		return
 	# Trees, as many as the map has forest here.
 	var count := int(20 + 260 * float(sur["forest"]))
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.15
-	trunk.bottom_radius = 0.25
-	trunk.height = 2.0
-	trunk.material = _mat(Color(0.32, 0.22, 0.13))
-	var crown := CylinderMesh.new()
-	crown.top_radius = 0.0
-	crown.bottom_radius = 1.8
-	crown.height = 5.0
-	crown.radial_segments = 8
-	crown.material = _mat(Color(0.13, 0.27, 0.15))
-	var tm := MultiMesh.new()
-	tm.transform_format = MultiMesh.TRANSFORM_3D
-	tm.mesh = trunk
-	var cmm := MultiMesh.new()
-	cmm.transform_format = MultiMesh.TRANSFORM_3D
-	cmm.mesh = crown
 	var xs: Array = []
 	for i in count * 3:
 		if xs.size() >= count:
@@ -743,43 +709,57 @@ func _build_outside() -> void:
 		var a := _rng.randf() * TAU
 		var d := _rng.randf_range(R + 6.0, R + 65.0)
 		var p := Vector3(cos(a) * d, 0, sin(a) * d)
-		if _near_water(p, 2.0) or absf(p.z) < 5.0:
+		if _near_water(p, 2.0) or _on_sand(p) or absf(p.z) < 5.0 or (kind != "village" and absf(p.x) < 4.5):
 			continue
-		xs.append([p, _rng.randf_range(0.8, 1.5)])
-	tm.instance_count = xs.size()
-	cmm.instance_count = xs.size()
-	for i in xs.size():
-		var p: Vector3 = xs[i][0]
-		var s: float = xs[i][1]
-		var b := Basis().scaled(Vector3(s, s, s))
-		tm.set_instance_transform(i, Transform3D(b, p + Vector3(0, s, 0)))
-		cmm.set_instance_transform(i, Transform3D(b, p + Vector3(0, 4.2 * s, 0)))
-	for mm in [tm, cmm]:
-		var inst := MultiMeshInstance3D.new()
-		inst.multimesh = mm
-		add_child(inst)
+		xs.append([p, _rng.randf_range(0.75, 1.3)])
+	var tree_kind := "broadleaf"
+	if float(sur["mountain"]) > 0.1 or fac == "vell":
+		tree_kind = "pine"
+	elif float(sur["forest"]) > 0.25 or float(sur["hills"]) > 0.2:
+		tree_kind = "mixed"
+	Look.trees(self, xs, tree_kind, _rng)
+	# A few trees in yards inside a village; bushes and stones by the walls.
+	var yard: Array = []
+	var bush: Array = []
+	for i2 in 40:
+		var a4 := _rng.randf() * TAU
+		var d4 := _rng.randf_range(6.0, R + 30.0)
+		var p4 := Vector3(cos(a4) * d4, 0, sin(a4) * d4)
+		if _near_water(p4, 1.5) or _on_sand(p4) or _on_street(p4, 1.5) or _in_obstacle(p4, 1.5):
+			continue
+		if d4 < R and kind == "village" and yard.size() < 5 and _rng.randf() < 0.4:
+			yard.append([p4, _rng.randf_range(0.6, 0.85)])
+		else:
+			bush.append([p4, _rng.randf_range(0.5, 1.0)])
+	Look.trees(self, yard, "broadleaf", _rng)
+	Look.bushes(self, bush, _rng, 0.4)
 	# Fields outside a village.
+	var fields: Array = []
 	if kind == "village":
 		for k in 5:
 			var a2 := _rng.randf() * TAU
 			var p2 := Vector3(cos(a2), 0, sin(a2)) * (R + _rng.randf_range(8.0, 25.0))
 			if not _near_water(p2, 6.0):
 				_box(Vector3(14, 0.06, 10), p2 + Vector3(0, 0.03, 0), Color(0.72, 0.64, 0.3), a2)
+				fields.append(p2)
+	# Grass everywhere the town isn't: thin in the streets' wear, full outside.
+	var cols := _ground_cols()
+	var sq: float = {"village": 7.0, "town": 11.0, "city": 15.0, "hold": 10.0}.get(kind, 8.0)
+	var grng := RandomNumberGenerator.new()
+	grng.seed = _rng.randi()
+	var reject := func(p5: Vector3) -> bool:
+		if p5.length() < sq + 0.8 or _on_street(p5, 0.6) or _in_obstacle(p5, 0.3) or _near_water(p5, 0.8) or _on_sand(p5):
+			return true
+		for f in fields:
+			if p5.distance_to(f) < 7.5:
+				return true
+		# Trodden inside the walls.
+		return p5.length() < R and grng.randf() < (0.45 if kind == "village" else 0.7)
+	Look.grass(self, Vector3.ZERO, R + 55.0, float(cols.get("grass", 1.0)), cols, [], grng, reject)
 	# Hills or mountains standing behind, if the map has them here.
 	var high := float(sur["hills"]) + float(sur["mountain"]) * 2.0
-	if high > 0.1:
-		for k3 in int(4 + high * 14):
-			var a3 := _rng.randf() * TAU
-			var hill := MeshInstance3D.new()
-			var cone := CylinderMesh.new()
-			var big := _rng.randf_range(30.0, 60.0) * (1.6 if float(sur["mountain"]) > 0.1 else 1.0)
-			cone.top_radius = big * 0.15
-			cone.bottom_radius = big
-			cone.height = big * (0.6 if float(sur["mountain"]) > 0.1 else 0.35)
-			hill.mesh = cone
-			hill.material_override = _mat(Color(0.42, 0.44, 0.3) if float(sur["mountain"]) < 0.1 else Color(0.5, 0.5, 0.52))
-			hill.position = Vector3(cos(a3), 0, sin(a3)) * _rng.randf_range(160.0, 230.0) + Vector3(0, cone.height * 0.5, 0)
-			add_child(hill)
+	var hill_col: Color = (cols["grass_dark"] as Color).lerp(Color(0.6, 0.64, 0.66), 0.35)
+	Look.far_hills(self, _rng, 170.0, hill_col, int(10 + high * 10), float(sur["mountain"]) > 0.1)
 	if World.is_night():
 		# Lanterns along the main street.
 		for k4 in 6:

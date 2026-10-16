@@ -19,6 +19,7 @@ const BatcherScript := preload("res://scripts/batcher.gd")
 const Props := preload("res://scripts/props.gd")
 const Lore := preload("res://scripts/lore.gd")
 const Gen := preload("res://scripts/world_gen.gd")
+const Look := preload("res://scripts/look.gd")
 
 const SIZE := Vector2i(500, 290)
 
@@ -39,6 +40,12 @@ var _rng := RandomNumberGenerator.new()
 var _env: Environment
 var _sun: DirectionalLight3D
 var _ground_col := Color(0.36, 0.44, 0.22)
+var _cols: Dictionary = {}
+var _flats: Array = [] # [centre, size, yaw] of roads, water and floors: no grass there
+var _tree_spots: Array = []
+var _dead_spots: Array = []
+## Set by a scene with a floor of its own (a hall, a cave): no grass.
+var underfoot_bare := false
 
 
 static func make(k: String, c := {}) -> Control:
@@ -70,6 +77,9 @@ func _ready() -> void:
 	_root.add_child(_cam)
 	_cam.make_current()
 	_stage()
+	Look.trees(_root, _tree_spots, "mixed" if _terrain() != Gen.T.MOUNTAIN else "pine", _rng)
+	Look.trees(_root, _dead_spots, "dead", _rng)
+	_build_grass()
 	_update_cam(0.0)
 
 
@@ -98,76 +108,36 @@ func _time_of_day() -> String:
 
 
 func _build_env() -> void:
-	match _terrain():
-		Gen.T.FOREST: _ground_col = Color(0.24, 0.34, 0.17)
-		Gen.T.SWAMP: _ground_col = Color(0.27, 0.3, 0.18)
-		Gen.T.HILLS: _ground_col = Color(0.42, 0.43, 0.27)
-		Gen.T.BEACH: _ground_col = Color(0.7, 0.63, 0.45)
-		Gen.T.MOUNTAIN: _ground_col = Color(0.45, 0.44, 0.42)
-	_env = Environment.new()
-	_env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
+	var t := _terrain()
+	_cols = Look.ground_colours(t)
+	_ground_col = (_cols["grass_dark"] as Color).lerp(_cols["grass_light"], 0.5)
 	var tod := _time_of_day()
-	_sun = DirectionalLight3D.new()
-	match tod:
-		"night":
-			sm.sky_top_color = Color(0.02, 0.03, 0.07)
-			sm.sky_horizon_color = Color(0.07, 0.08, 0.13)
-			sm.ground_horizon_color = Color(0.05, 0.05, 0.07)
-			_sun.light_color = Color(0.55, 0.65, 1.0)
-			_sun.light_energy = 0.4
-			_sun.rotation_degrees = Vector3(-38, -40, 0)
-			_env.ambient_light_energy = 0.45
-			_env.fog_light_color = Color(0.05, 0.06, 0.1)
-		"dusk":
-			sm.sky_top_color = Color(0.25, 0.3, 0.5)
-			sm.sky_horizon_color = Color(0.98, 0.62, 0.4)
-			sm.ground_horizon_color = Color(0.5, 0.4, 0.32)
-			_sun.light_color = Color(1.0, 0.7, 0.45)
-			_sun.light_energy = 1.1
-			_sun.rotation_degrees = Vector3(-14, 60, 0)
-			_env.ambient_light_energy = 0.6
-			_env.fog_light_color = Color(0.85, 0.6, 0.45)
-		_:
-			sm.sky_top_color = Color(0.42, 0.55, 0.72)
-			sm.sky_horizon_color = Color(0.8, 0.8, 0.76)
-			sm.ground_horizon_color = Color(0.55, 0.56, 0.48)
-			_sun.light_energy = 1.1
-			_sun.rotation_degrees = Vector3(-48, 35, 0)
-			_env.ambient_light_energy = 0.8
-			_env.fog_light_color = Color(0.76, 0.77, 0.73)
-	sky.sky_material = sm
-	_env.sky = sky
-	_env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	_env.fog_enabled = true
-	_env.fog_density = 0.02 if tod == "night" else 0.012
-	var we := WorldEnvironment.new()
-	we.environment = _env
-	_root.add_child(we)
-	_root.add_child(_sun)
-	# The ground.
-	var g := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(200, 200)
-	g.mesh = pm
-	var noise := FastNoiseLite.new()
-	noise.frequency = 0.08
-	var nt := NoiseTexture2D.new()
-	nt.width = 64
-	nt.height = 64
-	nt.seamless = true
-	nt.noise = noise
-	var ramp := Gradient.new()
-	ramp.set_color(0, _ground_col.darkened(0.15))
-	ramp.set_color(1, _ground_col.lightened(0.08))
-	nt.color_ramp = ramp
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = nt
-	m.uv1_scale = Vector3(30, 30, 1)
-	g.material_override = m
-	_root.add_child(g)
+	var haze := Color(0.76, 0.78, 0.76)
+	if t == Gen.T.SWAMP:
+		haze = Color(0.66, 0.7, 0.62)
+	_env = Look.environment(_root, tod, haze, 0.02 if tod == "night" else 0.01)
+	_sun = _env.get_meta("sun")
+	# Shadows are too dear for a little window in a pop-up.
+	_sun.shadow_enabled = false
+	var g := Look.ground(_root, 200.0, _cols)
+	g.position.y = 0.0
+
+
+## Grass over the scene once it's staged, kept off roads, water and floors.
+func _build_grass() -> void:
+	if underfoot_bare:
+		return
+	var reject := func(p: Vector3) -> bool:
+		for f in _flats:
+			var c: Vector3 = f[0]
+			var sz: Vector3 = f[1]
+			var q := (p - c).rotated(Vector3.UP, -float(f[2]))
+			if absf(q.x) < sz.x * 0.5 + 0.3 and absf(q.z) < sz.z * 0.5 + 0.3:
+				return true
+		return false
+	var grng := RandomNumberGenerator.new()
+	grng.seed = _rng.randi()
+	Look.grass(_root, Vector3.ZERO, 34.0, float(_cols.get("grass", 1.0)) * 0.3, _cols, [], grng, reject)
 
 
 func _mat(c: Color, unshaded := false) -> StandardMaterial3D:
@@ -189,6 +159,8 @@ func _box(size: Vector3, pos: Vector3, c: Color, rot_y := 0.0, rot_x := 0.0) -> 
 	mi.position = pos
 	mi.rotation = Vector3(rot_x, rot_y, 0)
 	_root.add_child(mi)
+	if size.y <= 0.1 and pos.y < 0.2:
+		_flats.append([pos, size, rot_y])
 	return mi
 
 
@@ -206,10 +178,9 @@ func _cyl(r1: float, r2: float, h: float, pos: Vector3, c: Color, segs := 8) -> 
 	return mi
 
 
+## Trees are gathered and drawn together (Look.trees) once the scene is staged.
 func _tree(pos: Vector3, s := 1.0, dead := false) -> void:
-	_cyl(0.15 * s, 0.25 * s, 2.0 * s, pos + Vector3(0, s, 0), Color(0.32, 0.22, 0.13))
-	if not dead:
-		_cyl(0.0, 1.7 * s, 4.6 * s, pos + Vector3(0, 4.0 * s, 0), Color(0.13, 0.27, 0.15))
+	(_dead_spots if dead else _tree_spots).append([pos, s * 0.8])
 
 
 func _trees(n: int, rmin: float, rmax: float, centre := Vector3.ZERO, dead := false) -> void:
@@ -441,7 +412,7 @@ func _stage() -> void:
 			_cam_to = Vector3(5, 3, 9)
 			_look = Vector3(0, 0.6, 0)
 		"lost", "road":
-			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), _ground_col.lightened(0.18))
+			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), (_cols["dirt"] as Color).lightened(0.12))
 			_trees(18, 8, 40)
 			_column(10, Vector3(0, 0, 22), Vector3(0, 0, -26), 1.4)
 			if kind == "lost":
@@ -492,7 +463,7 @@ func _stage() -> void:
 			_cam_to = Vector3(4, 2.6, 10)
 			_look = Vector3(0, 1, -8)
 		"farmer", "pedlar", "refugees":
-			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), _ground_col.lightened(0.18))
+			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), (_cols["dirt"] as Color).lightened(0.12))
 			_trees(14, 9, 40)
 			if kind == "pedlar":
 				_beast(Vector3(0.8, 0, -1.5), 0.0, Color(0.42, 0.36, 0.3), 0, 0.85)
@@ -510,7 +481,7 @@ func _stage() -> void:
 			_cam_to = Vector3(4, 2.5, 6)
 			_look = Vector3(0, 1.1, -0.5)
 		"deserters", "patrol":
-			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), _ground_col.lightened(0.18))
+			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), (_cols["dirt"] as Color).lightened(0.12))
 			_trees(14, 9, 40)
 			var fac := String(ctx.get("faction", "vell"))
 			var col: Color = Lore.FACTIONS.get(fac, Lore.FACTIONS["vell"])["color"]
@@ -547,7 +518,7 @@ func _stage() -> void:
 			_cam_to = Vector3(5, 3, 8)
 			_look = Vector3(0, 0.8, -1)
 		"prospectors", "traders":
-			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), _ground_col.lightened(0.18))
+			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), (_cols["dirt"] as Color).lightened(0.12))
 			_trees(10, 9, 40)
 			_beast(Vector3(1.5, 0, -1.5), 0.0, Color(0.36, 0.3, 0.24), 0, 0.75)
 			for i in 3:
@@ -559,7 +530,7 @@ func _stage() -> void:
 			_cam_to = Vector3(4, 2.3, 6)
 			_look = Vector3(0, 1.0, -0.5)
 		"caravan", "villagers":
-			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), _ground_col.lightened(0.18))
+			_box(Vector3(4, 0.04, 80), Vector3(0, 0.02, 0), (_cols["dirt"] as Color).lightened(0.12))
 			_trees(14, 9, 40)
 			var carts := 2 if kind == "caravan" else 1
 			for i in carts:
@@ -590,7 +561,7 @@ func _stage() -> void:
 			_cam_to = Vector3(6, 3.5, 8)
 			_look = Vector3(0, 0.6, -1)
 		"scouts_back", "scouts_lost":
-			_box(Vector3(3, 0.04, 80), Vector3(0, 0.02, 0), _ground_col.lightened(0.18))
+			_box(Vector3(3, 0.04, 80), Vector3(0, 0.02, 0), (_cols["dirt"] as Color).lightened(0.12))
 			_trees(14, 8, 40)
 			if kind == "scouts_back":
 				for i in int(ctx.get("n", 2)):
