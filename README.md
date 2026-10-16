@@ -240,6 +240,45 @@ place left off, and drops in battle so the muskets carry. The ♪ button opens
 the player: previous, pause, next, random or in order, Auto, music on/off,
 volume and the track list.
 
+### Settlements: walking in, people, languages
+
+Walking anywhere inside a village, town, city or dwarf hold on the map (not
+just its centre) takes you there. **The first visit is on foot**, in first
+person; after that you arrive to the **town menu** over a slow camera
+drifting above the roofs (market, talk to someone, walk the streets, rest a
+day, leave). TOWN MENU and WALK THE STREETS switch between the two.
+
+**The place is built from the map** (`scripts/town.gd`): a village round a
+well, a palisaded town with a church and market, a walled city with a keep,
+a dwarf hold cut into the rock; Aurest plaster and red tiles, Vellish timber,
+Dwarvish stone. A river on the map runs through the streets with a bridge;
+a coast gives a shore, jetties and boats; forest crowds the walls; hills
+stand behind. The same town every visit. Your men wait at the gate.
+
+**Its people** (`scripts/folk.gd`) are generated too, and remembered: a
+name, age, trade (ferrymen where there's a river, fishers on the coast,
+charcoal burners by the forest, miners in the holds), two traits, a need,
+and a history tied to real places on the map. Walk up and TALK, or pick
+them from the menu. A conversation is a run of tries: greet, ask their
+name, let them talk, give bread or coin, ask about the lizards or the land,
+ask what they need, show the musket, ask them to join.
+
+**You don't speak their language** (`scripts/tongue.gd`). Each people has
+its own generated tongue. At first you can only use **signs**, and signs are
+misread: a wave taken for a warding sign, bread taken for an insult, the
+musket taken for a threat. Their speech is shown as you hear it; words you
+know appear in English. You pick up words in context, fluency grows, and
+once you know the words for something you can say it, which is far clearer.
+The **Tongues** skill speeds it up.
+
+Each try rolls against their traits, their need, your standing in the town
+and luck: trust rises or falls, and you may learn a word, a piece of their
+story, a rumour that marks a nest or a town on your map, or a task (bring
+food for a hungry family, pay a debt, fight the lizards who took a brother).
+Now and then something else happens (a child, a dog, a guard, a drink).
+Win enough trust, or help with what they need, and they **join you**: a real
+recruit with a spear, under the Natives tag.
+
 ### Your character sheet (YOU)
 
 Opened with **YOU** on the map, in camp and on the Company screen.

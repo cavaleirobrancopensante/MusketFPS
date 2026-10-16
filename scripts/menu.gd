@@ -60,6 +60,7 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/battleplan.tscn")
 		return
 	if "--towntest" in args:
+		seed(4242) # the same land every test run, to compare looks
 		Company.new_campaign()
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		World.reset()
