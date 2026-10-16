@@ -183,3 +183,23 @@ static func rocks(at: Vector3, count: int, size: float, rng: RandomNumberGenerat
 			Vector3(rng.randf_range(-size, size), s * 0.3, rng.randf_range(-size, size)),
 			Vector3(rng.randf_range(-20, 20), rng.randf_range(0, 90), rng.randf_range(-20, 20)))
 	return r
+
+
+## The company's baggage wagon: a bed on four wheels under a canvas tilt,
+## with shafts in front for the porters. Faces -Z.
+static func wagon() -> Node3D:
+	var w := Node3D.new()
+	_box(w, Vector3(1.5, 0.45, 3.0), WOOD, Vector3(0, 0.85, 0)) # bed
+	_box(w, Vector3(1.55, 0.08, 3.05), WOOD_DARK, Vector3(0, 1.1, 0))
+	for z in [-1.0, 1.0]:
+		for side in [-1.0, 1.0]:
+			_cyl(w, 0.45, 0.45, 0.1, WOOD_DARK, Vector3(side * 0.8, 0.45, z), Vector3(0, 0, 90))
+	# The canvas tilt over hoops, and crates sticking out the back.
+	var tilt := _cyl(w, 0.85, 0.85, 2.8, SAIL.darkened(0.08), Vector3(0, 1.25, 0), Vector3(90, 0, 0))
+	tilt.scale = Vector3(1.0, 1.0, 0.75)
+	_box(w, Vector3(1.5, 0.2, 2.8), SAIL.darkened(0.08), Vector3(0, 1.2, 0))
+	_box(w, Vector3(0.6, 0.5, 0.5), WOOD, Vector3(-0.35, 1.35, 1.45), Vector3(0, 12, 0))
+	_box(w, Vector3(0.5, 0.45, 0.45), Color(0.4, 0.3, 0.2), Vector3(0.38, 1.3, 1.5), Vector3(0, -8, 0))
+	for side in [-1.0, 1.0]:
+		_box(w, Vector3(0.08, 0.08, 2.0), WOOD, Vector3(side * 0.45, 0.75, -2.4), Vector3(-6, 0, 0)) # shafts
+	return w

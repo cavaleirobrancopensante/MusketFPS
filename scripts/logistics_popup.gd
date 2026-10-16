@@ -15,6 +15,7 @@ extends Control
 signal changed
 
 const Men := preload("res://scripts/men.gd")
+const UI := preload("res://scripts/ui.gd")
 const GOLD := Color(0.95, 0.8, 0.45)
 const RED := Color(0.95, 0.42, 0.35)
 const GREEN := Color(0.55, 0.9, 0.55)
@@ -24,6 +25,10 @@ var _grid: GridContainer
 var _info: RichTextLabel
 var _grog: Button
 var _title: Label
+var _cargo: VBoxContainer
+var _cargo_list: VBoxContainer
+var _cargo_head: RichTextLabel
+var _cargo_btn: Button
 
 
 func _ready() -> void:
@@ -64,9 +69,28 @@ func _ready() -> void:
 	_info.add_theme_font_size_override("normal_font_size", 18)
 	_info.add_theme_font_size_override("bold_font_size", 18)
 	v.add_child(_info)
+	# The cargo: everything in the wagon by weight and space.
+	_cargo = VBoxContainer.new()
+	_cargo.visible = false
+	_cargo.add_theme_constant_override("separation", 6)
+	v.add_child(_cargo)
+	_cargo_head = RichTextLabel.new()
+	_cargo_head.bbcode_enabled = true
+	_cargo_head.fit_content = true
+	_cargo_head.scroll_active = false
+	_cargo_head.add_theme_font_size_override("normal_font_size", 18)
+	_cargo.add_child(_cargo_head)
+	var sc := UI.scroll()
+	sc.custom_minimum_size = Vector2(0, 330)
+	_cargo.add_child(sc)
+	_cargo_list = VBoxContainer.new()
+	_cargo_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(_cargo_list)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	v.add_child(row)
+	_cargo_btn = _button("CARGO", _toggle_cargo)
+	row.add_child(_cargo_btn)
 	_grog = _button("", _on_grog)
 	row.add_child(_grog)
 	var all := _button("SHARE EVERYTHING EVENLY", _on_share_all)
@@ -178,7 +202,11 @@ func refresh() -> void:
 		cm, Men.morale_word(cm), sick, hungry, thirsty]
 	if cm < Company.MUTINY_MORALE:
 		t += "\n[color=#%s][b]The men are close to mutiny.[/b][/color]" % RED.to_html(false)
+	var load := Company.wagon_load()
+	t += "\nLoad: [b]%d / %d kg[/b]   ·   space [b]%.0f / %.0f[/b]   (CARGO for the full list)" % [
+		int(load[0]), int(Company.WAGON_KG), load[1], Company.WAGON_SPACE]
 	_info.text = t
+	_fill_cargo()
 	_grog.text = "GROG: ON" if bool(s["grog"]) else "GROG: OFF"
 
 
@@ -224,3 +252,32 @@ func _on_grog() -> void:
 	Company.save()
 	refresh()
 	changed.emit()
+
+
+func _toggle_cargo() -> void:
+	_cargo.visible = not _cargo.visible
+	_grid.visible = not _cargo.visible
+	_info.visible = not _cargo.visible
+	_cargo_btn.text = "SUPPLIES" if _cargo.visible else "CARGO"
+	_fill_cargo()
+
+
+## Everything in the wagon: stores and spare kit, with their weight.
+func _fill_cargo() -> void:
+	if not _cargo.visible:
+		return
+	var load := Company.wagon_load()
+	_cargo_head.text = "[b]CARGO[/b]   %d / %d kg   ·   space %.0f / %.0f" % [int(load[0]), int(Company.WAGON_KG),
+		load[1], Company.WAGON_SPACE]
+	for c in _cargo_list.get_children():
+		c.queue_free()
+	var rows: Array = []
+	for k in Company.CONSUMABLES:
+		if int(Company.stores.get(k, 0)) > 0:
+			rows.append([k, int(Company.stores[k])])
+	for id in Company.stores["items"]:
+		rows.append([id, int(Company.stores["items"][id])])
+	for r in rows:
+		var l := Company.load_of(String(r[0]), int(r[1]))
+		_cargo_list.add_child(_label("%s ×%d   ·   %.1f kg   ·   %.1f space" % [Company.item_label(r[0]), int(r[1]), l[0], l[1]],
+			18, Color.WHITE))

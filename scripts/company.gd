@@ -48,29 +48,52 @@ const SLOT_NAMES := {"head": "Head", "torso": "Torso", "primary": "Primary weapo
 ## armour (fraction of melee damage turned), spread / reload (multipliers),
 ## misfire (chance), melee (bayonet damage).
 const ITEMS := {
-	"shako": {"name": "Shako", "slot": "head", "steady": 0.05,
+	"shako": {"name": "Shako", "slot": "head", "steady": 0.05, "kg": 0.4, "space": 0.4, "value": 3,
 		"desc": "Regulation felt shako with a brass plate. A man stands taller in it."},
-	"tricorne": {"name": "Tricorne", "slot": "head", "steady": 0.03,
+	"tricorne": {"name": "Tricorne", "slot": "head", "steady": 0.03, "kg": 0.4, "space": 0.4, "value": 2,
 		"desc": "An old cocked hat from the last war."},
-	"cap": {"name": "Forage cap", "slot": "head",
+	"cap": {"name": "Forage cap", "slot": "head", "kg": 0.2, "space": 0.2, "value": 1,
 		"desc": "A soft wool cap. Keeps the sun off, nothing more."},
-	"coat": {"name": "Regulation coat", "slot": "torso", "steady": 0.05,
+	"coat": {"name": "Regulation coat", "slot": "torso", "steady": 0.05, "kg": 2.0, "space": 0.6, "value": 6,
 		"desc": "Blue wool coat with white crossbelts. The uniform of the line."},
-	"shirt": {"name": "Linen shirt", "slot": "torso", "pace": 0.05,
+	"shirt": {"name": "Linen shirt", "slot": "torso", "pace": 0.05, "kg": 0.5, "space": 0.3, "value": 1,
 		"desc": "Light and cool. No protection at all."},
-	"buffcoat": {"name": "Buff coat", "slot": "torso", "armour": 0.3, "pace": -0.06,
+	"buffcoat": {"name": "Buff coat", "slot": "torso", "armour": 0.3, "pace": -0.06, "kg": 4.0, "space": 1.0, "value": 10,
 		"desc": "Thick oiled leather. Turns a glancing hack, but it's heavy."},
-	"musket": {"name": "Land musket", "slot": "primary", "spread": 1.0, "reload": 1.0, "misfire": 0.04,
+	"musket": {"name": "Land musket", "slot": "primary", "spread": 1.0, "reload": 1.0, "misfire": 0.04, "kg": 4.5, "space": 1.0, "value": 30,
 		"desc": "Smoothbore flintlock, .75 bore. Reliable."},
-	"worn_musket": {"name": "Worn musket", "slot": "primary", "spread": 1.35, "reload": 1.05, "misfire": 0.12,
+	"worn_musket": {"name": "Worn musket", "slot": "primary", "spread": 1.35, "reload": 1.05, "misfire": 0.12, "kg": 4.5, "space": 1.0, "value": 12,
 		"desc": "Pitted barrel, tired lock. Misfires often and scatters wide."},
-	"rifle": {"name": "Rifle", "slot": "primary", "spread": 0.4, "reload": 1.6, "misfire": 0.05,
+	"rifle": {"name": "Rifle", "slot": "primary", "spread": 0.4, "reload": 1.6, "misfire": 0.05, "kg": 4.5, "space": 1.0, "value": 50,
 		"desc": "A rifled barrel: deadly accurate, slow to load."},
-	"bayonet": {"name": "Socket bayonet", "slot": "secondary", "melee": 34.0,
+	"bayonet": {"name": "Socket bayonet", "slot": "secondary", "melee": 34.0, "kg": 0.4, "space": 0.2, "value": 4,
 		"desc": "Fixed on the muzzle, it turns the musket into a pike."},
-	"sword_bayonet": {"name": "Sword bayonet", "slot": "secondary", "melee": 42.0,
+	"sword_bayonet": {"name": "Sword bayonet", "slot": "secondary", "melee": 42.0, "kg": 0.8, "space": 0.3, "value": 8,
 		"desc": "A long, heavy blade made for the rifle."},
+	# Pole arms: no gun, but reach. Pikemen hold the line in front of the muskets.
+	"pike": {"name": "Boarding pike", "slot": "primary", "melee": 40.0, "reach": 2.8, "kg": 3.0, "space": 1.5, "value": 6,
+		"desc": "A ship's boarding pike, nine feet of ash and iron. Keeps them at arm's length and more."},
+	"spear": {"name": "Lizard spear", "slot": "primary", "melee": 32.0, "reach": 2.3, "kg": 2.0, "space": 1.2, "value": 4,
+		"desc": "A crude spear with a chipped stone head. Light, and longer than it looks."},
+	"cleaver": {"name": "Lizard cleaver", "slot": "secondary", "melee": 30.0, "kg": 2.5, "space": 0.6, "value": 5,
+		"desc": "A heavy, crude blade. Better than clubbing with a musket butt."},
+	# Goods: no use to us, but worth something to someone.
+	"lizard_shield": {"name": "Lizard shield", "slot": "goods", "kg": 4.0, "space": 1.2, "value": 6,
+		"desc": "Hide stretched over a wicker frame. Collectors in the towns pay for them."},
+	"hide": {"name": "Scaled hide", "slot": "goods", "kg": 5.0, "space": 1.0, "value": 4,
+		"desc": "Tough scaled leather. Tanners want it."},
+	"charm": {"name": "Bone charm", "slot": "goods", "kg": 0.2, "space": 0.1, "value": 8,
+		"desc": "Carved bone strung on sinew. The locals think they're lucky, or cursed."},
 }
+## Weight (kg) and space of a unit of each kind of store.
+const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01]}
+const WAGON_KG := 900.0
+const WAGON_SPACE := 60.0
+## What each kind of slain enemy may leave behind: [item id, chance per body].
+const LOOT_TABLE := {"lizards": [["cleaver", 0.22], ["lizard_shield", 0.12], ["hide", 0.2], ["charm", 0.1],
+	["spear", 0.08], ["stolen", 0.06]]}
+const PIKE_GEAR := {"head": "cap", "torso": "shirt", "primary": "pike", "secondary": ""}
+const DEFAULT_TAGS := ["Musketeers", "Pikes"]
 const CLUBBED_DAMAGE := 18.0 # no bayonet: he clubs with the butt
 ## What a man carries in his pack, and how much he can carry.
 const PACK := {
@@ -123,6 +146,14 @@ var prologue := false # the opening battle is still to be fought
 var stash := {}
 ## A fight the map has started: {"enemy": int, "terrain": int, "party": id}.
 var next_battle := {}
+## The battle plan: tags (groups) the player has made; each man has m["tag"]
+## and maybe m["plan"] = [x, y]: metres right of the officer and forward
+## toward the enemy. The wagon has its own place (usually at the rear).
+var tags: Array = DEFAULT_TAGS.duplicate()
+var wagon_plan := [0.0, -12.0]
+## What was left on the field after the last battle: [{"id", "n"}], to pick
+## through on the loot screen.
+var loot: Array = []
 var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
@@ -156,7 +187,16 @@ func new_campaign() -> void:
 		m["battles"] = rank * 2 + randi_range(0, 2)
 		m["gear"] = REGULAR_GEAR.duplicate()
 		m["pack"] = {"water": 1, "rations": 8, "ammo": 24}
+		m["tag"] = "Musketeers"
+		if i >= PROLOGUE_MEN - 3:
+			# Three of the ship's sailors with boarding pikes.
+			m["gear"] = PIKE_GEAR.duplicate()
+			m["pack"]["ammo"] = 0
+			m["tag"] = "Pikes"
 		roster.append(m)
+	tags = DEFAULT_TAGS.duplicate()
+	wagon_plan = [0.0, -12.0]
+	loot = []
 	prologue = true
 	stash = {}
 	next_battle = {}
@@ -185,6 +225,7 @@ func make_recruit() -> Dictionary:
 		"sick": 0, # days of sickness left
 		"gear": RECRUIT_GEAR.duplicate(),
 		"pack": {"water": 1, "rations": 2, "ammo": 0},
+		"tag": "Musketeers",
 	}
 	next_id += 1
 	return m
@@ -208,7 +249,7 @@ static func item_name(id: String) -> String:
 ## Everything his gear does for him, in one place (see ITEMS).
 static func gear_stats(m: Dictionary) -> Dictionary:
 	var st := {"steady": 0.0, "pace": 0.0, "armour": 0.0, "spread": 1.0, "reload": 1.0,
-		"misfire": 0.04, "melee": CLUBBED_DAMAGE, "bayonet": false}
+		"misfire": 0.04, "melee": CLUBBED_DAMAGE, "bayonet": false, "gun": true, "reach": 0.0}
 	var gear: Dictionary = m.get("gear", REGULAR_GEAR)
 	for slot in SLOTS:
 		var id := String(gear.get(slot, ""))
@@ -223,8 +264,11 @@ static func gear_stats(m: Dictionary) -> Dictionary:
 			st["reload"] = float(it["reload"])
 			st["misfire"] = float(it["misfire"])
 		if it.has("melee"):
-			st["melee"] = float(it["melee"])
+			st["melee"] = maxf(float(st["melee"]), float(it["melee"]))
 			st["bayonet"] = true
+		if it.has("reach"):
+			st["gun"] = false # a pole arm instead of a musket
+			st["reach"] = float(it["reach"])
 	return st
 
 
@@ -279,8 +323,10 @@ func apply_battle(result: Dictionary) -> void:
 	officer["kills"] = int(officer["kills"]) + int(result["officer_kills"])
 	if won:
 		victories += 1
-	# A won field is yours to strip: the fallen's gear goes back to the wagon.
+	# A won field is yours to strip: the fallen's gear and what the enemy
+	# left go on the loot pile (see the loot screen).
 	var recover := won and not was_prologue
+	loot = []
 
 	var survivors: Array = []
 	for m in roster:
@@ -297,7 +343,7 @@ func apply_battle(result: Dictionary) -> void:
 				"battles": m["battles"], "kills": m["kills"]})
 			summary["fallen"].append(title(m))
 			if recover:
-				_strip_to_stores(m)
+				_strip_to_loot(m)
 			continue
 		var gained := XP_SURVIVE + XP_KILL * int(r["kills"]) + (XP_VICTORY if won else 0)
 		var old_level := Men.level(m)
@@ -318,11 +364,25 @@ func apply_battle(result: Dictionary) -> void:
 		survivors.append(m)
 	roster = survivors
 
+	# Lizards that got into the wagon carried off a share of what was in it.
+	var looted := clampf(float(result.get("wagon_looted", 0.0)), 0.0, 0.8)
+	if looted > 0.01 and not was_prologue:
+		summary["wagon_looted"] = int(looted * 100)
+		for k in ["rations", "ammo", "rum"]:
+			stores[k] = int(int(stores[k]) * (1.0 - looted))
+		var its: Dictionary = stores["items"]
+		for id in its.keys():
+			its[id] = int(round(int(its[id]) * (1.0 - looted)))
+			if int(its[id]) <= 0:
+				its.erase(id)
+
 	if was_prologue:
 		_after_prologue(summary)
 	elif won:
 		# Pay: a bounty on every lizardman slain.
 		summary["pay"] = 15 + 5 * int(result["slain"])
+		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
+		summary["loot"] = loot.size()
 	else:
 		# A beaten company loses a quarter of its purse and half its baggage;
 		# what the men carry on their backs is all that's sure.
@@ -367,6 +427,44 @@ func _after_prologue(summary: Dictionary) -> void:
 	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1},
 		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true}
 	summary["pay"] = 0
+
+
+## A fallen man's kit and pack go on the loot pile.
+func _strip_to_loot(m: Dictionary) -> void:
+	var gear: Dictionary = m.get("gear", {})
+	for slot in SLOTS:
+		var id := String(gear.get(slot, ""))
+		if ITEMS.has(id):
+			_add_loot(id, 1)
+	var pack: Dictionary = m.get("pack", {})
+	for k in ["rations", "ammo"]:
+		if int(pack.get(k, 0)) > 0:
+			_add_loot(k, int(pack[k]))
+
+
+## What the slain left behind: their weapons, hides and charms, and now and
+## then something they had stolen.
+func _loot_from(enemy: String, slain: int) -> void:
+	for i in slain:
+		for row in LOOT_TABLE.get(enemy, []):
+			if randf() >= float(row[1]):
+				continue
+			if row[0] == "stolen":
+				match randi() % 4:
+					0: _add_loot("rations", randi_range(4, 10))
+					1: _add_loot("rum", randi_range(3, 6))
+					2: _add_loot("ammo", randi_range(10, 30))
+					_: _add_loot("crowns", randi_range(2, 10))
+			else:
+				_add_loot(String(row[0]), 1)
+
+
+func _add_loot(id: String, n: int) -> void:
+	for l in loot:
+		if l["id"] == id:
+			l["n"] = int(l["n"]) + n
+			return
+	loot.append({"id": id, "n": n})
 
 
 func _strip_to_stores(m: Dictionary) -> void:
@@ -470,12 +568,122 @@ func resupply_all() -> void:
 		share_evenly(key)
 
 
+# ---------------------------------------------------------------- the wagon's load
+
+## [kg, space] of `n` of something (an item id or a store like "rations").
+static func load_of(id: String, n: int) -> Array:
+	if CONSUMABLES.has(id):
+		return [CONSUMABLES[id][0] * n, CONSUMABLES[id][1] * n]
+	if ITEMS.has(id):
+		return [float(ITEMS[id].get("kg", 1.0)) * n, float(ITEMS[id].get("space", 0.5)) * n]
+	return [0.0, 0.0] # crowns
+
+
+## What the wagon is carrying: [kg, space].
+func wagon_load() -> Array:
+	var kg := 0.0
+	var sp := 0.0
+	for k in CONSUMABLES:
+		var l := load_of(k, int(stores.get(k, 0)))
+		kg += l[0]
+		sp += l[1]
+	for id in stores["items"]:
+		var l2 := load_of(id, int(stores["items"][id]))
+		kg += l2[0]
+		sp += l2[1]
+	return [kg, sp]
+
+
+## How many of `id` still fit in the wagon.
+func room_for(id: String) -> int:
+	var l := load_of(id, 1)
+	if l[0] <= 0.0 and l[1] <= 0.0:
+		return 999999
+	var w := wagon_load()
+	var by_kg := int(floor((WAGON_KG - w[0]) / maxf(l[0], 0.0001)))
+	var by_sp := int(floor((WAGON_SPACE - w[1]) / maxf(l[1], 0.0001)))
+	return maxi(0, mini(by_kg, by_sp))
+
+
+## Put up to `n` of something into the wagon (as far as it fits). Returns how many.
+func stow(id: String, n: int) -> int:
+	if id == "crowns":
+		money += n
+		return n
+	var k := mini(n, room_for(id))
+	if k <= 0:
+		return 0
+	if CONSUMABLES.has(id):
+		stores[id] = int(stores[id]) + k
+	else:
+		add_item(id, k)
+	return k
+
+
+## Take up to `n` from the loot pile into the wagon.
+func take_loot(index: int, n: int) -> int:
+	if index < 0 or index >= loot.size():
+		return 0
+	var l: Dictionary = loot[index]
+	var k := stow(String(l["id"]), mini(n, int(l["n"])))
+	l["n"] = int(l["n"]) - k
+	if int(l["n"]) <= 0:
+		loot.remove_at(index)
+	return k
+
+
+## Put something from the wagon back on the pile (to make room).
+func drop_to_loot(id: String, n: int) -> int:
+	var have := int(stores.get(id, 0)) if CONSUMABLES.has(id) else item_count(id)
+	var k := mini(n, have)
+	if k <= 0:
+		return 0
+	if CONSUMABLES.has(id):
+		stores[id] = int(stores[id]) - k
+	else:
+		add_item(id, -k)
+	_add_loot(id, k)
+	return k
+
+
+static func item_label(id: String) -> String:
+	match id:
+		"water": return "Water (days)"
+		"rations": return "Rations"
+		"ammo": return "Cartridges"
+		"rum": return "Rum (tots)"
+		"crowns": return "Crowns"
+	return item_name(id)
+
+
+## Trade goods in the wagon and what a settlement of this kind pays for them.
+func goods_value(kind: String) -> int:
+	var f: float = {"village": 0.6, "town": 1.0, "city": 1.2, "hold": 1.1}.get(kind, 0.0)
+	var total := 0.0
+	for id in stores["items"]:
+		if ITEMS.has(id) and (ITEMS[id]["slot"] == "goods" or id in ["cleaver", "spear"]):
+			total += float(ITEMS[id].get("value", 0)) * int(stores["items"][id]) * f
+	return int(total)
+
+
+func sell_goods(kind: String) -> int:
+	var v := goods_value(kind)
+	if v <= 0:
+		return 0
+	for id in stores["items"].keys():
+		if ITEMS.has(id) and (ITEMS[id]["slot"] == "goods" or id in ["cleaver", "spear"]):
+			stores["items"].erase(id)
+	money += v
+	save()
+	return v
+
+
 func can_buy(key: String) -> bool:
 	return money >= int(SUPPLY[key][1])
 
 
 func buy(key: String) -> void:
-	if not can_buy(key):
+	if not can_buy(key) or room_for(key) < int(SUPPLY[key][0]):
 		return
 	money -= int(SUPPLY[key][1])
 	stores[key] = int(stores[key]) + int(SUPPLY[key][0])
@@ -785,6 +993,7 @@ func save() -> void:
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
 		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle,
+		"tags": tags, "wagon_plan": wagon_plan, "loot": loot,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
@@ -815,6 +1024,11 @@ func load_campaign() -> bool:
 	prologue = bool(data.get("prologue", false))
 	stash = data.get("stash", {})
 	next_battle = data.get("next_battle", {})
+	tags = data.get("tags", DEFAULT_TAGS.duplicate())
+	wagon_plan = data.get("wagon_plan", [0.0, -12.0])
+	loot = data.get("loot", [])
+	for l in loot:
+		l["n"] = int(l["n"])
 	stores = data.get("stores", {"items": {"musket": 1, "bayonet": 1}, "water": WATER_CART, "rations": 40, "ammo": 120})
 	last_result = data.get("last_result", {})
 	march_note = String(data.get("march_note", ""))

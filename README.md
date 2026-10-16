@@ -106,8 +106,8 @@ with every seed.
 - **Every soldier is a person**: a name, his own reaction, pace and
   steadiness, experience, rank (Recruit, Musketeer, Veteran, Sergeant),
   battles fought and kills.
-- **Levels and attributes.** Every 100 experience is a level and gives 2
-  points to spend on his four attributes:
+- **Levels and attributes.** Every 100 experience is a level and gives 1
+  point to spend on his four attributes:
 
   | Attribute | What it does |
   |---|---|
@@ -138,6 +138,62 @@ with every seed.
   There are **four save slots**, each its own campaign in its own land:
   **CONTINUE** picks up the last one, **LOAD** any other, **NEW CAMPAIGN**
   asks which slot to use (and a second tap to overwrite).
+
+### The battle plan (PLAN on the map)
+
+Where every man stands when a fight starts. The tactical map fills the left
+and centre of the screen: you are the star, the enemy's side is at the top,
+every man is a dot in his tag's colour, the wagon is a box. On the right:
+
+- **Tags**: a dropdown of groups (Musketeers and Pikes to begin with); **NEW**
+  makes another (Ranged 2, Reserve, whatever you like). Tap a man's tag
+  button to put him in the selected tag.
+- **LINE**: drag across the field and the selected tag forms a line along
+  it, evenly spaced, in more ranks if the line is too short (a tap makes a
+  line centred there).
+- **MAN**: pick a man in the list, tap the field to place him.
+- **WAGON**: tap to place the wagon. Any dot (or the wagon) can be dragged.
+- **ONE LINE** and **PIKES AHEAD** presets.
+
+In battle the formation keeps its shape around you: it moves and wheels with
+you on FOLLOW and stays put on HOLD. Before a fight you saw coming, the
+encounter offers **PLAN** first. An **ambush** (in your camp at night, or a
+warband you never saw coming) gives no time: the men start scattered.
+
+**Pikemen.** Three of the ship's sailors carry boarding pikes. Pikemen don't
+shoot; they kneel in the front rank (the muskets fire over them), meet the
+lizards at nine feet and hold them off the musketeers.
+
+**The wagon** comes to every battle on the map, dragged by two porters to
+its place in the plan (at the rear, usually). Some lizards would rather
+plunder than fight: they make for the wagon and rummage in it until it's
+empty or someone hurts them, carrying off a share of the food, cartridges,
+rum and kit. Out in front it's bait: looting lizards stand still for a
+volley.
+
+### Loot and the wagon's load
+
+After a won fight, **LOOT THE FIELD**: on the left what's there (lizard
+cleavers and spears, shields, scaled hides, bone charms, whatever they had
+stolen, and the kit of your own fallen), on the right the wagon with its
+weight (900 kg) and space (60) bars. TAKE one, ALL, or TAKE EVERYTHING THAT
+FITS (the most valuable for its weight first); DROP from the wagon to make
+room. Crowns go straight into the purse. A cleaver or a spear can be
+issued as a weapon; the rest are goods: **SELL LOOT** in villages (cheap),
+towns, cities and dwarf holds. The wagon's full cargo is under **CARGO** in
+the Logistics window; buying stops when the wagon is full.
+
+### Music
+
+An original soundtrack composed and synthesised by code (tools/music, built
+on the TCG-RPG music engine): 15 pieces on four themes, the Regiment (fife
+and drum marches, horns, a soldiers' chorus), the Coast (lute, recorder,
+harp airs), the Camp (night pieces) and the Horde (war drums, shawms and
+horns in a Phrygian dominant). It follows the game (menu, the wreck, the
+map by day, the camp at night, battle) with crossfades, resumes where each
+place left off, and drops in battle so the muskets carry. The ♪ button opens
+the player: previous, pause, next, random or in order, Auto, music on/off,
+volume and the track list.
 
 ### The Company screen (COMPANY & KIT)
 
@@ -301,6 +357,12 @@ aftermath node.
 | `scripts/world_gen.gd` | Generates the land from a seed: height, terrain, rivers, lakes, fords, bridges, roads, settlements |
 | `scripts/world.gd` | `World` autoload: the map's clock, your march, sight and fog, every roaming party, encounters, saving |
 | `scripts/events.gd` | Events on the road: where they can happen, their choices and outcomes |
+| `scripts/battleplan.gd` | The battle plan: tactical map, tags, lines, presets, the wagon's place |
+| `scripts/loot.gd` | The loot screen: the field's pickings against the wagon's weight and space |
+| `scripts/music.gd` | `Music` autoload: playlists per place, crossfades, resume, its own bus |
+| `scripts/music_bar.gd` | The ♪ music player |
+| `scripts/ui.gd` | Touch helpers: lists you can swipe anywhere |
+| `tools/music/` | The composer and synthesiser that make `music/*.ogg` (`python3 tools/music/musket_music.py`) |
 | `scripts/map.gd` | The 3D map: terrain chunks, fog shader, trees, settlements, parties, camera, taps, HUD, visits |
 | `scripts/props.gd` | Scenery from primitives: ship, longboats, cannon, earthworks, rocks, the sea |
 | `scripts/settings.gd` | `Settings` autoload: camera mode, stress test |
@@ -368,7 +430,8 @@ linked campaign battles (buying, sharing out and marching in between), `--stress
 third person. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a
-phone. `-- --intro` plays the cutscene at 4x speed. `-- --maptest` makes a
+phone. `-- --intro` plays the cutscene at 4x speed. `-- --plantest` and
+`-- --loottest` exercise the battle plan and the loot screen. `-- --maptest` makes a
 new land, marches to the nearest village, buys food, then heads for the
 stash nest, slipping away from (or fighting) warbands on the way.
 

@@ -25,7 +25,7 @@ func _ready() -> void:
 	#   -- --autotest [--stress] [--tp]   a stand-alone battle
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	var args := OS.get_cmdline_user_args()
-	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots"]:
+	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest"]:
 		if a in args:
 			Settings.slot = 99 # tests never touch the player's saves
 	if "--intro" in args or "--intro-render" in args:
@@ -40,6 +40,17 @@ func _ready() -> void:
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		World.reset()
 		get_tree().change_scene_to_file.call_deferred(MAP)
+		return
+	if "--loottest" in args:
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		Company.apply_battle({"won": true, "slain": 30, "officer_kills": 2, "men": {}, "enemy": "lizards"})
+		get_tree().change_scene_to_file.call_deferred("res://scenes/loot.tscn")
+		return
+	if "--plantest" in args:
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		get_tree().change_scene_to_file.call_deferred("res://scenes/battleplan.tscn")
 		return
 	if "--company" in args:
 		# Headless check of the Company screen after the prologue.

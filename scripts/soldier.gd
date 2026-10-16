@@ -60,6 +60,10 @@ var down_status := "" # "wounded" or "killed" once he falls
 var melee_bonus := 0.0 # sharper with the bayonet as he rises in rank
 var melee_damage := MELEE_DAMAGE # set by his bayonet (or lack of one)
 var armour := 0.0 # fraction of a melee blow his coat turns
+var pike := false # a pole arm instead of a musket: no shooting, long reach
+var reach := MELEE_RANGE
+var engage := ENGAGE_RANGE
+var plan_pos = null # Vector2 from the battle plan: metres right, metres forward
 var spread_mult := 1.0
 var parry_bonus := 0.0 # strength
 var melee_rate := 1.0 # fitness: how soon he strikes again
@@ -117,6 +121,11 @@ func _ready() -> void:
 		melee_rate = float(st["melee_rate"])
 		hp = float(st["hp"])
 		ammo = int(record["pack"]["ammo"])
+		if not bool(st["gun"]):
+			pike = true
+			ammo = 0
+			reach = float(st["reach"])
+			engage = reach + 1.6
 		loaded = ammo > 0
 		rig_gear = record["gear"]
 		rig_pack = record["pack"]
@@ -162,7 +171,10 @@ func _physics_process(delta: float) -> void:
 
 	blocking = false
 	# Close combat: a lizardman within reach takes priority over everything.
-	var threat: Node3D = battle.nearest_enemy(global_position, ENGAGE_RANGE)
+	var threat: Node3D = battle.nearest_enemy(global_position, engage)
+	# Pikemen kneel in the front rank (the muskets fire over them) until it comes to blows.
+	if pike:
+		hit_height = 1.8 if threat != null else 1.1
 	if threat != null:
 		shot_timer = -1.0
 		_melee(delta, threat)
@@ -219,7 +231,7 @@ func _update_perception() -> void:
 	if ally:
 		_history.append([_clock, ally_slot, ally_forward])
 	else:
-		_history.append([_clock, battle.get_slot_position(slot_index), battle.line_forward])
+		_history.append([_clock, battle.slot_of(self), battle.line_forward])
 	while _history.size() > 1 and _clock - float(_history[0][0]) > reaction:
 		var old: Array = _history.pop_front()
 		_seen_slot = old[1]
@@ -251,12 +263,12 @@ func _melee(delta: float, e: Node3D) -> void:
 		v = -dir * BACKPEDAL * pace
 	else:
 		set_base_anim("guard")
-		if melee_timer <= 0.0 and d <= MELEE_RANGE + (0.4 if he_reels else 0.0):
+		if melee_timer <= 0.0 and d <= reach + (0.4 if he_reels else 0.0):
 			_thrust(e)
 		elif he_reels or charging:
-			if d > MELEE_RANGE * 0.8:
+			if d > reach * 0.8:
 				v = dir * 2.4 * pace # press him while he's off balance
-		elif d < 1.3:
+		elif d < (reach * 0.7 if pike else 1.3):
 			v = -dir * 1.0 * pace # keep the bayonet's length between us
 
 	if not charging:
