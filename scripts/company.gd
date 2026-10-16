@@ -93,7 +93,7 @@ const WAGON_SPACE := 60.0
 const LOOT_TABLE := {"lizards": [["cleaver", 0.22], ["lizard_shield", 0.12], ["hide", 0.2], ["charm", 0.1],
 	["spear", 0.08], ["stolen", 0.06]]}
 const PIKE_GEAR := {"head": "cap", "torso": "shirt", "primary": "pike", "secondary": ""}
-const DEFAULT_TAGS := ["Musketeers", "Pikes"]
+const DEFAULT_TAGS := ["Musketeers", "Pikes", "Wagon"]
 const CLUBBED_DAMAGE := 18.0 # no bayonet: he clubs with the butt
 ## What a man carries in his pack, and how much he can carry.
 const PACK := {
@@ -197,6 +197,7 @@ func new_campaign() -> void:
 	tags = DEFAULT_TAGS.duplicate()
 	wagon_plan = [0.0, -12.0]
 	loot = []
+	ensure_wagon_crew()
 	prologue = true
 	stash = {}
 	next_battle = {}
@@ -354,6 +355,17 @@ func apply_battle(result: Dictionary) -> void:
 			summary["levelled"].append("%s, level %d (+%d points)" % [title(m), Men.level(m), levels * Men.POINTS_PER_LEVEL])
 		# A win lifts a man; a defeat, or a rout, weighs on him.
 		Men.add_morale(m, -10 if was_prologue else (10 if won else -15))
+		# The wagon crew: running shames a man, standing to it makes him proud.
+		match String(r.get("conduct", "")):
+			"fled":
+				Men.add_morale(m, -6)
+				summary.get_or_add("conduct", []).append("%s ran from the wagon" % title(m))
+			"stood":
+				Men.add_morale(m, 3)
+				summary.get_or_add("conduct", []).append("%s held the wagon" % title(m))
+			"fought":
+				Men.add_morale(m, 6)
+				summary.get_or_add("conduct", []).append("%s fought for the wagon" % title(m))
 		if r["status"] == "wounded":
 			m["wounded_days"] = randi_range(3, 10)
 			summary["wounded"].append("%s (%d days)" % [title(m), m["wounded_days"]])
@@ -681,6 +693,19 @@ func sell_goods(kind: String) -> int:
 	money += v
 	save()
 	return v
+
+
+## Two men to haul the wagon if nobody has been given the job: the two
+## greenest musketeers.
+func ensure_wagon_crew() -> void:
+	if not tags.has("Wagon"):
+		tags.append("Wagon")
+	if roster.any(func(m): return m.get("tag", "") == "Wagon"):
+		return
+	var green: Array = roster.filter(func(m): return m.get("tag", "") == "Musketeers")
+	green.sort_custom(func(a, b): return int(a["xp"]) < int(b["xp"]))
+	for m in green.slice(0, 2):
+		m["tag"] = "Wagon"
 
 
 func can_buy(key: String) -> bool:
@@ -1034,6 +1059,7 @@ func load_campaign() -> bool:
 	loot = data.get("loot", [])
 	for l in loot:
 		l["n"] = int(l["n"])
+	ensure_wagon_crew()
 	stores = data.get("stores", {"items": {"musket": 1, "bayonet": 1}, "water": WATER_CART, "rations": 40, "ammo": 120})
 	last_result = data.get("last_result", {})
 	march_note = String(data.get("march_note", ""))

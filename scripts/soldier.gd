@@ -64,6 +64,13 @@ var pike := false # a pole arm instead of a musket: no shooting, long reach
 var reach := MELEE_RANGE
 var engage := ENGAGE_RANGE
 var plan_pos = null # Vector2 from the battle plan: metres right, metres forward
+## The wagon crew (men tagged "Wagon"): 0 and 1 haul at the shafts, the rest
+## guard it. -1 = not crew.
+var porter := -1
+## How a crewman took the looters, decided once by his nerve: "fled",
+## "stood" (shot from the wagon) or "fought" (went in with the blade).
+var conduct := ""
+var _fleeing := false
 var spread_mult := 1.0
 var parry_bonus := 0.0 # strength
 var melee_rate := 1.0 # fitness: how soon he strikes again
@@ -167,6 +174,9 @@ func _physics_process(delta: float) -> void:
 	if retarget_timer <= 0.0 or not is_valid_target(target):
 		retarget_timer = 0.4
 		target = battle.nearest_enemy(global_position, RANGE)
+
+	if porter >= 0 and _wagon_duty(delta):
+		return
 
 	var dist_t := INF
 	if is_valid_target(target):
@@ -457,6 +467,93 @@ func _after_victory(delta: float) -> void:
 		velocity = Vector3.ZERO
 		face_toward(to if d > 0.05 else facing)
 		set_base_anim(_task["what"])
+
+
+## The wagon crew. Hauling, they walk at the shafts with their muskets slung.
+## When looters come, each man does what his nerve allows (decided once):
+## a shaky man drops the shafts and runs to the officer until it's over; a
+## steady one stands at the wagon and shoots; a bold, strong one goes in with
+## the bayonet. Returns true while he's busy with the wagon.
+func _wagon_duty(delta: float) -> bool:
+	var raid: bool = battle.wagon_threat()
+	if raid and conduct == "":
+		# His nerve: steadiness (rank, kit and morale are in it), strength, luck.
+		var strong := 0.0
+		if record != null:
+			strong = 0.04 * (Men.attr(record, "strength") - Men.ATTR_BASE)
+		var nerve := steadiness + strong + randf_range(-0.15, 0.15)
+		if nerve < 0.42:
+			conduct = "fled"
+		elif nerve >= 0.78 or pike or ammo == 0:
+			conduct = "fought"
+		else:
+			conduct = "stood"
+		battle.porter_reacts(self)
+	if not raid:
+		_fleeing = false
+	if raid and conduct == "fled":
+		_fleeing = true
+	if _fleeing:
+		# Run to the officer and crouch behind him till the looters are gone.
+		var to: Vector3 = battle.player.global_position + battle.line_forward * -3.0 - global_position
+		to.y = 0.0
+		if to.length() > 1.5:
+			velocity = to.normalized() * SPEED * 1.35 * pace
+			face_toward(to)
+			set_base_anim("walk")
+			_move(delta)
+		else:
+			velocity = Vector3.ZERO
+			face_toward(battle.wagon.global_position - global_position)
+			set_base_anim("block")
+		return true
+	if raid and conduct == "fought":
+		var foe: Node3D = battle.nearest_enemy(battle.wagon.global_position, 9.0)
+		if foe != null:
+			shot_timer = -1.0
+			if global_position.distance_to(foe.global_position) > reach * 0.9:
+				var to2 := foe.global_position - global_position
+				to2.y = 0.0
+				velocity = to2.normalized() * SPEED * 1.2 * pace
+				face_toward(to2)
+				set_base_anim("guard")
+				_move(delta)
+			else:
+				_melee(delta, foe)
+			return true
+	# Hauling or standing guard at the wagon.
+	var spot: Vector3 = battle.porter_spot(porter)
+	var to3 := spot - global_position
+	to3.y = 0.0
+	if to3.length() > 0.4:
+		velocity = to3.normalized() * minf(SPEED * pace, to3.length() * 3.0)
+		face_toward(to3 if to3.length() > 1.0 else -battle.wagon.global_transform.basis.z)
+		set_base_anim("walk")
+		_move(delta)
+	else:
+		velocity = Vector3.ZERO
+		face_toward(-battle.wagon.global_transform.basis.z if porter < 2 else to3)
+	if raid and conduct == "stood":
+		# Shooting the looters off the stores, from the shafts.
+		var near: Node3D = battle.nearest_enemy(battle.wagon.global_position, 14.0)
+		if near != null:
+			target = near
+			face_toward(near.global_position - global_position)
+			if shot_timer >= 0.0:
+				shot_timer -= delta
+				set_base_anim("aim")
+				if shot_timer < 0.0:
+					_shoot()
+			elif loaded and _reprime_left <= 0.0:
+				shot_timer = randf_range(0.4, 1.0)
+			else:
+				set_base_anim("reload" if not loaded and ammo != 0 else "guard")
+			if global_position.distance_to(near.global_position) < reach:
+				_melee(delta, near)
+			return true
+	if to3.length() <= 0.4:
+		set_base_anim("haul" if porter < 2 and battle.wagon_moving else "idle")
+	return true
 
 
 ## His line broke: run for it, and he's safe once he gets there.

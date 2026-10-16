@@ -149,19 +149,29 @@ func _ready() -> void:
 	_all_men = soldiers.duplicate()
 	ambush = Company.active and not prologue and bool(Company.next_battle.get("ambush", false))
 	if Company.active and not prologue:
+		var crew := 0
 		for s in soldiers:
+			if String(s.record.get("tag", "")) == "Wagon":
+				s.porter = crew
+				crew += 1
+				continue
 			var pl = s.record.get("plan")
 			if pl is Array and pl.size() == 2:
 				s.plan_pos = Vector2(float(pl[0]), float(pl[1]))
 	_reassign_slots()
 	for s in soldiers:
 		s.position = slot_of(s)
-		if ambush:
+		if s.porter >= 0:
+			pass
+		elif ambush:
 			# Caught off guard: men all over the place, they'll form up as they can.
 			s.position = player.position + Vector3(randf_range(-9, 9), -0.1, randf_range(-6, 10))
 		add_child(s)
 	if Company.active and not prologue:
 		_build_wagon()
+		for s in soldiers:
+			if s.porter >= 0:
+				s.position = porter_spot(s.porter)
 	if prologue:
 		_setup_prologue()
 
@@ -338,6 +348,8 @@ func _play_and_free(p: Node) -> void:
 ## Where a man should stand: his place from the battle plan (metres right of
 ## and ahead of the officer, turned with the line), or a slot in the line.
 func slot_of(s) -> Vector3:
+	if s.porter >= 0 and wagon != null:
+		return porter_spot(s.porter)
 	if s.plan_pos != null:
 		var right := line_forward.cross(Vector3.UP).normalized()
 		var pp: Vector2 = s.plan_pos
@@ -375,7 +387,7 @@ func _reassign_slots() -> void:
 	soldiers.sort_custom(func(a, b): return (a.position - anchor).dot(right) < (b.position - anchor).dot(right))
 	var i := 0
 	for so in soldiers:
-		if so.plan_pos == null:
+		if so.plan_pos == null and so.porter < 0:
 			so.slot_index = i
 			i += 1
 	_unplanned = i
@@ -398,15 +410,6 @@ func _build_wagon() -> void:
 	wagon.position = _wagon_target()
 	if ambush:
 		wagon.position = player.position + Vector3(randf_range(-4, 4), 0, randf_range(2, 6))
-	for side in [-1.0, 1.0]:
-		var r := Rig3D.new()
-		r.kind = "soldier"
-		r.gear = {"head": "cap", "torso": "shirt", "primary": "musket", "secondary": ""}
-		r.pack = {"water": 0, "rations": 0, "ammo": 0}
-		r.position = Vector3(side * 0.45, 0, -3.3)
-		r.facing = Vector3.FORWARD
-		wagon.add_child(r)
-		_porters.append(r)
 
 
 func _wagon_target() -> Vector3:
@@ -415,22 +418,55 @@ func _wagon_target() -> Vector3:
 	return line_anchor + right * float(wp[0]) + line_forward * float(wp[1])
 
 
+var wagon_moving := false
+
+
+## The wagon only moves while someone is at the shafts (crew 0 and 1).
 func _update_wagon(delta: float) -> void:
 	if wagon == null:
 		return
 	var to := _wagon_target() - wagon.position
 	to.y = 0.0
-	var looted_now := looters() > 0
-	var moving := to.length() > 0.6 and not looted_now
-	if moving:
-		var step := minf(to.length(), WAGON_SPEED * delta)
+	var hauling := 0
+	for so in soldiers:
+		if so.porter >= 0 and so.porter < 2 and not so._fleeing \
+				and so.global_position.distance_to(porter_spot(so.porter)) < 1.2:
+			hauling += 1
+	wagon_moving = to.length() > 0.6 and hauling > 0 and looters() == 0
+	if wagon_moving:
+		var step := minf(to.length(), WAGON_SPEED * (0.6 if hauling == 1 else 1.0) * delta)
 		wagon.position += to.normalized() * step
 		var want := atan2(-to.x, -to.z)
 		wagon.rotation.y = lerp_angle(wagon.rotation.y, want, 1.0 - exp(-3.0 * delta))
-	for r in _porters:
-		r.anim = "block" if looted_now else ("walk" if moving else "idle")
-		r.move_speed = WAGON_SPEED if moving else 0.0
-		r.facing = -wagon.global_transform.basis.z
+
+
+## Where wagon crewman `i` stands: 0 and 1 at the shafts, the rest beside it.
+func porter_spot(i: int) -> Vector3:
+	var local: Vector3
+	match i:
+		0: local = Vector3(-0.45, 0, -3.3)
+		1: local = Vector3(0.45, 0, -3.3)
+		_:
+			var k := i - 2
+			local = Vector3(-1.7 if k % 2 == 0 else 1.7, 0, -0.8 + 1.6 * (k / 2))
+	var p := wagon.global_transform * local
+	return Vector3(p.x, 0, p.z)
+
+
+## Looters at (or making for) the wagon.
+func wagon_threat() -> bool:
+	return wagon != null and nearest_enemy(wagon.global_position, 9.0) != null
+
+
+func porter_reacts(s) -> void:
+	var who: String = s.display_name
+	match String(s.conduct):
+		"fled":
+			hud.show_message("%s drops the shafts and runs!" % who, 2.0)
+		"stood":
+			hud.show_message("%s stands by the wagon and fires!" % who, 2.0)
+		"fought":
+			hud.show_message("%s goes at them with the %s!" % [who, "pike" if s.pike else "bayonet"], 2.0)
 
 
 ## A looter is cut down: what he was carrying goes back in the wagon.
@@ -683,7 +719,7 @@ func _end_battle(won: bool) -> void:
 			if s.record == null:
 				continue
 			men[int(s.record["id"])] = {"kills": s.kills, "ammo_used": s.ammo_used,
-				"status": "fit" if s.alive else s.down_status}
+				"status": "fit" if s.alive else s.down_status, "conduct": s.conduct}
 		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men,
 			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
 			"enemy": "lizards"})

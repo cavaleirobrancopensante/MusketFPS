@@ -173,6 +173,18 @@ the wagon; only the rations already eaten are lost, so the sooner you deal
 with them the less it costs. Lose the fight and the survivors carry their
 share off. Out in front the wagon is bait: looters stand still for a volley.
 
+**The wagon crew** are ordinary men of the company with the **Wagon** tag
+(two at the shafts, any others as guards beside it). A new company gives the
+tag to its two greenest musketeers; change it in the battle plan. When
+lizards come within nine metres of the wagon, each man reacts by his own
+nerve (steadiness, plus a little strength, plus luck): a shaky man **drops
+the shafts and runs** for you, a middling one **stands** and shoots or
+bayonets the looters from his spot, a steady one (or a man with a pike or
+no cartridges left) **goes at them**. Porters can be wounded or killed like
+anyone else, and with nobody at the shafts the wagon stops where it is.
+Afterwards a man who ran loses some morale and a man who fought gains some;
+the camp lists who did what under "At the wagon".
+
 **After a victory** the men cheer, then spread over the field: some kneel by
 fallen comrades to bind their wounds, others go through the dead lizards'
 things.
