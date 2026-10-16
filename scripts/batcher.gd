@@ -57,7 +57,20 @@ void fragment() {
 }
 """
 
+## A soft dark patch on the ground under everyone (medium graphics: real
+## shadows are only on high, see look.gd).
+const BLOB_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+void fragment() {
+	float d = length(UV - vec2(0.5)) * 2.0;
+	ALBEDO = vec3(0.0);
+	ALPHA = (1.0 - smoothstep(0.25, 1.0, d)) * 0.42 * COLOR.a;
+}
+"""
+
 var _mm3d: Array = [] # MultiMesh per shape
+var _blob_mm: MultiMesh
 var _rigs: Array = []
 var _sprite_mm := {} # kind -> MultiMesh
 var _sprite_units := {} # kind -> Array of units
@@ -68,8 +81,12 @@ func _ready() -> void:
 	process_priority = 1000
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.85
-	var box := BoxMesh.new()
+	mat.roughness = 0.8
+	# A faint rim of light round the edges reads well against the field.
+	mat.rim_enabled = true
+	mat.rim = 0.3
+	mat.rim_tint = 0.5
+	var box := _rounded_box()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.5
 	cyl.bottom_radius = 0.5
@@ -82,22 +99,67 @@ func _ready() -> void:
 	sph.radial_segments = 10
 	sph.rings = 6
 	for mesh in [box, cyl, sph]:
-		mesh.material = mat
+		if mesh is ArrayMesh:
+			(mesh as ArrayMesh).surface_set_material(0, mat)
+		else:
+			mesh.material = mat
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_colors = true
 		mm.mesh = mesh
 		_mm3d.append(mm)
-		_add_instance(mm)
+		var inst := _add_instance(mm)
+		if Settings.graphics == "high":
+			inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	if Settings.graphics != "high":
+		var quad := PlaneMesh.new()
+		quad.size = Vector2.ONE
+		var bm := ShaderMaterial.new()
+		var bs := Shader.new()
+		bs.code = BLOB_SHADER
+		bm.shader = bs
+		quad.material = bm
+		_blob_mm = MultiMesh.new()
+		_blob_mm.transform_format = MultiMesh.TRANSFORM_3D
+		_blob_mm.use_colors = true
+		_blob_mm.mesh = quad
+		_add_instance(_blob_mm)
 
 
-func _add_instance(mm: MultiMesh) -> void:
+## The unit box with its edges and corners rounded off (a superellipsoid),
+## so stretched into torsos, limbs and hats it no longer looks like blocks.
+static func _rounded_box() -> ArrayMesh:
+	var sph := SphereMesh.new()
+	sph.radius = 0.5
+	sph.height = 1.0
+	sph.radial_segments = 16
+	sph.rings = 10
+	var arrays := sph.get_mesh_arrays()
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var e := 0.32 # 0 = a cube, 1 = a sphere
+	for i in verts.size():
+		var v := verts[i] * 2.0
+		v = Vector3(signf(v.x) * pow(absf(v.x), e), signf(v.y) * pow(absf(v.y), e), signf(v.z) * pow(absf(v.z), e))
+		verts[i] = v * 0.5
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = null
+	arrays[Mesh.ARRAY_TANGENT] = null
+	var st := SurfaceTool.new()
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	st.create_from(am, 0)
+	st.generate_normals()
+	return st.commit()
+
+
+func _add_instance(mm: MultiMesh) -> MultiMeshInstance3D:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# The battle covers the whole field; skip per-frame bounds work.
 	mmi.custom_aabb = AABB(Vector3(-600, -20, -600), Vector3(1200, 60, 1200))
 	add_child(mmi)
+	return mmi
 
 
 # ---------------------------------------------------------------- 3D rigs
@@ -187,6 +249,15 @@ func _process(_delta: float) -> void:
 			if r.draw_enabled():
 				buf.append_array(r.cache[shape])
 		_upload(_mm3d[shape], buf, FLOATS_3D)
+	# A blob of shade on the ground under each body that's standing.
+	if _blob_mm != null:
+		var bb := PackedFloat32Array()
+		for r in _rigs:
+			if r.draw_enabled() and not r._dead:
+				var p: Vector3 = r.global_position
+				var w := 1.25 if r.kind == "lizard" else 0.95
+				bb.append_array([w, 0.0, 0.0, p.x, 0.0, 1.0, 0.0, p.y + 0.025, 0.0, 0.0, w, p.z, 0.0, 0.0, 0.0, 1.0])
+		_upload(_blob_mm, bb, FLOATS_3D)
 
 	# Sprites: one instance per unit that is currently drawn as a sprite.
 	for kind in _sprite_mm:

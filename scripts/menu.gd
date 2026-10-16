@@ -154,6 +154,17 @@ func _ready() -> void:
 	_tp_check.add_theme_font_size_override("font_size", 22)
 	_tp_check.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_tp_check)
+	var gfx := _button("", func(): pass)
+	gfx.custom_minimum_size = Vector2(520, 60)
+	gfx.add_theme_font_size_override("font_size", 22)
+	var label := func(): gfx.text = "GRAPHICS: %s" % Settings.graphics.to_upper()
+	label.call()
+	gfx.pressed.connect(func():
+		var i := Settings.GRAPHICS.find(Settings.graphics)
+		Settings.graphics = Settings.GRAPHICS[(i + 1) % Settings.GRAPHICS.size()]
+		Settings.save_prefs()
+		label.call())
+	box.add_child(gfx)
 	_build_slots()
 
 

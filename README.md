@@ -329,6 +329,43 @@ it fills at the pace of the wait; a new land is generated phase by phase.
 The battle sounds are synthesised once per run and kept. Run with
 `-- --loadtimes` to print how long each stage took.
 
+### Graphics (GRAPHICS on the main menu)
+
+Everything is still built in code, with no art files, but it no longer looks
+like flat blocks:
+
+- **Sky**: a shader sky with drifting clouds, a sun disc and haze at the
+  horizon; stars at night, an orange sky at dusk.
+- **Ground**: a shader that mixes two greens and bare earth by noise at
+  two scales, so the land has patches and worn spots, coloured by the map's
+  terrain (forest, hills, swamp, beach, mountain).
+- **Grass**: thousands of grass tufts that sway in the wind and fade out with
+  distance, drawn as one batch. In towns they keep off streets, houses,
+  water and the beach, and are thinner inside the walls.
+- **Trees**: pines in three tiers, broadleaf trees with clusters of round
+  crowns, dead trees, bushes and rocks, each a slightly different colour, all
+  gently swaying, a few draw calls for a whole forest. Low hills stand all
+  round on the horizon.
+- **People**: rounded body parts instead of sharp boxes, and a soft rim of
+  light on the edges, so soldiers and lizardmen read as figures. Each one
+  has a soft shadow under the feet.
+- **Towns**: plaster, timber and stone have a grain.
+- The **scenes in the pop-ups** use the same sky, ground, grass and trees.
+
+GRAPHICS cycles **LOW / MEDIUM / HIGH** (saved):
+
+| | Grass tufts | Grass reach | Shadows | Glow |
+|---|---|---|---|---|
+| Low | 3,000 | 28 m | soft blobs | off |
+| Medium (default) | 9,000 | 50 m | soft blobs | off |
+| High | 15,000 | 70 m | real sun shadows | on |
+
+Hordes don't get dearer: all the bodies in a battle are still drawn in a
+handful of batches, whatever the setting. Real sun shadows (HIGH) can't be
+checked on this computer, so try them on the phone and drop back to MEDIUM
+if they flicker or slow it down. Testing: `-- --gfxq=low|medium|high`
+overrides the setting for a run.
+
 ### The Company screen (COMPANY & KIT)
 
 - **Left:** the man himself, a live 3D figure wearing his actual kit (drag to
@@ -549,6 +586,7 @@ aftermath node.
 | `scripts/hud.gd` | Multi-touch controls, swing buttons, status and messages |
 | `scripts/sprite_factory.gd` | Generates the pixel-art frames used as far stand-ins |
 | `scripts/sound_factory.gd` | Synthesises the sound effects |
+| `scripts/look.gd` | The look of the land: sky, ground, grass, trees, bushes, far hills, quality levels |
 
 ### Performance: big battles on a phone
 
@@ -567,6 +605,9 @@ What makes large battles affordable:
 - **Level of detail** (`rig3d.gd`): bodies within 12 m re-pose every frame,
   to 25 m every 2nd frame, beyond that every 4th, off-screen every 8th; small
   details (faces, buttons, teeth) are skipped beyond 16 m.
+- **Scenery in batches** (`look.gd`): grass, trees, bushes, rocks and far
+  hills are MultiMeshes with vertex shaders for the wind, so a forest is a
+  few draw calls; grass fades out by distance instead of popping.
 - **Far stand-ins** (`unit.gd`): units beyond 40 m are drawn as their sprite
   and switch back to the full model as you approach.
 
