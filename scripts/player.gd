@@ -84,6 +84,9 @@ var blocking := false
 var block_held := false
 
 var kills := 0
+var asleep_left := 0.0 # night camp: still asleep for this long (see battle._setup_camp)
+var wake_left := 0.0 # ...then getting up off the bedroll
+const WAKE_TIME := 1.5
 var _shot := false
 var grenades := GRENADES_PER_BATTLE
 var throw_left := 0.0
@@ -216,6 +219,12 @@ func _update_camera() -> void:
 		# arms rise from below the screen, so nothing of you blocks the view.
 		camera.position = Vector3(0, 1.64, 0.02)
 	camera.rotation = Vector3(pitch, 0, 0)
+	if asleep_left > 0.0 or wake_left > 0.0:
+		# On your back by the fire, looking at the stars, then up on your feet.
+		var up := 0.0 if asleep_left > 0.0 else 1.0 - wake_left / WAKE_TIME
+		up = up * up * (3.0 - 2.0 * up)
+		camera.position.y = lerpf(0.32, camera.position.y, up)
+		camera.rotation.x = lerpf(1.25, pitch, up)
 	if _shake > 0.0:
 		var s := _shake * _shake
 		camera.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.06 * s
@@ -234,6 +243,8 @@ func add_look(drag: Vector2) -> void:
 
 
 func request_fire() -> void:
+	if asleep_left > 0.0 or wake_left > 0.0:
+		return
 	_want_fire = true
 
 
@@ -308,6 +319,18 @@ func _physics_process(delta: float) -> void:
 		_keyboard_controls()
 
 		var input := move_input
+		if rig != null and not third_person:
+			# Lying down your own arms and musket would fill the screen: show
+			# them once you're half up.
+			rig.visible = asleep_left <= 0.0 and wake_left < WAKE_TIME * 0.5
+		if asleep_left > 0.0:
+			asleep_left -= delta
+			if asleep_left <= 0.0:
+				wake_left = WAKE_TIME
+			input = Vector2.ZERO
+		elif wake_left > 0.0:
+			wake_left = maxf(0.0, wake_left - delta)
+			input = Vector2.ZERO
 		var kb := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		if kb != Vector2.ZERO:
 			input = kb
@@ -535,6 +558,8 @@ func take_shot(amount: float, from: Node3D = null) -> void:
 func take_damage(amount: float, from: Node3D = null) -> void:
 	if not alive:
 		return
+	if asleep_left > 0.0:
+		asleep_left = 0.01 # that wakes you
 	if blocking and not _shot and from != null and is_instance_valid(from):
 		var to := from.global_position - global_position
 		to.y = 0.0

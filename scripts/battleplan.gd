@@ -83,7 +83,11 @@ func _ready() -> void:
 	_tags.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
 	_tags.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tags.add_theme_font_size_override("font_size", 20)
-	_tags.item_selected.connect(func(i): _tag = _tags.get_item_text(i); _refresh())
+	# The items read "Pikes (3)": go by index, not by the shown text.
+	_tags.item_selected.connect(func(i):
+		if i >= 0 and i < Company.tags.size():
+			_tag = Company.tags[i]
+		_refresh.call_deferred())
 	tr.add_child(_tags)
 	tr.add_child(_button("NEW", _on_new_tag, 80))
 	_new_tag = LineEdit.new()
@@ -473,6 +477,10 @@ func _on_done() -> void:
 
 ## `-- --plantest`: draw a line for the muskets, put the pikes ahead, a new tag.
 func _self_test() -> void:
+	_tags.select(1)
+	_tags.item_selected.emit(1)
+	await get_tree().process_frame
+	print("PLANTEST dropdown picked: ", _tag, " shown: ", _tags.get_item_text(_tags.selected))
 	_tag = "Musketeers"
 	_form_line("Musketeers", Vector2(-10, 0), Vector2(10, 0))
 	_preset_pikes()

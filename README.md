@@ -67,7 +67,7 @@ with every seed.
 - **Nightfall:** at 18:00 on the march you're asked: **make camp** and
   sleep until 06:00 (the night passes quickly; rested men gain a little
   morale), or **march on in the dark**, slower, half blind, and the men
-  resent it. A warband can still find your camp.
+  resent it. A warband can still find your camp: see **attacked in camp**.
 - **Events on the road**, picked by where you are: wreckage from the ship on
   the coast, hunting and berries and lost men in the forest, fever mist and
   bogs in the swamp, lizard tracks and ambushes in their country, farmers,
@@ -157,8 +157,21 @@ every man is a dot in his tag's colour, the wagon is a box. On the right:
 
 In battle the formation keeps its shape around you: it moves and wheels with
 you on FOLLOW and stays put on HOLD. Before a fight you saw coming, the
-encounter offers **PLAN** first. An **ambush** (in your camp at night, or a
-warband you never saw coming) gives no time: the men start scattered.
+encounter offers **PLAN** first. An **ambush** (a warband you never saw
+coming) gives no time: the men start scattered.
+
+**Attacked in camp.** At night the company sleeps on bedrolls in a ring
+round the fire, the wagon parked to one side, and two men stand watch at
+the edge of the firelight. Whether they see the lizards coming depends on
+their eyes (aim, a little fitness), whether they're hungry, thirsty or sick,
+the ground (the lizards creep right up through forest and swamp) and luck.
+**Seen:** the alarm goes up, the men throw off their blankets and are on
+their feet in a second or two, and the warband comes out of the dark from
+the front (or you abandon the camp and try to slip away). **Not seen:** you
+wake on your back by the fire with the lizards already among the bedrolls;
+each man wakes when the noise reaches him (a lizard close by or a blow wakes
+him at once; steady men sooner), and some die where they lie. Night battles
+are dark: firelight and muzzle flashes show the way.
 
 **Pikemen.** Three of the ship's sailors carry boarding pikes. Pikemen don't
 shoot; they kneel in the front rank (the muskets fire over them), meet the

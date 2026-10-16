@@ -1086,17 +1086,32 @@ func _event_choice(ev: Dictionary, key: String) -> void:
 var _scout_panel: PanelContainer
 var _scout_info: Label
 var _scout_far := false
+var _scout_shade: ColorRect # dims the map; tapping it closes the panel
 
 
 func _open_scouts() -> void:
 	if _scout_panel == null:
 		_build_scout_panel()
 	_refresh_scouts()
+	_scout_shade.visible = true
 	_scout_panel.visible = true
 	_center(_scout_panel)
 
 
+func _close_scouts() -> void:
+	_scout_panel.visible = false
+	_scout_shade.visible = false
+
+
 func _build_scout_panel() -> void:
+	_scout_shade = ColorRect.new()
+	_scout_shade.color = Color(0, 0, 0, 0.45)
+	_scout_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_scout_shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	_scout_shade.gui_input.connect(func(e):
+		if (e is InputEventMouseButton or e is InputEventScreenTouch) and e.pressed:
+			_close_scouts())
+	_popup.get_parent().add_child(_scout_shade)
 	_scout_panel = _panel(Color(0.08, 0.1, 0.15, 0.97))
 	_scout_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_scout_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -1105,7 +1120,14 @@ func _build_scout_panel() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	_scout_panel.add_child(v)
-	v.add_child(_label("SEND SCOUTS", 26, Color(0.95, 0.8, 0.45)))
+	var head := HBoxContainer.new()
+	v.add_child(head)
+	var title := _label("SEND SCOUTS", 26, Color(0.95, 0.8, 0.45))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var x := _button("✕", _close_scouts)
+	x.custom_minimum_size = Vector2(58, 58)
+	head.add_child(x)
 	_scout_info = _label("", 18, Color.WHITE)
 	_scout_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_scout_info.custom_minimum_size = Vector2(560, 0)
@@ -1133,10 +1155,17 @@ func _build_scout_panel() -> void:
 		["SW", Vector2(-1, 1)], ["S", Vector2(0, 1)], ["SE", Vector2(1, 1)]]
 	for d in dirs:
 		if d[0] == "":
-			grid.add_child(_button("CANCEL", func(): _scout_panel.visible = false))
+			var mid := _label("PICK A\nDIRECTION", 14, Color(0.72, 0.74, 0.8))
+			mid.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			mid.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			grid.add_child(mid)
 		else:
 			grid.add_child(_button(d[0], _send_scouts.bind(d[1])))
+	var cancel := _button("CANCEL: KEEP THEM HERE", _close_scouts)
+	cancel.custom_minimum_size.y = 58
+	v.add_child(cancel)
 	_scout_panel.visible = false
+	_scout_shade.visible = false
 
 
 func _refresh_scouts() -> void:
@@ -1157,7 +1186,7 @@ func _refresh_scouts() -> void:
 
 func _send_scouts(dir: Vector2) -> void:
 	var sc := World.send_scouts(dir, _scout_far)
-	_scout_panel.visible = false
+	_close_scouts()
 	if sc.is_empty():
 		_push_toast("Not enough fit men to spare.")
 	else:
@@ -1184,15 +1213,15 @@ func _on_scouts_back(r: Dictionary) -> void:
 
 ## A lizard warband has caught you.
 func _on_encounter(p: Dictionary) -> void:
+	if World.camping:
+		_camp_attacked(p)
+		return
 	var c := World.cell()
 	var cover: bool = World.gen.t(c.x, c.y) in [T.FOREST, T.SWAMP]
 	var chance := clampf(0.3 + (0.25 if cover else 0.0) + (World.party_pace() - 0.85), 0.1, 0.8)
 	var where := "in the trees" if cover else "in the open"
 	# Seen coming, there's time to form up as planned; out of nowhere, there isn't.
-	var ambush := World.camping or World.hours - float(p.get("seen_at", -99.0)) > 1.5
-	if World.camping:
-		where = "in your camp, in the dark"
-		World.camping = false
+	var ambush := World.hours - float(p.get("seen_at", -99.0)) > 1.5
 	var text := "They've caught up with you %s. %d of them against %d fit men." % [where, int(p["size"]), Company.fit_men().size()]
 	if ambush:
 		text += "\n\n[color=#f08060]AMBUSH! No time to form up: the men will be scattered.[/color]"
@@ -1205,6 +1234,60 @@ func _on_encounter(p: Dictionary) -> void:
 	buttons.append(["FIGHT", _fight.bind(p, ambush)])
 	buttons.append(["SLIP AWAY", _slip.bind(p, chance)])
 	_popup_open("%s!" % World.party_name(p), text, buttons)
+
+
+## Attacked in the night camp. Two men stand watch; whether they see the
+## lizards coming depends on their eyes (aim), how alert they are (not
+## hungry, sick or worn out), the cover the lizards creep through, and luck.
+## Seen: the alarm gets everyone up in time. Not seen: you wake with the
+## lizards already among the bedrolls.
+func _camp_attacked(p: Dictionary) -> void:
+	World.camping = false
+	var c := World.cell()
+	var t: int = World.gen.t(c.x, c.y)
+	var fit: Array = Company.fit_men()
+	fit.shuffle()
+	var watch: Array = fit.slice(0, mini(2, fit.size()))
+	var see := 0.0
+	for m in watch:
+		var eye := 0.32 + 0.06 * (Men.attr(m, "aim") - 5) + 0.02 * (Men.attr(m, "fitness") - 5)
+		if int(m.get("hunger", 0)) > 0 or int(m.get("thirst", 0)) > 0 or int(m.get("sick", 0)) > 0:
+			eye -= 0.1
+		see = 1.0 - (1.0 - see) * (1.0 - clampf(eye, 0.05, 0.85))
+	if t in [T.FOREST, T.SWAMP]:
+		see -= 0.2 # they creep right up through the trees
+	elif t in [T.HILLS, T.PLAINS, T.BEACH]:
+		see += 0.08
+	see = clampf(see, 0.1, 0.9)
+	var spotted := randf() < see
+	var names: Array = watch.map(func(m): return Company.title(m))
+	var ids: Array = watch.map(func(m): return int(m["id"]))
+	Company.next_battle = {"enemy": int(p["size"]), "terrain": t, "party": int(p["id"]), "ambush": false,
+		"enemy_kind": "lizards", "camp": true, "spotted": spotted, "night": true, "watch": ids}
+	Company.results_unseen = false
+	var text := ""
+	var buttons: Array = []
+	if spotted:
+		text = "Night, by the fire. %s on watch hear something in the dark, then see the eyes catch the firelight, and raise the alarm. The men are throwing off their blankets and reaching for their muskets.\n\n%d of them against %d fit men." % [
+			" and ".join(names), int(p["size"]), fit.size()]
+		text += "\n\nAbandon the camp and slip away in the dark? About 35%% chance; fail and you fight anyway, worse placed."
+		buttons.append(["STAND TO!", _camp_fight.bind(p)])
+		buttons.append(["SLIP AWAY", _slip.bind(p, 0.35)])
+		_popup_open("The watch has seen them!", text, buttons)
+	else:
+		text = "Night. %s on watch never saw them come. You wake to screaming: they're already in among the bedrolls, %d of them, and your men are still asleep." % [
+			" and ".join(names), int(p["size"])]
+		buttons.append(["UP! TO ARMS!", _camp_fight.bind(p)])
+		_popup_open("They're in the camp!", text, buttons)
+
+
+func _camp_fight(p: Dictionary) -> void:
+	_popup_close()
+	if _test:
+		print("  MAPTEST: camp attacked by ", World.party_name(p), " (counted as won)", " spotted" if Company.next_battle.get("spotted") else " asleep")
+		World.remove_party(int(p["id"]))
+		return
+	_go(BATTLE)
 
 
 ## Look over the battle plan before this fight: the plan screen's FIGHT! button starts it.

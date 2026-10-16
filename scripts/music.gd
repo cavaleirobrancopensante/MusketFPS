@@ -4,7 +4,7 @@ extends Node
 ## place, each place remembering where its music was).
 ##
 ## The pieces are composed offline (tools/music/musket_music.py) and listed in
-## data/music.json with the places ("contexts") they belong to:
+## scripts/music_catalogue.gd (generated with data/music.json) with the places ("contexts") they belong to:
 ##   menu, intro (the wreck), map (marching by day), camp (night),
 ##   battle, nest (lizard country).
 ## Auto mode follows the game; picking a track in the player switches to
@@ -14,7 +14,7 @@ extends Node
 signal track_changed(track: Dictionary)
 signal state_changed
 
-const CATALOGUE := "res://data/music.json"
+const Catalogue := preload("res://scripts/music_catalogue.gd")
 const SETTINGS := "user://settings.cfg"
 const FADE := 1.6
 const BATTLE_GAIN := 0.55
@@ -39,16 +39,16 @@ var _fade: Tween
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	if FileAccess.file_exists(CATALOGUE):
-		var data = JSON.parse_string(FileAccess.get_file_as_string(CATALOGUE))
-		if typeof(data) == TYPE_ARRAY:
-			tracks = data
+	# The catalogue is a script constant (not the JSON next to it), so it is
+	# always in an exported build.
+	tracks = Catalogue.TRACKS.duplicate(true)
 	for t in tracks:
 		by_id[t["id"]] = t
 	# Music has its own bus, so the game can lower it without touching effects.
 	if AudioServer.get_bus_index("Music") < 0:
 		AudioServer.add_bus()
 		AudioServer.set_bus_name(AudioServer.bus_count - 1, "Music")
+	AudioServer.set_bus_send(AudioServer.get_bus_index("Music"), "Master")
 	for i in 2:
 		var p := AudioStreamPlayer.new()
 		p.bus = "Music"
