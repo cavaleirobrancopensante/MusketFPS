@@ -44,7 +44,14 @@ func _ready() -> void:
 	if "--loottest" in args:
 		Company.new_campaign()
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
-		Company.apply_battle({"won": true, "slain": 30, "officer_kills": 2, "men": {}, "enemy": "lizards"})
+		# A wagon packed to the brim and two men down: their kit can't all fit.
+		Company.stow("rations", 99999)
+		var men := {}
+		for m in Company.roster:
+			men[int(m["id"])] = {"status": "ok", "kills": 0}
+		for m in Company.roster.slice(0, 2):
+			men[int(m["id"])] = {"status": "killed", "kills": 0}
+		Company.apply_battle({"won": true, "slain": 30, "officer_kills": 2, "men": men, "enemy": "lizards"})
 		get_tree().change_scene_to_file.call_deferred("res://scenes/loot.tscn")
 		return
 	if "--plantest" in args:
