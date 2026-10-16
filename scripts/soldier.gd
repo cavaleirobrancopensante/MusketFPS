@@ -41,6 +41,14 @@ var melee_timer := 0.0
 var retarget_timer := 0.0
 var target: Node3D = null
 
+# Campaign record (a Dictionary from Company.roster), or null in a
+# stand-alone battle. His traits, rank and name come from it.
+var record = null
+var display_name := "Private"
+var kills := 0
+var down_status := "" # "wounded" or "killed" once he falls
+var melee_bonus := 0.0 # sharper with the bayonet as he rises in rank
+
 # Personality.
 var reaction := 0.5
 var pace := 1.0
@@ -63,7 +71,18 @@ func _ready() -> void:
 	reaction = randf_range(0.15, 1.1)
 	pace = randf_range(0.85, 1.15)
 	steadiness = randf()
-	reload_time = randf_range(4.0, 5.6) / pace
+	var rank := 0
+	if record != null:
+		reaction = float(record["reaction"])
+		pace = float(record["pace"])
+		steadiness = float(record["steadiness"])
+		rank = int(record["rank"])
+		display_name = Company.surname_title(record)
+	# Every rank: steadier, quicker to react and reload, harder with the bayonet.
+	steadiness = minf(1.0, steadiness + 0.1 * rank)
+	reaction *= 1.0 - 0.1 * rank
+	melee_bonus = 5.0 * rank
+	reload_time = randf_range(4.0, 5.6) / pace * (1.0 - 0.06 * rank)
 	tempo = pace
 	retarget_timer = randf() * 0.4
 	_glance_t = randf_range(1.0, 4.0)
@@ -212,9 +231,9 @@ func _thrust(e: Node3D) -> void:
 		return
 	var result := "hit"
 	if e.has_method("receive_blow"):
-		result = e.receive_blow(MELEE_DAMAGE, self, false)
+		result = e.receive_blow(MELEE_DAMAGE + melee_bonus, self, false)
 	else:
-		e.take_damage(MELEE_DAMAGE, self)
+		e.take_damage(MELEE_DAMAGE + melee_bonus, self)
 	if result == "hit":
 		battle.play_sound("stab", e.global_position + Vector3.UP, -4.0)
 		if e.has_method("stagger"):
@@ -323,10 +342,12 @@ func _shoot() -> void:
 	# Smoothbore muskets: good odds up close, poor at range; nerves matter.
 	var chance := clampf(0.8 - d * 0.014, 0.25, 0.8) * lerpf(0.85, 1.05, steadiness)
 	if randf() < chance:
-		target.take_damage(100.0)
+		target.take_damage(100.0, self)
 
 
 func _on_died() -> void:
+	# Not every man who goes down is dead: many are wounded and live.
+	down_status = "wounded" if randf() < Company.WOUND_CHANCE else "killed"
 	remove_from_group("friendlies")
 	battle.play_sound("grunt", global_position + Vector3.UP * 1.5, -4.0)
 	battle.on_soldier_died(self)

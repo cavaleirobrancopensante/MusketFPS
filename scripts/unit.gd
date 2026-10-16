@@ -2,15 +2,13 @@ extends CharacterBody3D
 ## Shared base for the soldiers and lizardmen: their look, a hit capsule for
 ## musket rays, animation state, damage and death.
 ##
-## The look is either a Doom-style billboard sprite with front/side/back
-## frames (2D mode) or a low-poly 3D model with procedural animation (3D mode),
-## chosen in the main menu. AI and combat never touch the look directly: they
-## just set `facing` and an animation name, and the look follows.
+## The look is a low-poly 3D model with procedural animation (Rig3D). Far
+## from the camera it swaps to a Doom-style sprite with front/side/back
+## frames, a cheap stand-in, and back as you approach. AI and combat never
+## touch the look directly: they just set `facing` and an animation name.
 ##
-## Nothing here is drawn on its own: sprites are instances in the Batcher's
-## atlas batch (one draw call per kind), and 3D rigs write their parts into
-## the Batcher's shared batches. In 3D, a unit far from the camera switches
-## to its sprite (a cheap stand-in) and back as you approach.
+## Nothing here is drawn on its own: rigs write their parts into the
+## Batcher's shared batches, and sprites are instances in its atlas batches.
 ##
 ## Units don't use physics to walk (collision_mask = 0); they steer directly
 ## on the flat field, which is far cheaper on a phone than real pathfinding.
@@ -19,7 +17,7 @@ const Rig3D := preload("res://scripts/rig3d.gd")
 
 ## Frames per second for looping animations (others hold a single frame).
 const ANIM_FPS := {"walk": 8.0, "reload": 2.5}
-## 3D: beyond this distance the unit is drawn as a sprite (with hysteresis).
+## Beyond this distance the unit is drawn as a sprite (with hysteresis).
 const STANDIN_FAR := 40.0
 const STANDIN_NEAR := 35.0
 
@@ -47,6 +45,7 @@ var _flip := false
 var _lying := false
 var _sprite_col := Color.WHITE
 var _visual_scale := Vector3.ONE
+var last_hit_by: Node3D = null # who gets the credit for killing us
 
 
 func _setup_body(layer: int, radius: float, height: float, sprite_height_m: float) -> void:
@@ -60,21 +59,17 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	shape.position.y = height * 0.5
 	add_child(shape)
 
-	# The sprite always exists (2D look, or the far stand-in in 3D).
+	# The sprite is the far stand-in.
 	_sprite_h = sprite_height_m
 	sprite_node = Node3D.new()
 	add_child(sprite_node)
 	battle.batcher.add_sprite(rig_kind, self)
 	_update_sprite_frame()
 
-	if Settings.use_3d:
-		rig = Rig3D.new()
-		rig.kind = rig_kind
-		add_child(rig)
-		visual = rig
-	else:
-		visual = sprite_node
-		sprite_on = true
+	rig = Rig3D.new()
+	rig.kind = rig_kind
+	add_child(rig)
+	visual = rig
 	_visual_scale = visual.scale
 
 
@@ -147,7 +142,7 @@ func _process(delta: float) -> void:
 		_update_sprite_frame()
 
 
-## 3D only: far from the camera, swap the model for its sprite.
+## Far from the camera, swap the model for its sprite.
 func _update_standin() -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
@@ -211,9 +206,11 @@ func write_sprite(buf: PackedFloat32Array) -> void:
 
 # ---------------------------------------------------------------- damage
 
-func take_damage(amount: float, _from: Node3D = null) -> void:
+func take_damage(amount: float, from: Node3D = null) -> void:
 	if not alive:
 		return
+	if from != null:
+		last_hit_by = from
 	hp -= amount
 	_flash_left = 0.2
 	if hp <= 0.0:

@@ -206,6 +206,8 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 func _on_died() -> void:
 	_cancel_windup()
 	remove_from_group("enemies")
+	if last_hit_by != null and is_instance_valid(last_hit_by) and "kills" in last_hit_by:
+		last_hit_by.kills += 1
 	battle.play_sound("death", global_position + Vector3.UP * 1.4, -4.0)
 	battle.on_enemy_died(self)
 	# Leave the corpse a while, then clean up to keep the phone happy.

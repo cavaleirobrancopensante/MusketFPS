@@ -1,8 +1,7 @@
 extends Node3D
 ## The battle. You (an officer with a musket) and a company of musketeers
 ## hold a field against waves of charging lizardmen. Everything is built in
-## code, so the scene file is just this one node. Settings.use_3d (set in the
-## main menu) picks sprites or 3D models; everything else is shared.
+## code, so the scene file is just this one node.
 ##
 ## The company is the "squad brain": it owns the line (anchor + facing) and
 ## hands each soldier a slot. Soldiers and lizardmen themselves stay dumb.
@@ -15,6 +14,7 @@ const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 const MENU := "res://scenes/menu.tscn"
+const AFTERMATH := "res://scenes/aftermath.tscn"
 const MAX_SOUNDS := 24
 
 enum FireMode { ON_COMMAND, AT_WILL }
@@ -39,6 +39,10 @@ var enemies: Array = []
 var line_anchor := Vector3.ZERO
 var line_forward := Vector3.FORWARD
 var wave := 0
+var waves: Array = [] # how many lizardmen arrive in each wave
+var slain := 0
+var _all_men: Array = [] # every soldier who took the field, fallen or not
+var _reported := false
 var game_state := "starting" # starting, fighting, between, won, lost
 var state_timer := 5.0
 
@@ -75,11 +79,24 @@ func _ready() -> void:
 
 	line_forward = Vector3.FORWARD
 	line_anchor = Vector3(player.position.x, 0, player.position.z) + line_forward * LINE_DISTANCE
-	for i in (STRESS_COMPANY if Settings.stress else COMPANY_SIZE):
-		var s = SoldierScript.new()
-		s.battle = self
-		s.frames = soldier_frames
-		soldiers.append(s)
+	# Campaign: your actual men (the fit ones) against the warband the scouts
+	# reported. Otherwise a stand-alone battle (stress test, autotest).
+	if Company.active:
+		waves = Company.waves_for(Company.next_enemy_count())
+		for rec in Company.fit_men():
+			var s = SoldierScript.new()
+			s.battle = self
+			s.frames = soldier_frames
+			s.record = rec
+			soldiers.append(s)
+	else:
+		waves = STRESS_WAVES if Settings.stress else WAVES
+		for i in (STRESS_COMPANY if Settings.stress else COMPANY_SIZE):
+			var s = SoldierScript.new()
+			s.battle = self
+			s.frames = soldier_frames
+			soldiers.append(s)
+	_all_men = soldiers.duplicate()
 	_reassign_slots()
 	for s in soldiers:
 		s.position = get_slot_position(s.slot_index)
@@ -91,7 +108,11 @@ func _ready() -> void:
 	hud.battle = self
 	hud.player = player
 	layer.add_child(hud)
-	hud.show_message("Form the line! They're coming...", 4.5)
+	if Company.active and Company.march_note != "":
+		hud.show_message(Company.march_note, 6.0)
+		state_timer = maxf(state_timer, 6.0)
+	else:
+		hud.show_message("Form the line! They're coming...", 4.5)
 
 
 # ---------------------------------------------------------------- orders
@@ -134,7 +155,7 @@ func order_volley() -> void:
 
 
 func wave_count() -> int:
-	return (STRESS_WAVES if Settings.stress else WAVES).size()
+	return waves.size()
 
 
 func is_at_will() -> bool:
@@ -355,14 +376,40 @@ func nearest_friendly(from: Vector3) -> Node3D:
 func on_soldier_died(s) -> void:
 	soldiers.erase(s)
 	_reassign_slots()
-	if soldiers.size() > 0:
-		hud.show_message("Man down! Close ranks!", 1.5)
-	else:
+	if soldiers.size() == 0:
 		hud.show_message("Your company is gone.", 2.5)
+	elif s.record != null:
+		hud.show_message("%s is down! Close ranks!" % s.display_name, 1.8)
+	else:
+		hud.show_message("Man down! Close ranks!", 1.5)
 
 
 func on_enemy_died(e) -> void:
 	enemies.erase(e)
+	slain += 1
+
+
+## Campaign: report the battle to the company (once) and offer the way out.
+func _end_battle(won: bool) -> void:
+	game_state = "won" if won else "lost"
+	if Company.active and not _reported:
+		_reported = true
+		var men := {}
+		for s in _all_men:
+			if s.record == null:
+				continue
+			men[int(s.record["id"])] = {"kills": s.kills,
+				"status": "fit" if s.alive else s.down_status}
+		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "men": men})
+	hud.show_restart()
+
+
+## Leave the field for the aftermath screen (campaign) or replay (otherwise).
+func finish() -> void:
+	if Company.active:
+		get_tree().change_scene_to_file(AFTERMATH)
+	else:
+		restart()
 
 
 # ---------------------------------------------------------------- loop
@@ -400,14 +447,13 @@ func _process(delta: float) -> void:
 				_start_wave()
 		"fighting":
 			if enemies.is_empty():
-				if wave >= (STRESS_WAVES if Settings.stress else WAVES).size():
-					game_state = "won"
-					hud.show_message("Victory! The line held.", 9999.0)
-					hud.show_restart()
+				if wave >= waves.size():
+					hud.show_message("Victory! The field is ours.", 9999.0)
+					_end_battle(true)
 				else:
 					game_state = "between"
 					state_timer = 7.0
-					hud.show_message("Wave repulsed! Reload and dress the line.", 4.0)
+					hud.show_message("They falter! More are coming. Reload and dress the line.", 4.0)
 
 	if _autotest:
 		_run_autotest(delta)
@@ -416,7 +462,7 @@ func _process(delta: float) -> void:
 func _start_wave() -> void:
 	wave += 1
 	game_state = "fighting"
-	var count: int = (STRESS_WAVES if Settings.stress else WAVES)[wave - 1]
+	var count: int = waves[wave - 1]
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var centre := line_anchor + line_forward * SPAWN_DISTANCE
 	for i in count:
@@ -428,15 +474,20 @@ func _start_wave() -> void:
 		l.position = Vector3(pos.x, 0, pos.z)
 		enemies.append(l)
 		add_child(l)
-	hud.show_message("Wave %d — %d lizardmen!" % [wave, count], 2.5)
+	if wave == 1:
+		hud.show_message("Here they come: %d lizardmen!" % count, 2.5)
+	else:
+		hud.show_message("Another %d coming!" % count, 2.5)
 	if _autotest:
 		print("wave ", wave, " start: soldiers ", soldiers.size(), " player hp ", player.hp)
 
 
 func _on_player_died() -> void:
-	game_state = "lost"
-	hud.show_message("You have fallen.", 9999.0)
-	hud.show_restart()
+	if Company.active:
+		hud.show_message("You fall. Your men carry you from the field.", 9999.0)
+	else:
+		hud.show_message("You have fallen.", 9999.0)
+	_end_battle(false)
 
 
 ## Headless smoke test: `godot --headless -- --autotest` fires volleys and the
@@ -487,6 +538,17 @@ func _run_autotest(delta: float) -> void:
 
 	if game_state == "won" or game_state == "lost":
 		print("AUTOTEST END: ", game_state, " wave ", wave, " soldiers ", soldiers.size(), " melee ", _at_stats)
+		if Company.active and Company.battles < 4:
+			# Campaign test: show the result, hire, march on, fight again.
+			var r: Dictionary = Company.last_result
+			print("  day %d money %d men %d fit %d | slain %d pay %d | fallen %s | wounded %s | promoted %s" % [
+				Company.day, Company.money, Company.roster.size(), Company.fit_men().size(),
+				r["slain"], r["pay"], r["fallen"], r["wounded"], r["promoted"]])
+			while Company.can_hire() and Company.roster.size() < 8:
+				Company.hire_recruit()
+			print("  march: ", Company.march_on())
+			get_tree().change_scene_to_file("res://scenes/battle.tscn")
+			return
 		get_tree().quit()
 
 
