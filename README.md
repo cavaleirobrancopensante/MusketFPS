@@ -39,6 +39,49 @@ as castaways: low morale, a few days' food, and the ship's stores (muskets,
 powder, two guns, rum) in the lizards' hands. Getting them back is the
 first great objective.
 
+### The map
+
+After the beach, **TO THE MAP** takes the company inland. The land is
+generated from a seed (a new one for each campaign): 512 × 512 cells of
+real 3D terrain, about 250 leagues of coast, forest, swamp, plains, hills
+and mountains.
+
+- **Warband time:** tap where to go and the company marches there along the
+  best route. The clock (and the calendar, food, water, wages, healing and
+  every other party) runs only while you march or **WAIT**; it stops when
+  you stop. Day and night pass with the sun.
+- **Geography matters.** Pace depends on the ground: open plains, slow
+  forest and hills, very slow swamp and mountain passes, impassable peaks,
+  sea and lakes. Rivers can only be crossed at **fords** (slow) or
+  **bridges**. **Roads** come in three states: good (fast) in the nations'
+  heartlands, worn on the frontiers, ruined in the lizard lands. The men's
+  fitness sets the pace, and carrying wounded or sick men slows it.
+- **Line of sight and fog of war.** Everything starts unknown. What you can
+  see is worked out on the real heightmap: hills and mountains see far,
+  forests block sight and shorten it, night shortens it too. Land you've
+  seen stays mapped (dimmed when out of sight); parties show only while you
+  can see them.
+- **Water:** passing rivers and lakes refills the barrels with clean water,
+  swamps with foul water; a dry day leaves you with what you carry.
+- **The land's powers** (placeholder names in `lore.gd`): the Kingdom of
+  Aurest in the west and the Vellish Marches in the east (at war), the
+  dwarf holds of the Greyspine mountains in the north, and the lizard nests
+  in the south-west swamps. One nest holds the ship's stores.
+- **A living world:** nests send out warbands that roam and raid villages;
+  cities send patrols that hunt them (and each other, across the war);
+  caravans travel between towns and holds; villagers go to market; dwarf
+  traders come down from the mountains. Parties that meet fight it out,
+  and you hear of what you see.
+- **Encounters:** a lizard warband that catches you means battle (fought on
+  ground that matches the map: forest, hills, swamp, beach, plains) or a
+  chance to slip away, better in cover. Tap any party to go after it.
+- **Settlements:** visit villages, towns, cities and holds to buy food and
+  rum, refill water and rest. Raided villages have nothing left. Nobody in
+  this land has heard of gunpowder.
+- **Controls:** tap to march; drag to pan; pinch or mouse wheel to zoom
+  (from a single village to the whole land); CENTRE to follow the company;
+  COMPANY, WAGON, CAMP and MENU at the top right.
+
 ### Between battles
 
 - **Every soldier is a person**: a name, his own reaction, pace and
@@ -234,6 +277,9 @@ aftermath node.
 | `scripts/menu.gd` | Main menu: continue, new campaign, stress test |
 | `scripts/lore.gd` | Placeholder names: nation, regiment, ship, land, beach, commander, the lost stash |
 | `scripts/intro.gd` | The shipwreck cutscene |
+| `scripts/world_gen.gd` | Generates the land from a seed: height, terrain, rivers, lakes, fords, bridges, roads, settlements |
+| `scripts/world.gd` | `World` autoload: the map's clock, your march, sight and fog, every roaming party, encounters, saving |
+| `scripts/map.gd` | The 3D map: terrain chunks, fog shader, trees, settlements, parties, camera, taps, HUD, visits |
 | `scripts/props.gd` | Scenery from primitives: ship, longboats, cannon, earthworks, rocks, the sea |
 | `scripts/settings.gd` | `Settings` autoload: camera mode, stress test |
 | `scripts/company.gd` | `Company` autoload: the men, kit, the wagon, the march, money, results, saving |
@@ -300,11 +346,14 @@ linked campaign battles (buying, sharing out and marching in between), `--stress
 third person. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a
-phone. `-- --intro` plays the cutscene at 4x speed.
+phone. `-- --intro` plays the cutscene at 4x speed. `-- --maptest` makes a
+new land, marches to the nearest village, buys food, then heads for the
+stash nest, slipping away from (or fighting) warbands on the way.
 
 ## What's next
 
 See [ROADMAP.md](ROADMAP.md): castaways in a huge unknown land, a
 Warband-style map under fog of war, lizards, two human nations at war,
 dwarves, and the edge your muskets give you. Done: M0, M1, projectiles, kit
-and logistics, and the shipwreck prologue. Next: M2, the map.
+and logistics, the shipwreck prologue, and the first playable map. Next:
+recruiting natives, then the stash.

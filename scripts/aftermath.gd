@@ -9,6 +9,7 @@ extends Control
 const BATTLE := "res://scenes/battle.tscn"
 const MENU := "res://scenes/menu.tscn"
 const COMPANY := "res://scenes/company.tscn"
+const MAP := "res://scenes/map.tscn"
 const Men := preload("res://scripts/men.gd")
 const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
 
@@ -67,7 +68,7 @@ func _ready() -> void:
 	buttons.add_theme_constant_override("h_separation", 12)
 	buttons.add_theme_constant_override("v_separation", 12)
 	left.add_child(buttons)
-	_march = _button("MARCH ON", _on_march)
+	_march = _button("TO THE MAP", _on_march)
 	_hire = _button("", _on_hire)
 	_honour = _button("ROLL OF HONOUR", _on_honour)
 	buttons.add_child(_button("COMPANY & KIT", _on_company))
@@ -191,7 +192,7 @@ func _refresh() -> void:
 		var no_shot := Company.roster.filter(func(m): return int(m["pack"]["ammo"]) == 0).size()
 		if no_shot > 0:
 			t += "[color=#%s]%d men have no cartridges.[/color]\n" % [_hex(RED), no_shot]
-		t += "Scouts report about %d lizardmen ahead.\n" % Company.next_enemy_count()
+		pass
 	if men > 0 and fit == 0:
 		t += "\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]" % _hex(RED)
 	_summary.text = t
@@ -291,8 +292,8 @@ func _on_hire() -> void:
 
 func _on_march() -> void:
 	Company.results_unseen = false
-	Company.march_on()
-	get_tree().change_scene_to_file(BATTLE)
+	Company.save()
+	get_tree().change_scene_to_file(MAP)
 
 
 func _on_company() -> void:

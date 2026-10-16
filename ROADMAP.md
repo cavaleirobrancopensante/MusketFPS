@@ -60,7 +60,17 @@ Each milestone ends with something playable.
   cannons, a tutorial woven into the waves, the Major's fall, the rout
   inland. You start with low morale and supplies, and the stash is lost.
 
-### M2: The map
+### M2: The map (first playable ✅)
+
+Done: a seeded 512 × 512 land in 3D with coast, plains, forest, swamp, hills,
+mountains, rivers, lakes, fords, bridges and roads in three states; terrain
+speeds; line of sight on the heightmap and fog of war; Warband time that
+runs only while you move; day and night; villages, towns, cities, dwarf
+holds and lizard nests; roaming warbands, patrols, caravans, villagers and
+dwarf traders that fight each other and raid; encounters into battles on
+matching ground; buying food and rum in settlements. Still to do: scouts,
+smaller "lost" settlements in the lizard lands, rumours, a minimap.
+
 
 - **Warband-style:** your party is a figure walking on the map. Tap where to
   go and it marches there; time (the clock, the calendar, food and water,
