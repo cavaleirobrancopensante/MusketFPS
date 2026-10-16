@@ -30,7 +30,7 @@ const STRESS_WAVES := [200]
 const LINE_SPACING := 1.5 # metres between men in the line
 const LINE_DISTANCE := 0.0 # you stand in the line itself, in the gap at its centre
 const REALIGN_ANGLE := 40.0 # degrees you must turn before a following line wheels
-const WAVES := [8, 14, 20]
+const WAVES := [8, 12, 16] # (eased when the reload grew two seconds longer)
 const SPAWN_DISTANCE := 65.0
 
 # ---- the prologue: a big battle that goes wrong (see _prologue_process)

@@ -147,7 +147,9 @@ func _ready() -> void:
 		steadiness = minf(1.0, steadiness + Company.Officer.men_steady())
 		reaction *= Company.Officer.reaction_mult()
 	melee_bonus = 5.0 * rank
-	reload_time = randf_range(4.0, 5.6) / pace * (1.0 - 0.06 * rank) * gear_reload
+	# Bite, prime, shut the pan, pour, ram, return the rod, cock: about two
+	# seconds longer than a drill-book reload, and a ball that goes through.
+	reload_time = randf_range(6.0, 7.6) / pace * (1.0 - 0.06 * rank) * gear_reload
 	tempo = pace
 	retarget_timer = randf() * 0.4
 	_glance_t = randf_range(1.0, 4.0)

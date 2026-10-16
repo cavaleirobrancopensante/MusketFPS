@@ -25,7 +25,15 @@ const PlayerBody := preload("res://scripts/player_body.gd")
 
 const SPEED := 5.0
 const GRAVITY := 20.0
-const RELOAD_TIME := 3.5
+const RELOAD_TIME := 5.5 # bite, prime, close the pan, pour, ram three times, return the rod, cock
+const PISTOL_RELOAD := 5.0
+const PISTOL_SPEED := 260.0
+const PISTOL_SPREAD := 0.034
+const PISTOL_AIM_SPREAD := 0.012
+const DRAW_TIME := 0.55 # a pistol from the belt or a sabre from the scabbard
+## How each blade swings, relative to the bayonet the swings were tuned for:
+## [damage x, reach x, speed x (shorter strike and recovery)].
+const BLADES := {"melee": [1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.3]}
 const RANGE := 90.0
 const BALL_SPEED := 340.0
 const GRENADES_PER_BATTLE := 3
@@ -42,7 +50,7 @@ const AIM_TIME := 0.22 # seconds to bring the musket up to your cheek
 const FIX_TIME := 1.1 # draw the bayonet from its scabbard and lock it on
 const UNFIX_TIME := 0.9
 ## Reload progress (0..1) at which the ramrod hits bottom: one clink each.
-const RAM_STROKES := [0.46, 0.58, 0.70]
+const RAM_STROKES := [0.5, 0.58, 0.66] # (fractions of the reload; see player_body.gd)
 const MIN_WINDUP := 0.18 # fastest possible blow
 const FULL_CHARGE := 0.8 # hold this long for a fully charged blow
 const STRIKE_TIME := 0.16
@@ -72,7 +80,14 @@ var rig = null
 var third_person := false
 
 # Melee state, read by the HUD to animate the viewmodel.
-var weapon := "musket" # "musket" or "melee"
+var weapon := "musket" # "musket", "melee" (bayonet fixed), "pistol" or "saber"
+# The sidearms you carry (from your kit).
+var has_pistol := true
+var has_saber := true
+var pistol_loaded := true
+var pistol_reload_left := 0.0
+var _last_pistol_p := 1.0
+var switch_from := "musket"
 var switch_left := 0.0
 var switch_total := 1.0
 var switch_target := "musket"
@@ -89,6 +104,7 @@ var reload_time := RELOAD_TIME
 var spread_mult := 1.0
 var speed_mult := 1.0
 var melee_mult := 1.0
+var saber_mult := 1.3
 var block_arc := BLOCK_ARC
 var armour := 0.0
 var misfire_chance := 0.0
@@ -158,11 +174,16 @@ func _apply_sheet() -> void:
 	spread_mult = O.spread_mult()
 	speed_mult = O.speed_mult()
 	melee_mult = O.melee_mult()
+	saber_mult = O.saber_mult()
 	block_arc = O.block_arc()
 	armour = O.armour()
 	misfire_chance = O.misfire() * 0.5 # you look after your own lock
 	ammo = int(Company.officer.get("pack", {}).get("ammo", 30))
 	loaded = ammo > 0
+	var g: Dictionary = Company.officer.get("gear", {})
+	has_pistol = String(g.get("pistol", "")) != ""
+	has_saber = String(g.get("sword", "")) != ""
+	pistol_loaded = has_pistol and ammo > 1
 
 
 ## 3D mode: switch between first and third person.
@@ -185,14 +206,38 @@ func _process(delta: float) -> void:
 ## Toggle aiming down the sights (musket only). The wish is remembered, so
 ## the musket comes back up by itself after each reload.
 func toggle_aim() -> void:
-	if weapon == "musket" and switch_left <= 0.0:
+	if is_gun() and switch_left <= 0.0:
 		aim_wanted = not aim_wanted
 
 
-## Actually sighting right now: wanted, loaded, musket in hand.
+## Actually sighting right now: wanted, loaded, a gun in hand.
 func is_aiming() -> bool:
-	return alive and aim_wanted and weapon == "musket" and switch_left <= 0.0 and loaded \
+	return alive and aim_wanted and is_gun() and switch_left <= 0.0 and is_loaded() \
 		and throw_left <= 0.0
+
+
+## A firearm in hand (musket or pistol), or a blade (bayonet or sabre).
+func is_gun() -> bool:
+	return weapon == "musket" or weapon == "pistol"
+
+
+func is_melee() -> bool:
+	return weapon == "melee" or weapon == "saber"
+
+
+## The weapon in hand is loaded (for the HUD's FIRE button).
+func is_loaded() -> bool:
+	return pistol_loaded if weapon == "pistol" else loaded
+
+
+## The weapons you can take up, in the order of the buttons along the bottom.
+func weapons() -> Array:
+	var out := ["musket", "melee"]
+	if has_pistol:
+		out.append("pistol")
+	if has_saber:
+		out.append("saber")
+	return out
 
 
 ## Throw a grenade: musket in your left hand, wind back, lob it in an arc.
@@ -286,11 +331,26 @@ func request_fire() -> void:
 
 
 func toggle_weapon() -> void:
-	if not alive or switch_left > 0.0 or swing_phase != "idle" or throw_left > 0.0:
+	switch_to("melee" if weapon == "musket" else "musket")
+
+
+## Take up another weapon: fix or unfix the bayonet, draw the pistol from
+## your belt or the sabre from its scabbard (the musket goes over your
+## shoulder), or put them away and take up the musket again.
+func switch_to(w: String) -> void:
+	if not alive or switch_left > 0.0 or swing_phase != "idle" or throw_left > 0.0 or w == weapon:
+		return
+	if not w in weapons():
 		return
 	aim_wanted = false
-	switch_target = "melee" if weapon == "musket" else "musket"
-	switch_total = FIX_TIME if switch_target == "melee" else UNFIX_TIME
+	switch_from = weapon
+	switch_target = w
+	if (weapon == "musket" and w == "melee") or (weapon == "melee" and w == "musket"):
+		switch_total = FIX_TIME if w == "melee" else UNFIX_TIME
+	elif w == "melee":
+		switch_total = DRAW_TIME + FIX_TIME * 0.8 # musket off the shoulder, then the bayonet
+	else:
+		switch_total = DRAW_TIME + (0.25 if weapon in ["pistol", "saber"] else 0.0)
 	switch_left = switch_total
 	_bayonet_sound_done = false
 
@@ -301,7 +361,7 @@ func is_switching() -> bool:
 
 ## Start winding up a blow. Returns false if you can't swing right now.
 func begin_swing() -> bool:
-	if not alive or weapon != "melee" or switch_left > 0.0 or swing_phase != "idle" or throw_left > 0.0:
+	if not alive or not is_melee() or switch_left > 0.0 or swing_phase != "idle" or throw_left > 0.0:
 		return false
 	swing_phase = "windup"
 	phase_time = 0.0
@@ -340,6 +400,13 @@ func reload_progress() -> float:
 	if loaded:
 		return 1.0
 	return 1.0 - reload_left / reload_time
+
+
+## 0..1 through reloading the pistol.
+func pistol_reload_progress() -> float:
+	if pistol_loaded:
+		return 1.0
+	return 1.0 - pistol_reload_left / (PISTOL_RELOAD * reload_time / RELOAD_TIME)
 
 
 ## 0..1 through fixing or unfixing the bayonet (1 when not switching).
@@ -383,13 +450,15 @@ func _physics_process(delta: float) -> void:
 
 		_update_switch(delta)
 		_update_swing(delta)
-		blocking = block_held and weapon == "melee" and swing_phase == "idle" and switch_left <= 0.0
+		blocking = block_held and is_melee() and swing_phase == "idle" and switch_left <= 0.0
 
 		_update_throw(delta)
 		if _want_fire:
 			_want_fire = false
 			if weapon == "musket" and switch_left <= 0.0 and throw_left <= 0.0:
 				_fire()
+			elif weapon == "pistol" and switch_left <= 0.0 and throw_left <= 0.0:
+				_fire_pistol()
 
 		_reprime = maxf(0.0, _reprime - delta)
 		# You need both hands on the musket to reload it (and a cartridge).
@@ -399,10 +468,24 @@ func _physics_process(delta: float) -> void:
 			for stroke in RAM_STROKES:
 				if _last_reload_p < stroke and p >= stroke:
 					battle.play_sound_ui("ramrod", -8.0)
+			if _last_reload_p < 0.94 and p >= 0.94:
+				battle.play_sound_ui("crack", -20.0) # the hammer clicks back
 			_last_reload_p = p
 			if reload_left <= 0.0:
 				loaded = true
 				_last_reload_p = 1.0
+		# The pistol loads the same way, only while it's in your hand.
+		if not pistol_loaded and weapon == "pistol" and switch_left <= 0.0 and ammo != 0:
+			pistol_reload_left -= delta
+			var pp := pistol_reload_progress()
+			if _last_pistol_p < 0.55 and pp >= 0.55:
+				battle.play_sound_ui("ramrod", -12.0)
+			if _last_pistol_p < 0.92 and pp >= 0.92:
+				battle.play_sound_ui("crack", -20.0)
+			_last_pistol_p = pp
+			if pistol_reload_left <= 0.0:
+				pistol_loaded = true
+				_last_pistol_p = 1.0
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -428,7 +511,7 @@ func _keyboard_controls() -> void:
 		block_held = true
 	if Input.is_action_just_released("block"):
 		block_held = false
-	if weapon == "musket":
+	if is_gun():
 		if Input.is_action_just_pressed("fire"):
 			_want_fire = true
 		return
@@ -453,9 +536,16 @@ func _update_switch(delta: float) -> void:
 	switch_left -= delta
 	# Time the scrape-and-click so the click lands as the bayonet locks on.
 	var click_at := 0.46 if switch_target == "melee" else 0.05
+	if switch_target in ["saber", "pistol"]:
+		click_at = 0.5
 	if not _bayonet_sound_done and switch_progress() >= click_at:
 		_bayonet_sound_done = true
-		battle.play_sound_ui("bayonet", -6.0)
+		if switch_target == "saber":
+			battle.play_sound_ui("swish", -8.0) # the blade rasps out
+		elif switch_target == "pistol":
+			battle.play_sound_ui("crack", -22.0) # the hammer pulled back
+		else:
+			battle.play_sound_ui("bayonet", -6.0)
 	if switch_left <= 0.0:
 		switch_left = 0.0
 		weapon = switch_target
@@ -474,15 +564,16 @@ func _update_swing(delta: float) -> void:
 				_hit_done = false
 		"strike":
 			phase_time += delta
-			if not _hit_done and phase_time >= STRIKE_TIME * 0.5:
+			var quick: float = BLADES.get(weapon, [1, 1, 1])[2]
+			if not _hit_done and phase_time >= STRIKE_TIME * 0.5 / quick:
 				_hit_done = true
 				_apply_melee()
-			if phase_time >= STRIKE_TIME:
+			if phase_time >= STRIKE_TIME / quick:
 				swing_phase = "recover"
 				phase_time = 0.0
 		"recover":
 			phase_time += delta
-			if phase_time >= RECOVER_TIME:
+			if phase_time >= RECOVER_TIME / float(BLADES.get(weapon, [1, 1, 1])[2]):
 				swing_phase = "idle"
 				phase_time = 0.0
 				swing_dir = Swing.NONE
@@ -496,7 +587,8 @@ func _flat_forward() -> Vector3:
 
 func _apply_melee() -> void:
 	var data: Dictionary = SWINGS[swing_dir]
-	var reach: float = data["reach"]
+	var blade: Array = BLADES.get(weapon, [1.0, 1.0, 1.0])
+	var reach: float = float(data["reach"]) * float(blade[1])
 	var cone: float = data["cone"]
 	var fwd := _flat_forward()
 	var candidates := []
@@ -511,7 +603,12 @@ func _apply_melee() -> void:
 		candidates.append([d, e])
 	candidates.sort_custom(func(a, b): return a[0] < b[0])
 
-	var damage: float = (data["damage"] + data["charge_damage"] * strike_charge) * melee_mult
+	var damage: float = (data["damage"] + data["charge_damage"] * strike_charge) * float(blade[0])
+	if weapon == "saber":
+		# A sabre is made for cutting: the slashes bite, the thrust less so.
+		damage *= saber_mult * (0.75 if swing_dir == Swing.THRUST else 1.0)
+	else:
+		damage *= melee_mult
 	var knock: float = data["knock"] * (1.0 + strike_charge * 0.5)
 	var right := global_transform.basis.x
 	var count := 0
@@ -585,6 +682,38 @@ func _fire() -> void:
 		battle.spawn_smoke(from + fwd * 2.5 + right * 0.4 - Vector3.UP * 0.3, 0.8)
 		battle.spawn_flash(from + fwd * 1.2 + right * 0.3 - Vector3.UP * 0.25)
 	fired.emit(hit)
+
+
+## The pistol: one quick shot, short-ranged and wild, then a slow reload.
+func _fire_pistol() -> void:
+	if not pistol_loaded and ammo == 0:
+		battle.hud.show_message("Your cartridge box is empty!", 1.2)
+		return
+	if not pistol_loaded:
+		return
+	if randf() < misfire_chance * 1.5:
+		battle.play_sound_ui("crack", -10.0)
+		battle.hud.show_message("The pistol misfires!", 1.0)
+		return
+	pistol_loaded = false
+	pistol_reload_left = PISTOL_RELOAD * reload_time / RELOAD_TIME
+	_last_pistol_p = 0.0
+	if ammo > 0:
+		ammo -= 1
+		ammo_used += 1
+	battle.play_sound_ui("musket", -3.0)
+	var from := camera.global_position
+	var fwd := -camera.global_transform.basis.z
+	var to_me := global_position + Vector3.UP * 1.5 - from
+	from += fwd * maxf(0.4, to_me.dot(fwd))
+	fwd = battle.projectiles.spread_dir(fwd, lerpf(PISTOL_SPREAD, PISTOL_AIM_SPREAD, aim_amount) * spread_mult)
+	battle.projectiles.fire("pistol", from, fwd * PISTOL_SPEED, self)
+	if rig != null:
+		var muzzle: Vector3 = rig.pistol_muzzle_global()
+		battle.spawn_smoke(muzzle + fwd * 0.6, 0.5)
+		battle.spawn_flash(muzzle + fwd * 0.05, 0.7)
+	_shake = maxf(_shake, 0.25)
+	fired.emit(false)
 
 
 ## Called by the projectile system when one of your balls hits someone.

@@ -44,7 +44,9 @@ const XP_KILL := 20
 # ---- gear
 const SLOTS := ["head", "torso", "primary", "secondary"]
 const SLOT_NAMES := {"head": "Head", "torso": "Torso", "primary": "Primary weapon",
-	"secondary": "Secondary weapon"}
+	"secondary": "Secondary weapon", "pistol": "Sidearm", "sword": "Sword"}
+## The officer carries two more: a pistol and a sword (see officer.gd).
+const OFFICER_SLOTS := ["head", "torso", "primary", "secondary", "pistol", "sword"]
 ## Item stats (all optional): steady (+steadiness), pace (+/- fraction),
 ## armour (fraction of melee damage turned), spread / reload (multipliers),
 ## misfire (chance), melee (bayonet damage).
@@ -82,6 +84,13 @@ const ITEMS := {
 		"desc": "A crude spear with a chipped stone head. Light, and longer than it looks."},
 	"cleaver": {"name": "Lizard cleaver", "slot": "secondary", "melee": 30.0, "kg": 2.5, "space": 0.6, "value": 5,
 		"desc": "A heavy, crude blade. Better than clubbing with a musket butt."},
+	# An officer's sidearms.
+	"pistol": {"name": "Sea-service pistol", "slot": "pistol", "kg": 1.2, "space": 0.3, "value": 18,
+		"desc": "A heavy flintlock pistol. One shot, close in, then a slow reload."},
+	"saber": {"name": "Infantry sabre", "slot": "sword", "melee": 44.0, "kg": 1.3, "space": 0.4, "value": 14,
+		"desc": "A curved, single-edged blade. Quicker than a bayonet, made for cutting."},
+	"cutlass": {"name": "Ship's cutlass", "slot": "sword", "melee": 40.0, "kg": 1.4, "space": 0.4, "value": 8,
+		"desc": "Short, broad and heavy. A sailor's blade."},
 	# Goods: no use to us, but worth something to someone.
 	"lizard_shield": {"name": "Lizard shield", "slot": "goods", "kg": 4.0, "space": 1.2, "value": 6,
 		"desc": "Hide stretched over a wicker frame. Collectors in the towns pay for them."},

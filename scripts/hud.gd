@@ -120,7 +120,10 @@ func _on_hurt() -> void:
 
 
 func _melee() -> bool:
-	return player.weapon == "melee"
+	return player.is_melee()
+
+
+const WEAPON_LABELS := {"musket": "MUSKET", "melee": "BAYONET", "pistol": "PISTOL", "saber": "SABRE"}
 
 
 # ---------------------------------------------------------------- layout
@@ -141,8 +144,13 @@ func _buttons() -> Array:
 	else:
 		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": "FIRE"})
 		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": "AIM"})
-	list.append({"id": "weapon", "circle": true, "pos": Vector2(s.x - 58, s.y - 330), "r": 46.0,
-		"label": "MUSKET" if _melee() else "BAYONET"})
+	# A small button for every weapon you carry, along the very bottom.
+	var ws: Array = player.weapons()
+	var ww := 118.0
+	var x0 := s.x * 0.5 - (ws.size() * (ww + 8.0) - 8.0) * 0.5 - 70.0 # clear of VOLLEY
+	for i in ws.size():
+		list.append({"id": "w_" + String(ws[i]), "circle": false, "rect": Rect2(x0 + i * (ww + 8.0), s.y - 48.0, ww, 40.0),
+			"label": WEAPON_LABELS[ws[i]], "small": true})
 	list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
 		"label": "GRENADE %d" % player.grenades})
 	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": "VOLLEY!"})
@@ -238,6 +246,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 				look_last = p
 		"weapon":
 			player.toggle_weapon()
+		"w_musket", "w_melee", "w_pistol", "w_saber":
+			player.switch_to(id.substr(2))
 		"grenade":
 			player.throw_grenade()
 		"aim":
@@ -468,9 +478,10 @@ func _draw_button(b: Dictionary) -> void:
 		draw_circle(pos, r, bg)
 		draw_arc(pos, r, 0, TAU, 48, edge, 3)
 		var label: String = b["label"]
-		if id == "fire" and not _melee() and not player.loaded:
+		if id == "fire" and not _melee() and not player.is_loaded():
 			# Reload ring fills up around the fire button.
-			draw_arc(pos, r + 9, -PI * 0.5, -PI * 0.5 + TAU * player.reload_progress(), 48, Color(0.95, 0.78, 0.3), 7)
+			var prog: float = player.pistol_reload_progress() if player.weapon == "pistol" else player.reload_progress()
+			draw_arc(pos, r + 9, -PI * 0.5, -PI * 0.5 + TAU * prog, 48, Color(0.95, 0.78, 0.3), 7)
 			label = "LOADING"
 			label_col = Color(1, 1, 1, 0.5)
 		if swinging and player.swing_phase == "windup":
@@ -484,6 +495,28 @@ func _draw_button(b: Dictionary) -> void:
 		_text_center(label, pos, fsize, label_col)
 	else:
 		var rect: Rect2 = b["rect"]
+		if id.begins_with("w_"):
+			# The weapon in hand is gold; the one you're switching to pulses.
+			var w := id.substr(2)
+			var gold := Color(0.95, 0.78, 0.3)
+			if w == player.weapon and not player.is_switching():
+				bg = Color(gold, 0.3)
+				edge = gold
+				label_col = gold
+			elif player.is_switching() and w == player.switch_target:
+				edge = Color(gold, 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012))
+			# Unloaded guns show how far through the reload they are.
+			var prog := 1.0
+			if w == "musket":
+				prog = player.reload_progress()
+			elif w == "pistol":
+				prog = player.pistol_reload_progress()
+			draw_rect(rect, bg)
+			if prog < 1.0:
+				draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - 5), Vector2(rect.size.x * prog, 5)), Color(gold, 0.8))
+			draw_rect(rect, edge, false, 2)
+			_text_center(b["label"], rect.get_center(), 16, label_col)
+			return
 		draw_rect(rect, bg)
 		draw_rect(rect, edge, false, 2)
 		_text_center(b["label"], rect.get_center(), 20, label_col)
