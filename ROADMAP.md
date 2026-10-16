@@ -9,7 +9,9 @@ person, and keep your men alive, paid and fed between fights.
 
 - Sandbox, Warband-like: no fixed story; you make your own career.
 - 3D only. Sprites stay only as far-distance stand-ins for performance.
-- You choose your background when starting a new game (see M6).
+- You choose your background when starting a new game (see M6). Now that
+  every campaign opens as Harrow's Ensign at Cinder Ford, the background
+  becomes who you were before the battle (and what that gives you).
 
 ## The core loop
 
@@ -49,6 +51,16 @@ The battle becomes a chain of linked fights before the map exists.
   with friendly fire both ways and men holding fire when the line is blocked.
 - Hand grenades: thrown, bouncing, fused, with blast and knockback.
 - A kinds table ready for javelins, arrows and round shot (M5).
+
+### Prologue, kit and logistics ✅ done
+
+- Cinder Ford: you start as the Ensign, the captain falls and gives you the
+  company, you lead the survivors out.
+- Kit per man (head, torso, primary, secondary, pack) handed out from the
+  wagon on the Company screen, and visible on the 3D models.
+- Levels with attribute points (aim, strength, constitution, fitness),
+  morale, health, hunger, thirst, foul water, sickness, grog, fair shares,
+  desertion and mutiny. The Logistics window on the wagon.
 
 ### M2: Campaign map
 

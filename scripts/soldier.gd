@@ -17,9 +17,16 @@ extends "res://scripts/unit.gd"
 ## open. Under the CHARGE order he picks his own fight, fires if he has a
 ## shot, and falls back to you when badly wounded.
 ##
+## His kit matters (see Company.ITEMS): the musket sets his spread, reload and
+## misfires, the bayonet his thrust (without one he clubs with the butt), a
+## buff coat turns some of a hack, and he can only fire the cartridges in his
+## pack. Allied men (other companies in a big battle) keep their own line and
+## always fire at will; when their line breaks they run.
+##
 ## Animations: idle, walk, aim (musket levelled, shot coming), fire, reload
 ## (ramming), guard (bayonet charged), block and thrust.
 
+const Men := preload("res://scripts/men.gd")
 const SPEED := 3.8
 const RANGE := 40.0
 const MELEE_RANGE := 1.8
@@ -51,6 +58,22 @@ var display_name := "Private"
 var kills := 0
 var down_status := "" # "wounded" or "killed" once he falls
 var melee_bonus := 0.0 # sharper with the bayonet as he rises in rank
+var melee_damage := MELEE_DAMAGE # set by his bayonet (or lack of one)
+var armour := 0.0 # fraction of a melee blow his coat turns
+var spread_mult := 1.0
+var parry_bonus := 0.0 # strength
+var melee_rate := 1.0 # fitness: how soon he strikes again
+var misfire_chance := MISFIRE_CHANCE
+var ammo := -1 # cartridges in his pack; -1 = as many as he likes (stand-alone battles)
+var ammo_used := 0
+var _told_empty := false
+
+# Another company's man in a big battle: his own place, his own fire.
+var ally := false
+var ally_slot := Vector3.ZERO
+var ally_forward := Vector3.FORWARD
+var routing := false # his line broke: running for `rout_to`
+var rout_to := Vector3.ZERO
 
 # Personality.
 var reaction := 0.5
@@ -75,31 +98,50 @@ func _ready() -> void:
 	pace = randf_range(0.85, 1.15)
 	steadiness = randf()
 	var rank := 0
+	var gear_reload := 1.0
 	if record != null:
 		reaction = float(record["reaction"])
 		pace = float(record["pace"])
 		steadiness = float(record["steadiness"])
 		rank = int(record["rank"])
 		display_name = Company.surname_title(record)
+		var st: Dictionary = Men.combat_stats(record)
+		steadiness = clampf(steadiness + float(st["steady"]), 0.0, 1.0)
+		pace *= 1.0 + float(st["pace"])
+		armour = float(st["armour"])
+		spread_mult = float(st["spread"])
+		misfire_chance = float(st["misfire"])
+		melee_damage = float(st["melee"])
+		gear_reload = float(st["reload"])
+		parry_bonus = float(st["parry"])
+		melee_rate = float(st["melee_rate"])
+		hp = float(st["hp"])
+		ammo = int(record["pack"]["ammo"])
+		loaded = ammo > 0
+		rig_gear = record["gear"]
+		rig_pack = record["pack"]
 	# Every rank: steadier, quicker to react and reload, harder with the bayonet.
 	steadiness = minf(1.0, steadiness + 0.1 * rank)
 	reaction *= 1.0 - 0.1 * rank
 	melee_bonus = 5.0 * rank
-	reload_time = randf_range(4.0, 5.6) / pace * (1.0 - 0.06 * rank)
+	reload_time = randf_range(4.0, 5.6) / pace * (1.0 - 0.06 * rank) * gear_reload
 	tempo = pace
 	retarget_timer = randf() * 0.4
 	_glance_t = randf_range(1.0, 4.0)
 	_setup_body(4, 0.35, 1.8, 1.8)
 	_seen_slot = global_position
-	_seen_forward = battle.line_forward
+	_seen_forward = ally_forward if ally else battle.line_forward
 
 
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
 	_clock += delta
+	if routing:
+		_rout(delta)
+		return
 	_update_perception()
-	if not loaded:
+	if not loaded and ammo != 0:
 		reload_left -= delta
 		_ram_sound_t -= delta
 		if _ram_sound_t <= 0.0 and reload_left > 0.8:
@@ -127,7 +169,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# CHARGE: every man picks his own fight.
-	if battle.is_charging() and _charge(delta):
+	if not ally and battle.is_charging() and _charge(delta):
 		return
 
 	# March to where he *thinks* his slot is (he reacts a moment late).
@@ -147,7 +189,7 @@ func _physics_process(delta: float) -> void:
 		shot_timer -= delta
 		if shot_timer < 0.0:
 			_shoot()
-	elif loaded and _reprime_left <= 0.0 and battle.is_at_will() and dist_t <= RANGE and gap < 1.5:
+	elif loaded and _reprime_left <= 0.0 and (ally or battle.is_at_will()) and dist_t <= RANGE and gap < 1.5:
 		# Shaky men fire sooner and from further out; steady men wait.
 		shot_timer = randf_range(0.3, 1.2) + steadiness * 1.5
 
@@ -168,13 +210,16 @@ func _physics_process(delta: float) -> void:
 		if dist_t < 25.0 and randf() < 0.02:
 			_glance = 0.0
 		face_toward(Basis(Vector3.UP, _glance) * look)
-		set_base_anim("idle" if loaded else "reload")
+		set_base_anim("idle" if loaded or ammo == 0 else "reload")
 
 
 ## He sees the line's position and facing as they were `reaction` seconds ago,
 ## so when you wheel or halt the company, the movement ripples through it.
 func _update_perception() -> void:
-	_history.append([_clock, battle.get_slot_position(slot_index), battle.line_forward])
+	if ally:
+		_history.append([_clock, ally_slot, ally_forward])
+	else:
+		_history.append([_clock, battle.get_slot_position(slot_index), battle.line_forward])
 	while _history.size() > 1 and _clock - float(_history[0][0]) > reaction:
 		var old: Array = _history.pop_front()
 		_seen_slot = old[1]
@@ -194,7 +239,7 @@ func _melee(delta: float, e: Node3D) -> void:
 	var d := to_e.length()
 	var dir := to_e / maxf(d, 0.01)
 	face_toward(dir)
-	var charging: bool = battle.is_charging()
+	var charging: bool = not ally and battle.is_charging()
 	var he_rears: bool = e.get("target") == self and float(e.get("windup")) >= 0.0
 	var he_reels: bool = float(e.get("stagger_time")) > 0.0
 	var v := Vector3.ZERO
@@ -226,7 +271,7 @@ func _melee(delta: float, e: Node3D) -> void:
 
 
 func _thrust(e: Node3D) -> void:
-	melee_timer = MELEE_COOLDOWN * randf_range(0.8, 1.25) / pace
+	melee_timer = MELEE_COOLDOWN * randf_range(0.8, 1.25) / pace / melee_rate
 	play_oneshot("thrust", 0.3)
 	_punch(Vector3.ONE * 1.08, 0.25)
 	if randf() >= 0.75:
@@ -234,9 +279,9 @@ func _thrust(e: Node3D) -> void:
 		return
 	var result := "hit"
 	if e.has_method("receive_blow"):
-		result = e.receive_blow(MELEE_DAMAGE + melee_bonus, self, false)
+		result = e.receive_blow(melee_damage + melee_bonus, self, false)
 	else:
-		e.take_damage(MELEE_DAMAGE + melee_bonus, self)
+		e.take_damage(melee_damage + melee_bonus, self)
 	if result == "hit":
 		battle.play_sound("stab", e.global_position + Vector3.UP, -4.0)
 		if e.has_method("stagger"):
@@ -296,12 +341,14 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	if blocking and not _shot and alive and from != null and is_instance_valid(from):
 		var to_from := from.global_position - global_position
 		to_from.y = 0.0
-		if facing.dot(to_from.normalized()) > 0.3 and randf() < 0.45 + 0.4 * steadiness:
+		if facing.dot(to_from.normalized()) > 0.3 and randf() < 0.45 + 0.4 * steadiness + parry_bonus:
 			battle.play_sound("clang", global_position + Vector3.UP * 1.4, -3.0)
 			if from.has_method("stagger"):
 				from.stagger(to_from.normalized() * 2.2, 0.45)
 			melee_timer = 0.0 # riposte straight away
 			return
+	if not _shot:
+		amount *= 1.0 - armour
 	super.take_damage(amount, from)
 
 
@@ -339,13 +386,18 @@ func _shoot() -> void:
 	if battle.projectiles.line_blocked(muzzle, aim_point, self) and randf() < 0.25 + 0.7 * steadiness:
 		shot_timer = randf_range(0.3, 0.7)
 		return
-	if randf() < MISFIRE_CHANCE:
+	if randf() < misfire_chance:
 		# Flash in the pan: a puff by the lock, no shot. Re-prime and try again.
 		battle.spawn_flash(muzzle - dir * 0.6)
 		battle.play_sound("ramrod", muzzle, -10.0)
 		_reprime_left = REPRIME_TIME / pace
 		return
 	loaded = false
+	ammo_used += 1
+	if ammo > 0:
+		ammo -= 1
+		if ammo == 0:
+			battle.on_out_of_ammo(self)
 	reload_left = reload_time * randf_range(0.9, 1.15)
 	_ram_sound_t = 1.5
 	play_oneshot("fire", 0.25)
@@ -354,9 +406,23 @@ func _shoot() -> void:
 	battle.play_sound("musket", muzzle, -2.0)
 	# A real ball: smoothbores scatter, nerves make it worse, and a miss flies
 	# on to whatever is behind.
-	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness)
+	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult
 	var v: Vector3 = battle.projectiles.spread_dir(aim_point - muzzle, spread) * BALL_SPEED
 	battle.projectiles.fire("ball", muzzle, v, self)
+
+
+## His line broke: run for it, and he's safe once he gets there.
+func _rout(delta: float) -> void:
+	var to := rout_to - global_position
+	to.y = 0.0
+	if to.length() < 3.0:
+		battle.on_ally_escaped(self)
+		return
+	var push: Vector3 = battle.separation(self, battle.soldiers, 1.0)
+	velocity = to.normalized() * SPEED * 1.3 * pace + push
+	face_toward(to)
+	set_base_anim("walk")
+	_move(delta)
 
 
 func _on_died() -> void:

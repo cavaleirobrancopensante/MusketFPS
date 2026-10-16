@@ -49,6 +49,10 @@ var last_hit_by: Node3D = null # who gets the credit for killing us
 var hit_radius := 0.35 # body for projectiles: an upright cylinder
 var hit_height := 1.8
 var _shot := false # the current damage is a projectile or blast: can't be parried
+var rig_look := "" # draw with this rig kind instead of rig_kind (the captain)
+var rig_gear := {} # his kit and pack, for the 3D model (see rig3d.gd)
+var rig_pack := {}
+var invulnerable := false # story characters until their moment comes
 
 
 func _setup_body(layer: int, radius: float, height: float, sprite_height_m: float) -> void:
@@ -72,7 +76,9 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	_update_sprite_frame()
 
 	rig = Rig3D.new()
-	rig.kind = rig_kind
+	rig.kind = rig_look if rig_look != "" else rig_kind
+	rig.gear = rig_gear
+	rig.pack = rig_pack
 	add_child(rig)
 	visual = rig
 	_visual_scale = visual.scale
@@ -89,7 +95,7 @@ func _move(delta: float) -> void:
 	position += Vector3(velocity.x, 0.0, velocity.z) * delta
 
 
-func is_valid_target(t: Node3D) -> bool:
+func is_valid_target(t) -> bool:
 	return t != null and is_instance_valid(t) and t.get("alive") == true
 
 
@@ -212,7 +218,7 @@ func write_sprite(buf: PackedFloat32Array) -> void:
 # ---------------------------------------------------------------- damage
 
 func take_damage(amount: float, from: Node3D = null) -> void:
-	if not alive:
+	if not alive or invulnerable:
 		return
 	if from != null:
 		last_hit_by = from

@@ -12,24 +12,81 @@ sprite, animation and sound is generated in code.
 
 ## The campaign
 
-**NEW CAMPAIGN** musters your company: eight men, a few of whom have seen a
-fight. Between battles you're in camp:
+### Prologue: Cinder Ford
+
+**NEW CAMPAIGN** opens on the battle of Cinder Ford. You are the **Ensign**
+of Captain Aldous Harrow's company: eighteen men in the centre of the line,
+another company on either flank, and the greatest lizard horde in living
+memory coming across the plain. The captain gives the orders (FOLLOW, HOLD,
+CHARGE and VOLLEY are locked while he lives; he calls the volleys himself).
+
+In the second wave a lizard javelin brings him down. Go to him (a gold
+marker shows where): he gives you the company with his last words. The left
+flank breaks, the horde pours round it, and the order buttons are yours:
+lead what's left of your men back to **the woods** behind the field (follow
+the marker to the red flag). The company that walks out of the trees,
+bloodied and short of everything, is the one you campaign with, and you are
+its captain now.
+
+### Between battles
 
 - **Every soldier is a person**: a name, his own reaction, pace and
   steadiness, experience, rank (Recruit, Musketeer, Veteran, Sergeant),
-  battles fought and kills. Each rank makes a man steadier, quicker to react
-  and reload, and harder with the bayonet.
+  battles fought and kills.
+- **Levels and attributes.** Every 100 experience is a level and gives 2
+  points to spend on his four attributes:
+
+  | Attribute | What it does |
+  |---|---|
+  | Aim | Accuracy with the musket |
+  | Strength | Bayonet damage and parrying |
+  | Constitution | Hit points, how fast wounds and sickness heal, holding out against hunger and foul water |
+  | Fitness | Pace in battle and on the march (a fit company marches a day faster), striking again sooner in melee |
+
+- **Morale** (0–100) rises with victories, pay, full bellies and grog, and
+  falls with defeats, missed pay, hunger, thirst, sickness and unfairness.
+  It makes a man steadier or shakier in battle. Men below 12 desert; a
+  company below 30 may **mutiny**, and the angriest third breaks into the
+  wagon and leaves with food, powder and money.
+- **Hunger and thirst** kill slowly: first morale, then every attribute, then
+  health, and at 0 health a man dies on the road. Thirst works in days,
+  hunger in about a week.
+- **Water** is found on most days of the march, but some days are dry and some
+  streams are foul. Foul water makes men sick unless it's served as **grog**:
+  one tot of rum a man a day. Rum is bought from the sutler.
+- **Fair shares.** Men who starve while their comrades eat, or who carry far
+  less than the rest, resent it.
 - **Battles have consequences.** A man who goes down is either wounded (out
   for 3 to 10 days) or killed. The dead go on the **roll of honour**.
-- **Aftermath:** lizardmen slain, the bounty, the fallen, the wounded and
-  promotions.
-- **Camp:** hire recruits (25 crowns, raw and shaky), then **MARCH ON**.
-  Marching takes days: wounds heal, and wages fall due every week. Unpaid men
-  may desert. Each warband is bigger than the last.
-- **Falling in battle** isn't the end: your men carry you off the field, but
-  a beaten company loses a quarter of its purse.
+- **Camp:** hire recruits (25 crowns; raw, with a worn musket and no
+  cartridges), look after the company, then **MARCH ON**. Wages fall due every
+  week. A beaten company loses a quarter of its purse and half its baggage.
 - The campaign saves itself after every battle and march; **CONTINUE** picks
   it up.
+
+### The Company screen (COMPANY & KIT)
+
+- **Left:** the man himself, a live 3D figure wearing his actual kit (drag to
+  turn him). Under it: name, rank, level, his four attributes (with **+**
+  buttons while he has points), morale, health, HP, and anything wrong with
+  him (wounded, sick, hungry, thirsty).
+- **Middle:** his kit on a body diagram: **Head** (shako, tricorne, forage
+  cap), **Torso** (regulation coat, linen shirt, buff coat), **Primary
+  weapon** (land musket, worn musket, rifle), **Secondary weapon** (socket or
+  sword bayonet; without one he clubs with the butt). Tap a slot to swap in
+  something from the wagon. His **Pack**: water (up to 2 days), rations (up
+  to 8 days), cartridges (up to 40 shots) with − / + / FILL. In battle a
+  man can fire only the cartridges he carries.
+- **Right:** every man, with his status, morale, shot and food at a glance.
+  Below: **the wagon**. Tap it (or LOGISTICS, or WAGON in camp) for the
+  **Logistics** window: water, rations, cartridges and rum in the wagon and
+  in the packs, what a day costs, how many days it lasts, SHARE EVENLY for
+  each, the sutler, the grog switch, whether the water is foul, how fair the
+  rations are, and the company's morale.
+
+Kit shows on the 3D models in battle too: hats, coats, the rifle's brass
+patchbox, the longer sword bayonet, and a canteen, haversack and cartridge
+box only when he actually carries water, food and shot.
 
 ## The battle
 
@@ -165,9 +222,12 @@ aftermath node.
 |---|---|
 | `scripts/menu.gd` | Main menu: continue, new campaign, stress test |
 | `scripts/settings.gd` | `Settings` autoload: camera mode, stress test |
-| `scripts/company.gd` | `Company` autoload: the men, money, calendar, results, saving |
+| `scripts/company.gd` | `Company` autoload: the men, kit, the wagon, the march, money, results, saving |
+| `scripts/men.gd` | A soldier's attributes, levels, morale, health and conditions, and what they do in battle |
 | `scripts/aftermath.gd` | Between battles: results, the company, hiring, marching on |
-| `scripts/battle.gd` | The battle: world, waves, the company's line and orders, smoke, sound playback |
+| `scripts/company_screen.gd` | The Company screen: portrait, kit, pack, attributes, the men |
+| `scripts/logistics_popup.gd` | The wagon: stocks, days left, sharing out, sutler, grog |
+| `scripts/battle.gd` | The battle: world, waves, the company's line and orders, the Cinder Ford prologue, smoke, sound |
 | `scripts/projectiles.gd` | Musket balls, grenades and future arrows/javelins: flight, hits, tracers |
 | `scripts/player.gd` | Movement, looking, camera, musket, melee and blocking |
 | `scripts/player_body.gd` | Poses your own officer's body from your actions |
@@ -221,11 +281,15 @@ First-person 3D poses are the tables at the top of `player_body.gd`.
 
 `godot --headless --path . --fixed-fps 60 -- --autotest` plays a stand-alone
 battle with automatic volleys, bayonet fighting and blocking, and prints the
-result. Add `--campaign` to play four linked campaign battles (hiring and
-marching in between), `--stress` for the 50 vs 200 battle, or `--tp` for
-third person. This catches script errors without a phone.
+result. Add `--campaign` to play the Cinder Ford prologue and then four
+linked campaign battles (buying, sharing out and marching in between), `--stress` for the 50 vs 200 battle, or `--tp` for
+third person. `-- --company` opens the Company screen after the prologue,
+swaps kit, spends points, uses the wagon and marches six times without food
+to check hunger, desertion and mutiny. This catches script errors without a
+phone.
 
 ## What's next
 
-See [ROADMAP.md](ROADMAP.md). Done: M0 (3D only) and M1 (a company that
-remembers). Next: M2, the campaign map.
+See [ROADMAP.md](ROADMAP.md). Done: M0 (3D only), M1 (a company that
+remembers), projectiles, the prologue, kit and logistics. Next: M2, the
+campaign map.
