@@ -16,10 +16,10 @@ signal changed
 
 const Men := preload("res://scripts/men.gd")
 const UI := preload("res://scripts/ui.gd")
-const GOLD := Color(0.95, 0.8, 0.45)
+const GOLD := Color("d4ad55") # brass (ui.gd)
 const RED := Color(0.95, 0.42, 0.35)
 const GREEN := Color(0.55, 0.9, 0.55)
-const DIM := Color(0.72, 0.74, 0.8)
+const DIM := Color("9aa3b8") # slate (ui.gd)
 
 var _grid: GridContainer
 var _info: RichTextLabel
@@ -40,14 +40,7 @@ func _ready() -> void:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(shade)
 	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.1, 0.12, 0.18)
-	sb.set_corner_radius_all(12)
-	sb.border_color = Color(0.95, 0.8, 0.45, 0.4)
-	sb.set_border_width_all(2)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 18)
-	panel.add_theme_stylebox_override("panel", sb)
+	panel.add_theme_stylebox_override("panel", UI.box(UI.WOOL, 18, 6, 0.3))
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(980, 0)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -113,6 +106,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	UI.dress(l, size)
 	return l
 
 

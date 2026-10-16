@@ -16,12 +16,12 @@ const LOOT := "res://scenes/loot.tscn"
 const Men := preload("res://scripts/men.gd")
 const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
 
-const GOLD := Color(0.95, 0.8, 0.45)
+const GOLD := Color("d4ad55") # brass (ui.gd)
 const RED := Color(0.95, 0.42, 0.35)
 const GREEN := Color(0.55, 0.9, 0.55)
-const DIM := Color(0.75, 0.77, 0.82)
-const BG := Color(0.07, 0.09, 0.14)
-const PANEL := Color(0.11, 0.13, 0.2)
+const DIM := Color("9aa3b8") # slate (ui.gd)
+const BG := UI.NIGHT
+const PANEL := UI.WOOL
 
 var _summary: RichTextLabel
 var _header: Label
@@ -93,11 +93,7 @@ func _ready() -> void:
 	# ---- right: the company
 	var right := PanelContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = PANEL
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 16
-	sb.content_margin_right = 16
+	var sb := UI.box(PANEL, 16)
 	sb.content_margin_top = 12
 	sb.content_margin_bottom = 12
 	right.add_theme_stylebox_override("panel", sb)
@@ -132,6 +128,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.dress(l, size)
 	return l
 
 

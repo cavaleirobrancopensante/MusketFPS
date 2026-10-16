@@ -16,10 +16,11 @@ extends CanvasLayer
 ## scene is done it calls Loading.done() and the cover fades away.
 ## While the cover is up the new scene is paused (process_mode disabled), so
 ## nothing runs half-built.
+const UI := preload("res://scripts/ui.gd")
 
-const BG := Color(0.06, 0.07, 0.11)
-const GOLD := Color(0.95, 0.8, 0.45)
-const DIM := Color(0.72, 0.74, 0.8)
+const BG := UI.NIGHT
+const GOLD := Color("d4ad55") # brass (ui.gd)
+const DIM := Color("9aa3b8") # slate (ui.gd)
 const HINTS := [
 	"Keep the powder dry and the rations fair: hungry men remember who ate.",
 	"A man who runs from the wagon is ashamed of it; a man who fought for it is proud.",
@@ -64,19 +65,16 @@ func _ready() -> void:
 	box.grow_vertical = Control.GROW_DIRECTION_BOTH
 	box.add_theme_constant_override("separation", 14)
 	_cover.add_child(box)
-	_title = _label("", 38, GOLD)
+	_title = _label("", 46, GOLD)
+	_title.add_theme_font_override("font", UI.display_font())
 	box.add_child(_title)
 	_bar = ProgressBar.new()
-	_bar.custom_minimum_size = Vector2(760, 26)
+	_bar.custom_minimum_size = Vector2(760, 14)
 	_bar.show_percentage = false
 	_bar.max_value = 1.0
 	_bar.step = 0.0
-	var under := StyleBoxFlat.new()
-	under.bg_color = Color(0.14, 0.16, 0.24)
-	under.set_corner_radius_all(6)
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = GOLD
-	fill.set_corner_radius_all(6)
+	var under := UI.box(UI.WOOL_DARK, 0, 4, 0.3)
+	var fill := UI.box(UI.BRASS, 0, 4, 0.0)
 	_bar.add_theme_stylebox_override("background", under)
 	_bar.add_theme_stylebox_override("fill", fill)
 	box.add_child(_bar)

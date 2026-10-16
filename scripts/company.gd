@@ -903,7 +903,7 @@ static func mixed_places(men: Array) -> void:
 	for g in guns:
 		line.insert(mid, g)
 	_row(line, 0.0, 1.5, true)
-	_row(by["pike"], 2.6, 1.4, false)
+	_row(by["pike"], 2.6, 1.4, true) # (a gap in front of you, so you can see)
 	_row(by["bow"], -2.8, 1.6, false)
 
 

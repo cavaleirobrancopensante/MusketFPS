@@ -11,8 +11,8 @@ extends Control
 
 const UI := preload("res://scripts/ui.gd")
 const CAMP := "res://scenes/aftermath.tscn"
-const GOLD := Color(0.95, 0.8, 0.45)
-const DIM := Color(0.72, 0.74, 0.8)
+const GOLD := Color("d4ad55") # brass (ui.gd)
+const DIM := Color("9aa3b8") # slate (ui.gd)
 const RED := Color(0.95, 0.42, 0.35)
 
 var _field: VBoxContainer
@@ -27,7 +27,7 @@ var _confirm := false # DONE tapped once with our fallen's kit still on the fiel
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color(0.07, 0.09, 0.14)
+	bg.color = UI.NIGHT
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var v := VBoxContainer.new()
@@ -71,6 +71,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	UI.dress(l, size)
 	return l
 
 
@@ -98,12 +99,7 @@ func _bar(col: Color) -> ProgressBar:
 func _column(parent: Control, title: String) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.11, 0.13, 0.2)
-	sb.set_corner_radius_all(10)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 12)
-	panel.add_theme_stylebox_override("panel", sb)
+	panel.add_theme_stylebox_override("panel", UI.box(UI.WOOL, 12))
 	parent.add_child(panel)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)

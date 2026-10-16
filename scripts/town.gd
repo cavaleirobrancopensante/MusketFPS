@@ -24,8 +24,8 @@ const Townsfolk := preload("res://scripts/townsfolk.gd")
 const Look := preload("res://scripts/look.gd")
 const MAP := "res://scenes/map.tscn"
 
-const GOLD := Color(0.95, 0.8, 0.45)
-const DIM := Color(0.72, 0.74, 0.8)
+const GOLD := Color("d4ad55") # brass (ui.gd)
+const DIM := Color("9aa3b8") # slate (ui.gd)
 const RED := Color(0.95, 0.42, 0.35)
 const GREEN := Color(0.55, 0.9, 0.55)
 const SPEED := 4.2
@@ -920,7 +920,7 @@ func _build_ui() -> void:
 	_pad.gui_input.connect(_on_pad)
 	_pad.draw.connect(_draw_pad)
 	_ui.add_child(_pad)
-	var info_panel := _panel(Color(0.06, 0.07, 0.11, 0.8))
+	var info_panel := _panel(Color(UI.NIGHT, 0.82))
 	info_panel.position = Vector2(14, 14)
 	info_panel.custom_minimum_size = Vector2(430, 0)
 	_ui.add_child(info_panel)
@@ -979,12 +979,7 @@ func _build_ui() -> void:
 
 func _panel(col: Color) -> PanelContainer:
 	var p := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = col
-	sb.set_corner_radius_all(10)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 12)
-	p.add_theme_stylebox_override("panel", sb)
+	p.add_theme_stylebox_override("panel", UI.box(col, 12))
 	return p
 
 
@@ -1077,7 +1072,7 @@ func _set_mode(m: String) -> void:
 
 
 func _build_menu() -> void:
-	_menu = _panel(Color(0.07, 0.08, 0.13, 0.9))
+	_menu = _panel(Color(UI.WOOL, 0.92))
 	_menu.position = Vector2(14, 120)
 	_menu.custom_minimum_size = Vector2(430, 0)
 	_menu.visible = false
@@ -1161,6 +1156,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	UI.dress(l, size)
 	return l
 
 
@@ -1243,7 +1239,7 @@ func _update_cine(delta: float) -> void:
 # ---------------------------------------------------------------- talking
 
 func _build_conv() -> void:
-	_conv = _panel(Color(0.07, 0.08, 0.13, 0.96))
+	_conv = _panel(Color(UI.WOOL, 0.97))
 	_conv.anchor_left = 0.42
 	_conv.anchor_right = 1.0
 	_conv.anchor_bottom = 1.0

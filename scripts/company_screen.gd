@@ -21,13 +21,13 @@ const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 const CAMP := "res://scenes/aftermath.tscn"
 
-const GOLD := Color(0.95, 0.8, 0.45)
+const GOLD := Color("d4ad55") # brass (ui.gd)
 const RED := Color(0.95, 0.42, 0.35)
 const GREEN := Color(0.55, 0.9, 0.55)
-const DIM := Color(0.72, 0.74, 0.8)
-const BG := Color(0.07, 0.09, 0.14)
-const PANEL := Color(0.11, 0.13, 0.2)
-const CARD := Color(0.16, 0.19, 0.28)
+const DIM := Color("9aa3b8") # slate (ui.gd)
+const BG := UI.NIGHT
+const PANEL := UI.WOOL
+const CARD := Color("263352")
 
 var _sel: Dictionary = {} # the man on show
 var _picker_slot := "" # a slot's choices are open
@@ -98,19 +98,13 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	UI.dress(l, size)
 	return l
 
 
 func _panel(col: Color, pad: int) -> PanelContainer:
 	var p := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = col
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = pad
-	sb.content_margin_right = pad
-	sb.content_margin_top = pad
-	sb.content_margin_bottom = pad
-	p.add_theme_stylebox_override("panel", sb)
+	p.add_theme_stylebox_override("panel", UI.box(col, pad))
 	return p
 
 
@@ -391,11 +385,10 @@ func _build_middle() -> Control:
 
 func _style_card(b: Button) -> void:
 	for state in ["normal", "hover", "pressed", "focus"]:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = CARD.lightened(0.08 if state == "hover" else (0.15 if state == "pressed" else 0.0))
-		sb.set_corner_radius_all(8)
-		sb.border_color = Color(0.95, 0.8, 0.45, 0.6 if state != "normal" else 0.25)
-		sb.set_border_width_all(2)
+		var sb := UI.box(CARD.lightened(0.08 if state == "hover" else (0.15 if state == "pressed" else 0.0)), 0, 5, 0.0)
+		sb.border_color = Color(UI.BRASS, 0.7 if state != "normal" else 0.3)
+		sb.set_border_width_all(1)
+		sb.border_width_left = 4 # a brass edge, like a facing
 		sb.content_margin_left = 12
 		sb.content_margin_right = 8
 		b.add_theme_stylebox_override(state, sb)

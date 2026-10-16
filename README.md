@@ -414,6 +414,26 @@ checked on this computer, so try them on the phone and drop back to MEDIUM
 if they flicker or slow it down. Testing: `-- --gfxq=low|medium|high`
 overrides the setting for a run.
 
+### The look of the screens
+
+The menus wear the regiment's coat: blue wool panels edged with a thin
+pipeclay line, brass for headings and the main action on each screen,
+madder red for what's pressed or wrong. Titles and headings are set in
+**IM Fell** (old printers' type, like the headings in an order book; it has
+true small capitals); everything else in **Alegreya Sans**, which stays
+readable small on a phone. Both are free fonts in `fonts/` (the only files in
+the game not made in code). `scripts/ui.gd` builds the theme once and
+Settings applies it to every screen; a big label becomes a heading on its own.
+
+The **main menu** opens on the company's camp at night, live: the fire, the
+wagon, the colours, a sentry, men asleep on their blankets, the camera
+drifting slowly. Continue (brass), New campaign and Load sit on the left,
+Skirmish and Stress test under them, and View and Graphics along the foot.
+
+In battle the HUD's buttons are rounded and translucent, brass when an
+order is in force, madder when you press them; your health and the status
+line sit on a strip of night at the top left.
+
 ### The Company screen (COMPANY & KIT)
 
 - **Left:** the man himself, a live 3D figure wearing his actual kit (drag to

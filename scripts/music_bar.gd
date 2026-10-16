@@ -8,8 +8,8 @@ extends Control
 ## Add it to any screen:  MusicBar.attach(root_control, Vector2(x, y))
 
 const UI := preload("res://scripts/ui.gd")
-const GOLD := Color(0.95, 0.8, 0.45)
-const DIM := Color(0.72, 0.74, 0.8)
+const GOLD := Color("d4ad55") # brass (ui.gd)
+const DIM := Color("9aa3b8") # slate (ui.gd)
 
 var _panel: PanelContainer
 var _title: Label
@@ -42,14 +42,7 @@ func _build(at: Vector2) -> void:
 	add_child(note)
 
 	_panel = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.1, 0.15, 0.97)
-	sb.set_corner_radius_all(12)
-	sb.border_color = Color(0.95, 0.8, 0.45, 0.4)
-	sb.set_border_width_all(2)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 16)
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel.add_theme_stylebox_override("panel", UI.box(Color(UI.WOOL, 0.98), 16, 6, 0.3))
 	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_panel.custom_minimum_size = Vector2(640, 560)
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -103,6 +96,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	UI.dress(l, size)
 	return l
 
 
