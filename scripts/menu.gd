@@ -30,6 +30,7 @@ func _ready() -> void:
 	#   -- --autotest --camp [--spotted]  attacked in the night camp
 	#   -- --autotest --assault [--walls=W]  storming a nest
 	#   -- --autotest --patrol [--vell] [--army] [--allied]  against a nation's patrol or a lord's army (or beside it)
+	#   -- --contracttest, -- --siegetest  headless checks of contracts and town sieges
 	var args := OS.get_cmdline_user_args()
 	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
 		if a in args:
@@ -64,6 +65,44 @@ func _ready() -> void:
 			# Through the loading screen, as from the setup screen.
 			Loading.change.call_deferred(BATTLE)
 			return
+	if "--siegetest" in args:
+		# Headless check of a town siege: it falls, and a broken one lifts.
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		World.new_world(1234)
+		var towns: Array = World.gen.settlements.filter(func(st): return st["kind"] == "town" and st.get("faction", "") == "vell")
+		for k in 2:
+			var tw: Dictionary = towns[k]
+			var army: Dictionary = {}
+			for p in World.parties:
+				if p["kind"] == "army" and p["faction"] == "aurest":
+					army = p
+					break
+			army["x"] = float(tw["x"]) + 0.5
+			army["y"] = float(tw["y"]) + 0.5
+			World._begin_siege(army, tw)
+			print("SIEGE of ", tw["name"], " by ", World.party_name(army), ": ", World.siege_of(int(tw["id"])).get("need"), " days")
+			if k == 1:
+				World.remove_party(int(army["id"])) # (beaten by a relief army)
+			for d in 8:
+				World._sieges_tick()
+			print("SIEGE ", tw["name"], " now ", tw["faction"], " besieged ", not World.siege_of(int(tw["id"])).is_empty(), " owner ", World.places[int(tw["id"])].get("owner", "-"))
+		print("SIEGE news: ", World.log.slice(-6))
+		# And the war left to itself for 40 days (nobody watching).
+		World.new_world(4321)
+		Company.active = false
+		for k in 40 * 24:
+			World.advance(1.0)
+		for st in World.gen.settlements:
+			var sg := World.siege_of(int(st["id"]))
+			if not sg.is_empty():
+				print("SIEGE (day 40) ", st["name"], " ", sg["days"], "/", sg["need"])
+			if World.places[int(st["id"])].has("owner"):
+				print("SIEGE (day 40) TAKEN ", st["name"], " now ", st["faction"])
+		for l in World.lords:
+			print("SIEGE (day 40) LORD ", World.lord_full(l), " army ", int(l["army"]), " home ", World.settlement(int(l["home"]))["name"])
+		get_tree().quit()
+		return
 	if "--contracttest" in args:
 		# Headless check of a contract: signing, pay, progress, the end.
 		Company.new_campaign()

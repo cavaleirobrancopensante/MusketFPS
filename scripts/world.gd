@@ -179,6 +179,9 @@ func load_world() -> bool:
 	var pl: Dictionary = data.get("places", {})
 	for k in pl:
 		places[int(k)] = pl[k]
+		# A place taken in the war flies its new banner.
+		if pl[k].has("owner"):
+			gen.settlements[int(k)]["faction"] = String(pl[k]["owner"])
 	log = data.get("log", [])
 	goal = data.get("goal", {})
 	path = data.get("path", []).map(func(c): return Vector2i(int(c[0]), int(c[1])))
@@ -582,6 +585,7 @@ func _note_water() -> void:
 
 func _midnight() -> void:
 	var notes: PackedStringArray = Company.pass_day(_day_water) if Company.active else PackedStringArray()
+	_sieges_tick()
 	# Nests not under siege fill up again, and mend their stakes.
 	for st in gen.settlements:
 		if st["kind"] == "nest" and not nest_destroyed(int(st["id"])):
@@ -1342,6 +1346,12 @@ func _raise_armies() -> void:
 		if int(l["army"]) >= 0 or hours < float(l["back_at"]):
 			continue
 		var seat := settlement(int(l["home"]))
+		if String(seat.get("faction", "")) != String(l["faction"]):
+			var other: Array = gen.settlements.filter(func(s): return s.get("faction", "") == l["faction"] and s["kind"] in ["city", "town"])
+			if other.is_empty():
+				continue # (his nation has nowhere left to raise men)
+			l["home"] = int(other.pick_random()["id"])
+			seat = settlement(int(l["home"]))
 		var size := mini(110, randi_range(40, 70) + day() / 2)
 		var p := _new_party("army", String(l["faction"]), size, seat)
 		p["lord"] = int(l["id"])
@@ -1356,11 +1366,21 @@ func _raise_armies() -> void:
 func _army_errand(p: Dictionary, me: Vector2, home: Dictionary) -> void:
 	var f := String(p["faction"])
 	var choices: Array = []
+	var relieve := _relief_target(p)
+	if not relieve.is_empty() and randf() < 0.75:
+		p["target"] = int(relieve["id"])
+		p["path"] = _route(me, Vector2(relieve["x"], relieve["y"]))
+		if not (p["path"] as Array).is_empty():
+			return
 	if randf() < 0.65 and not home.is_empty():
 		var hp := Vector2(home["x"], home["y"])
-		var enemy: Array = gen.settlements.filter(func(s): return s.get("faction", "") == Company.AT_WAR.get(f, "") and s["kind"] in ["village", "town"] and not is_raided(int(s["id"])))
+		var enemy: Array = gen.settlements.filter(func(s): return s.get("faction", "") == Company.AT_WAR.get(f, "") and s["kind"] == "village" and not is_raided(int(s["id"])))
 		enemy.sort_custom(func(a, b): return Vector2(a["x"], a["y"]).distance_squared_to(hp) < Vector2(b["x"], b["y"]).distance_squared_to(hp))
 		choices = enemy.slice(0, 4)
+		# ...and the nearest walled places, to besiege.
+		var walled: Array = gen.settlements.filter(func(s): return s.get("faction", "") == Company.AT_WAR.get(f, "") and s["kind"] in ["town", "city"] and int(places[int(s["id"])].get("siege_army", -1)) < 0)
+		walled.sort_custom(func(a, b): return Vector2(a["x"], a["y"]).distance_squared_to(hp) < Vector2(b["x"], b["y"]).distance_squared_to(hp))
+		choices.append_array(walled.slice(0, 2))
 	if choices.is_empty():
 		choices = gen.settlements.filter(func(s): return s.get("faction", "") == f and s["id"] != p["target"])
 	if choices.is_empty():
@@ -1373,11 +1393,23 @@ func _army_errand(p: Dictionary, me: Vector2, home: Dictionary) -> void:
 		p["wait"] = 24.0
 
 
+## A town of yours besieged? Go and break the siege (most armies will).
+func _relief_target(p: Dictionary) -> Dictionary:
+	var f := String(p["faction"])
+	for st in gen.settlements:
+		if st.get("faction", "") == f and int(places[int(st["id"])].get("siege_army", -1)) >= 0:
+			return st
+	return {}
+
+
 ## An army at an enemy village burns it; at a town, it sits before the walls
 ## a day and burns the fields round it.
 func _army_arrives(p: Dictionary, tgt: Dictionary) -> void:
 	var l := lord_of(p)
 	var who := lord_short(l) if not l.is_empty() else "An army"
+	if tgt["kind"] in ["town", "city"] and int(places[int(tgt["id"])].get("siege_army", -1)) < 0:
+		_begin_siege(p, tgt)
+		return
 	places[int(tgt["id"])]["raided"] = hours + (96.0 if tgt["kind"] == "village" else 48.0)
 	p["wait"] = 10.0 if tgt["kind"] == "village" else 24.0
 	_tell("%s burns %s!" % [who, tgt["name"]] if tgt["kind"] == "village" else "%s lays waste round %s." % [who, tgt["name"]], tgt)
@@ -1394,3 +1426,77 @@ func _army_lost(p: Dictionary) -> void:
 	l["army"] = -1
 	l["back_at"] = hours + 24.0 * randf_range(6.0, 10.0)
 	_tell("%s's army is broken; he gets away with his household." % lord_short(l), {"x": p["x"], "y": p["y"]})
+
+
+# ---------------------------------------------------------------- sieges
+# An army that reaches an enemy town or city sits down before it. Each
+# midnight the siege goes on while the army is still there: a town holds 4
+# days, a city 7 (fewer for a big army, or with your guns helping). Then it
+# falls and flies the besieger's banner (its seat moves if a lord lived
+# there). An army of the town's own nation will come to break the siege;
+# you can attack the besiegers from the town (map.gd), or help them.
+
+const SIEGE_DAYS := {"town": 4, "city": 7}
+
+
+func _begin_siege(p: Dictionary, tgt: Dictionary) -> void:
+	var pl: Dictionary = places[int(tgt["id"])]
+	pl["siege_army"] = int(p["id"])
+	pl["siege_days"] = 0
+	pl["siege_need"] = maxi(2, int(SIEGE_DAYS[tgt["kind"]]) - (1 if int(p["size"]) >= 70 else 0))
+	p["wait"] = 9999.0 # (it stays until the siege ends)
+	p["path"] = []
+	var l := lord_of(p)
+	_tell("%s lays siege to %s!" % [lord_short(l) if not l.is_empty() else "An army", tgt["name"]], tgt)
+
+
+func siege_of(id: int) -> Dictionary:
+	var pl: Dictionary = places.get(id, {})
+	var a := int(pl.get("siege_army", -1))
+	if a < 0:
+		return {}
+	return {"army": party_by_id(a), "days": int(pl.get("siege_days", 0)), "need": int(pl.get("siege_need", 4))}
+
+
+## Your guns before the walls: the siege is that much shorter.
+func help_siege(id: int, days: int) -> void:
+	var pl: Dictionary = places[id]
+	pl["siege_days"] = int(pl.get("siege_days", 0)) + days
+
+
+## Each midnight: sieges go on, or end.
+func _sieges_tick() -> void:
+	for st in gen.settlements:
+		var id := int(st["id"])
+		var pl: Dictionary = places[id]
+		var a := int(pl.get("siege_army", -1))
+		if a < 0:
+			continue
+		var p := party_by_id(a)
+		if p.is_empty() or Vector2(p["x"], p["y"]).distance_to(Vector2(st["x"], st["y"])) > 4.0:
+			pl.erase("siege_army")
+			_tell("The siege of %s is broken!" % st["name"], st)
+			continue
+		pl["siege_days"] = int(pl["siege_days"]) + 1
+		if int(pl["siege_days"]) >= int(pl["siege_need"]):
+			_town_falls(st, p)
+
+
+func _town_falls(st: Dictionary, p: Dictionary) -> void:
+	var id := int(st["id"])
+	var pl: Dictionary = places[id]
+	var was := String(st["faction"])
+	var to := String(p["faction"])
+	st["faction"] = to
+	pl["owner"] = to
+	pl.erase("siege_army")
+	p["wait"] = 24.0
+	p["target"] = -1
+	var l := lord_of(p)
+	_tell("%s falls to %s! It flies the banner of %s now." % [st["name"], lord_short(l) if not l.is_empty() else "the besiegers", Lore.FACTIONS[to]["short"]], st)
+	# A lord whose seat it was moves to another of his nation's places.
+	for lo in lords:
+		if int(lo["home"]) == id and String(lo["faction"]) == was:
+			var other: Array = gen.settlements.filter(func(s): return s.get("faction", "") == was and s["kind"] in ["city", "town"])
+			if not other.is_empty():
+				lo["home"] = int(other.pick_random()["id"])

@@ -220,7 +220,7 @@ func _field_brain(delta: float) -> void:
 		face_toward(v)
 		set_base_anim("walk")
 	else:
-		face_toward(reg.forward)
+		face_toward(reg.slot_facing(slot_index))
 		if pike:
 			set_base_anim("guard" if reg.braced else "idle")
 		else:

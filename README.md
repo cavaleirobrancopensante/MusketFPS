@@ -149,6 +149,16 @@ with every seed.
   **LORDS** on the map lists them all: where you stand with each nation and
   lord, and what you know of their armies. Their armies show gold on the
   map; anyone out to get you shows red.
+- **Sieges and the war front.** An army that reaches an enemy town or
+  city sits down before it (the label shows "besieged"): a town holds 4
+  days, a city 7, a little less against a big army. If the besiegers are
+  still there at the end, it falls and flies their banner from then on
+  (towns change hands back and forth as the war goes; a lord who lost his
+  seat raises his men elsewhere). The town's own nation sends armies to
+  break the siege. Walk up to a besieged town and the gates are shut:
+  **ATTACK THE BESIEGERS** (the garrison sallies to fight beside you), or,
+  if you're on good terms with the besiegers, **HELP THE SIEGE** (your guns
+  bring the walls down in a day). Either side remembers.
 - **Contracts.** Meet a lord's army when he and his nation think well
   enough of you (not cold, not wary) and you can **OFFER YOUR SERVICE**: he
   hires the company for three weeks at a weekly wage (more for more men and
@@ -850,6 +860,15 @@ cannon, on top of your own company of musketeers, which you lead) and **the
 enemy**: a lizard warband (warriors, javelin throwers, brutes, raptor
 riders) or a rival army in red coats with the same kinds as yours. The count
 at the bottom warns when it gets big for a phone.
+
+**Square.** Foot (muskets, pikes, bows, crossbows; 8 men or more) can form
+**SQUARE** (in the command view's orders, or the army bar on foot): a hollow
+box with every face outward. Horse can't break it: riders that gallop into
+it rear and are hurt. It shoots all round and can't be taken in the flank
+or rear; but it can't march (any move order opens it out again), and it's a
+fat target for shot. When horse charge one of your regiments the alert says
+"Form square!"; the computer's generals form square when horse bear down on
+their foot, and their horse won't ride at a square.
 
 **Deployment.** The battle opens paused in the command view. Tap a regiment
 (or its card), then **tap** the ground to stand it there in a **column of

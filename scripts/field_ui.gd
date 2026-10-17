@@ -307,7 +307,7 @@ func _draw_overlay() -> void:
 		if r.broken():
 			fc.a = 0.12
 		var hw: float = maxf(2.5, r.width() * 0.5 + 1.0)
-		var depth: float = maxf(2.0, ceilf(float(r.members.size()) / r.files_now()) * r.rank_gap)
+		var depth: float = r.block_depth()
 		_quad(r.centroid, r.forward, r.right(), hw, depth * 0.5, fc)
 		if r in selected and r.is_ranged() and not r.broken():
 			_cone_fill(r)
@@ -325,7 +325,7 @@ func _draw_overlay() -> void:
 		var f: Vector3 = r.forward
 		var rt: Vector3 = r.right()
 		var hw: float = maxf(2.5, r.width() * 0.5 + 1.0)
-		var depth: float = maxf(2.0, ceilf(float(r.members.size()) / r.files_now()) * r.rank_gap)
+		var depth: float = r.block_depth()
 		var front: Vector3 = c + f * depth * 0.5
 		var back: Vector3 = c - f * depth * 0.5
 		var pts := [front - rt * hw, front + rt * hw, back + rt * hw, back - rt * hw]
@@ -489,6 +489,8 @@ func _buttons() -> Array:
 		if any_ranged:
 			list.append(["fire", "FIRE: AT WILL" if r0.fire_at_will else "FIRE: HOLDING"])
 			list.append(["volley", "VOLLEY"])
+		if selected.any(func(r): return r.can_square()):
+			list.append(["square", "SQUARE: " + ("FORMED" if r0.square else "OFF")])
 		list.append(["run", "RUN: " + ("ON" if r0.run else "OFF")])
 		list.append(["fallback", "FALL BACK"])
 		if selected.size() == 1 and r0.player_led and battle.player.alive:
@@ -988,6 +990,7 @@ func _button(id: String) -> void:
 func _order(what: String) -> void:
 	var fire_v: bool = not selected[0].fire_at_will
 	var run_v: bool = not selected[0].run
+	var square_v: bool = not selected[0].square
 	for r in selected:
 		if r.broken():
 			continue
@@ -1008,6 +1011,8 @@ func _order(what: String) -> void:
 				r.order_volley()
 			"run":
 				r.run = run_v
+			"square":
+				r.form_square(square_v)
 			"fallback":
 				if not deploying:
 					r.order_fallback()

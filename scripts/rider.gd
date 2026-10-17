@@ -221,7 +221,7 @@ func _impact(u: Node3D) -> void:
 	var to_me := global_position - u.global_position
 	to_me.y = 0.0
 	var faces_me: bool = u.get("facing") != null and (u.get("facing") as Vector3).dot(to_me.normalized()) > 0.3
-	if ureg != null and ureg.braced and bool(u.get("pike")) and faces_me:
+	if ureg != null and ((ureg.braced and bool(u.get("pike"))) or ureg.square) and faces_me:
 		take_damage(70.0, u)
 		battle.play_sound("clang", global_position + Vector3.UP * 1.6, 0.0)
 		speed_now = 0.0
