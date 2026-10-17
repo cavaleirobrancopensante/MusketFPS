@@ -32,6 +32,7 @@ const T := Gen.T
 signal day_passed(notes: PackedStringArray)
 signal news(text: String)
 signal encounter(party: Dictionary) # a hostile party has caught you
+signal fight_near(friend: Dictionary, foe: Dictionary) # a nation's men about to fight near you: join them?
 signal arrived(target: Dictionary) # {"kind": "settlement"/"party"/"cell", ...}
 signal dusk # 18:00 on the march: make camp, or march on in the dark?
 signal dawn # 06:00: camp is struck
@@ -456,7 +457,8 @@ func advance(dh: float) -> void:
 		_fight_t -= step
 		if _fight_t <= 0.0:
 			_fight_t = 0.5
-			_fights()
+			if _fights():
+				return # (a fight close by: will you join it?)
 		if day() != day_before:
 			_midnight()
 		if _check_contact():
@@ -1136,8 +1138,14 @@ func _move_party(p: Dictionary, dh: float) -> void:
 
 
 ## Parties that meet: lizards against anyone, Aurest against Vell. The
-## stronger side usually wins; the loser is destroyed.
-func _fights() -> void:
+## stronger side usually wins; the loser is destroyed. A fight within
+## JOIN_RANGE of you, in sight, with a nation's patrol (that isn't your
+## enemy) in it, waits for you: join it (map.gd) or let it go. Returns true
+## when it's asking.
+const JOIN_RANGE := 5.0
+
+
+func _fights() -> bool:
 	for a in parties.duplicate():
 		if not a in parties:
 			continue
@@ -1146,6 +1154,8 @@ func _fights() -> void:
 				continue
 			if Vector2(a["x"], a["y"]).distance_to(Vector2(b["x"], b["y"])) > CONTACT:
 				continue
+			if _offer_join(a, b):
+				return true
 			var sa := float(a["size"]) * (1.2 if a["kind"] == "patrol" else 1.0) * randf_range(0.6, 1.4)
 			var sb := float(b["size"]) * (1.2 if b["kind"] == "patrol" else 1.0) * randf_range(0.6, 1.4)
 			var win: Dictionary = a if sa >= sb else b
@@ -1155,6 +1165,33 @@ func _fights() -> void:
 			parties.erase(lose)
 			_tell("%s destroyed %s." % [party_name(win).split(" (")[0], party_name(lose).split(" (")[0].to_lower()],
 				{"x": win["x"], "y": win["y"]})
+	return false
+
+
+func _offer_join(a: Dictionary, b: Dictionary) -> bool:
+	if not Company.active or camping or Company.fit_men().is_empty():
+		return false
+	var at := Vector2(a["x"], a["y"])
+	if at.distance_to(pos) > JOIN_RANGE or not can_see(a):
+		return false
+	var cands: Array = []
+	for p in [a, b]:
+		if p["kind"] == "patrol" and not Company.is_enemy(String(p["faction"])):
+			cands.append(p)
+	if cands.is_empty():
+		return false
+	# Both nations' patrols: the side you stand better with.
+	cands.sort_custom(func(x, y): return int(Company.standing.get(x["faction"], 0)) > int(Company.standing.get(y["faction"], 0)))
+	var friend: Dictionary = cands[0]
+	var foe: Dictionary = b if friend == a else a
+	if int(friend.get("declined", -1)) == int(foe["id"]):
+		return false
+	friend["declined"] = int(foe["id"]) # (asked once)
+	friend["wait"] = 2.0
+	foe["wait"] = 2.0
+	stop()
+	fight_near.emit(friend, foe)
+	return true
 
 
 ## Is this party out to get you? Lizards always; a nation's patrols once

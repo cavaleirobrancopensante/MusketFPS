@@ -1037,7 +1037,8 @@ func _end_battle(won: bool) -> void:
 			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
 			"enemy": String(Company.next_battle.get("enemy_kind", "lizards")) if Company.active and not prologue else "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0)),
 			"assault": int(Company.next_battle.get("assault", -1)), "stash": bool(Company.next_battle.get("stash", false)),
-			"nest_name": String(Company.next_battle.get("nest_name", ""))})
+			"nest_name": String(Company.next_battle.get("nest_name", "")),
+			"allies_left": field.allies_left() if field != null else 0})
 	hud.show_restart()
 
 

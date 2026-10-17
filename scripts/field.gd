@@ -79,6 +79,10 @@ var fog := 0.0022 # the air's haze down among the men (the command view clears i
 ## nation it is ("" in the Tests' battle: the old red-coated musketeers).
 var foe_coat := Color(0.62, 0.12, 0.1)
 var nation := ""
+## A nation fighting beside you (Company.next_battle.allies), its coats.
+var ally_nation := ""
+var ally_coat := Color(0.62, 0.12, 0.1)
+var _making_allied := false # (while its men are made: they dress as its soldiers)
 ## How fast the battle goes (the setup's PACE): marching, loading and blows
 ## all scale with it, so there's time to fight and to command.
 var pace := 0.75
@@ -133,6 +137,16 @@ func setup(b, c: Dictionary) -> void:
 			you["xbow" if role == "crossbow" else role] = 1
 		if Company.guns > 0:
 			you["gun"] = 1
+		var al: Dictionary = nb.get("allies", {})
+		var af := String(al.get("faction", ""))
+		if Lore.FACTIONS.has(af) and Lore.FACTIONS[af].has("coat"):
+			ally_nation = af
+			ally_coat = Lore.FACTIONS[af]["coat"]
+			ai_sides = [0, 1] # (its general commands what you don't)
+			var ak := {}
+			for k in al.get("comp", {}):
+				ak[k] = 1
+			cfg["ally"] = ak
 		cfg["you"] = you
 		camp = bool(c.get("camp", false))
 		spotted = camp and bool(c.get("spotted", false))
@@ -196,6 +210,8 @@ func make_sprites() -> void:
 		if int(cfg["you"][k]) > 0:
 			want[_sprite_name(k, 0)] = [k, 0]
 	want[_sprite_name("musket", 0)] = ["musket", 0]
+	for k in cfg.get("ally", {}):
+		want[_sprite_name(k, 2)] = [k, 2]
 	var foe_side := 1
 	for k in cfg.get("foe", {}):
 		if int(cfg["foe"][k]) > 0:
@@ -221,7 +237,7 @@ func _sprite_name(kind: String, side: int) -> String:
 			return "f_brute"
 		"liz_raptor":
 			return "f_raptor"
-	return "f_%s%d" % [kind, side]
+	return "f_%s%d" % [kind, side] # (side 2: a nation fighting beside you)
 
 
 func _sprite_spec(kind: String, side: int) -> Dictionary:
@@ -236,6 +252,12 @@ func _sprite_spec(kind: String, side: int) -> Dictionary:
 			return {"rig": "lizard", "cell_m": 2.5, "anims": Impostor.LIZARD_ANIMS}
 		"liz_brute":
 			return {"rig": "lizard", "scale": 1.45, "cell_m": 3.6, "anims": Impostor.LIZARD_ANIMS}
+	if side == 2:
+		var g2: Dictionary = FieldSoldier.NATION_GEAR[kind]
+		if kind == "cav":
+			return {"mount": "horse", "gear": {"head": "kettle_hat", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
+				"coat": ally_coat, "saddle": ally_coat, "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
+		return {"rig": "soldier", "gear": g2, "coat": ally_coat, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS}
 	var gear: Dictionary = FieldSoldier.gear_for(self, kind, side)
 	return {"rig": "soldier", "gear": gear, "coat": red if side == 1 else null, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS}
 
@@ -321,6 +343,19 @@ func spawn_campaign() -> void:
 		mine.append(["musket", true, 1, []])
 	if Company.guns > 0:
 		mine.append(["gun", false, Company.guns])
+	# A nation's men fighting beside you: in the same line, theirs to lead
+	# until you give them an order.
+	var al: Dictionary = nb.get("allies", {})
+	if ally_nation != "":
+		var acap := {"pike": 24, "xbow": 14, "bow": 14, "cav": 10}
+		for k in ["pike", "xbow", "bow", "cav"]:
+			var n := int(al.get("comp", {}).get(k, 0))
+			while n > 0:
+				var take := mini(n, int(acap[k]))
+				if n - take > 0 and n - take < 4:
+					take = n
+				mine.append([k, false, take, [], true])
+				n -= take
 	var comp: Dictionary = nb.get("comp", {})
 	if assault:
 		comp = {"none": 0} # (the garrison is the nest's: _build_nest)
@@ -613,7 +648,7 @@ func _deploy(side: int, list: Array) -> void:
 		for e in row:
 			var w := _width_n(e[0], int(e[2]))
 			var at := Vector3(0, 0, z) + right * (x + w * 0.5) + fwd * (-ri * 28.0)
-			_make_reg(side, e[0], int(e[2]), at, fwd, bool(e[1]), e[3] if e.size() > 3 else [])
+			_make_reg(side, e[0], int(e[2]), at, fwd, bool(e[1]), e[3] if e.size() > 3 else [], 0.0, e.size() > 4 and bool(e[4]))
 			x += w + 8.0
 	for i in guns.size():
 		var gx := (float(i) - (guns.size() - 1) * 0.5) * 34.0
@@ -626,7 +661,7 @@ func _deploy(side: int, list: Array) -> void:
 		var cw := _width_n(cav[i][0], int(cav[i][2]))
 		var wing := line_ends + 14.0 + cw * 0.5 + (i / 2) * (cw + 10.0)
 		wing = minf(wing, Terrain.HALF - 12.0)
-		_make_reg(side, cav[i][0], int(cav[i][2]), Vector3(0, 0, z) + right * sgn * wing - fwd * 4.0, fwd, false, cav[i][3] if cav[i].size() > 3 else [])
+		_make_reg(side, cav[i][0], int(cav[i][2]), Vector3(0, 0, z) + right * sgn * wing - fwd * 4.0, fwd, false, cav[i][3] if cav[i].size() > 3 else [], 0.0, cav[i].size() > 4 and bool(cav[i][4]))
 
 
 func _width_n(kind: String, n: int) -> float:
@@ -635,7 +670,7 @@ func _width_n(kind: String, n: int) -> float:
 	return maxf(4.0, (files - 1) * float(info["spacing"]))
 
 
-func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours: bool, recs: Array = [], spacing := 0.0):
+func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours: bool, recs: Array = [], spacing := 0.0, allied := false):
 	var r = Regiment.new()
 	r.field = self
 	r.id = regs.size()
@@ -650,10 +685,14 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	r.forward = fwd
 	r.dest_forward = fwd
 	r.player_led = yours
+	r.allied = allied
 	at = terrain.free_spot(at)
 	r.pos = at
 	var same := regs.filter(func(x): return x.side == side and x.kind == kind).size()
 	r.title = "Your company" if yours else "%s %s" % [ORDINAL[mini(same, ORDINAL.size() - 1)], r.info["name"]]
+	if allied:
+		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], {"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse"}.get(kind, String(r.info["name"]).to_lower())]
+	_making_allied = allied
 	regs.append(r)
 	_deaths[r] = 0
 	if yours:
@@ -661,11 +700,12 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	for i in n:
 		var u = _make_unit(side, kind) if i >= recs.size() else FieldSoldier.from_record(battle, self, recs[i], side)
 		if kind != "gun":
-			_dress(u, kind, side)
+			_dress(u, kind, 2 if allied else side)
 		u.reg = r
 		u.slot_index = i
 		r.members.append(u)
 	r.size0 = r.members.size()
+	_making_allied = false
 	for u in r.members:
 		var sp: Vector3 = terrain.free_spot(r.slot(u.slot_index))
 		u.position = sp
@@ -920,8 +960,8 @@ func _ai(side: int) -> void:
 	for r in regs:
 		if r.side != side or r.broken() or r.gone():
 			continue
-		if r.player_led and side == 0 and not (test_mode):
-			continue
+		if side == 0 and not test_mode and (r.player_led or (not r.allied and not bool(cfg.get("auto", false)))):
+			continue # (yours are yours to command)
 		if r.hold_fast:
 			continue # (a nest's garrison, behind its stakes)
 		if r.order == "charge" and r.target != null and not r.target.broken():
@@ -1075,6 +1115,15 @@ func _finish(won: bool) -> void:
 	else:
 		battle.game_state = "won" if won else "lost"
 		battle.hud.show_restart()
+
+
+## How many of the nation's men who fought beside you are still standing.
+func allies_left() -> int:
+	var n := 0
+	for r in regs:
+		if r.allied:
+			n += r.members.size()
+	return n
 
 
 func status_line() -> String:

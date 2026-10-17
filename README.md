@@ -127,6 +127,21 @@ with every seed.
   caravans travel between towns and holds; villagers go to market; dwarf
   traders come down from the mountains. Parties that meet fight it out,
   and you hear of what you see.
+- **The nations and you.** Aurest and Vell each keep a **standing** with
+  you (hostile, wary, neutral, friendly). Walk up to a patrol, a caravan or
+  a band of deserters and you can **ATTACK** them: a field battle against
+  their real make-up (spearmen, crossbowmen, archers and horse in their
+  nation's coats and kettle hats; nobody in this land has gunpowder). It
+  costs you with that nation (deserters are fair game) and warms the other
+  side a little, since they're at war. Fall to hostile and the nation's
+  patrols hunt you like warbands. No bounty on men: their kit and purses go
+  on the loot pile.
+- **Joining a fight.** When a nation's patrol is about to fight close by
+  (a warband, or the other nation's men) and it isn't your enemy, the clock
+  stops: **JOIN** them and their regiments deploy in your line, following
+  their own officers until you give them an order from the command view
+  (then they're yours), or **STAY OUT**. They remember the help; the other
+  nation remembers too.
 - **Encounters:** a lizard warband that catches you means battle or a
   chance to slip away, better in cover. Tap any party to go after it. The
   battle is a field battle (see **Field battle** under Tests: the same
@@ -973,8 +988,10 @@ linked campaign battles (buying, sharing out and marching in between), `--stress
 skirmish with a mixed company (muskets, spears, bows, crossbows), or `--tp` for
 third person. `--camp` (add `--spotted` for the watch seeing them) is
 the night camp attacked, and `--assault` (with `--walls=0.3` for a broken
-palisade) storms a nest with two guns; both start a fresh campaign after
-the prologue and then march on to more battles. `-- --company` opens the Company screen after the prologue,
+palisade) storms a nest with two guns, `--patrol` (`--vell` for the
+other nation) fights a nation's patrol, and `--patrol --allied` fights a
+warband beside one; all start a fresh campaign after the prologue and
+then march on to more battles. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a
 phone. `-- --intro` plays the cutscene at 4x speed. `-- --plantest` and

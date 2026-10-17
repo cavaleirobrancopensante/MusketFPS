@@ -443,7 +443,7 @@ func apply_battle(result: Dictionary) -> void:
 	var won: bool = result["won"]
 	var men: Dictionary = result["men"]
 	var was_prologue := bool(result.get("prologue", false))
-	var summary := {"enemy": String(result.get("enemy", "lizards")), "won": won, "slain": int(result["slain"]), "fallen": [], "wounded": [],
+	var summary := {"enemy": String(result.get("enemy", "lizards")), "allies_left": int(result.get("allies_left", 0)), "won": won, "slain": int(result["slain"]), "fallen": [], "wounded": [],
 		"promoted": [], "levelled": [], "pay": 0, "day": day, "prologue": was_prologue, "lost_gear": 0}
 	if not was_prologue:
 		battles += 1

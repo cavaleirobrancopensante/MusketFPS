@@ -50,6 +50,9 @@ static func make(b, f, kind: String, s: int):
 	me.record = rec
 	if s == 1:
 		me.rig_coat = f.foe_coat
+	elif f._making_allied:
+		me.rig_coat = f.ally_coat
+		rec["gear"] = (NATION_GEAR[kind] as Dictionary).duplicate()
 	return me
 
 
