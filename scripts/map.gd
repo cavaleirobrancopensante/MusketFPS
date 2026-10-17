@@ -575,7 +575,7 @@ func _build_hud() -> void:
 	for spec in [["YOU", func():
 				get_tree().set_meta("officer_back", "res://scenes/map.tscn")
 				_go("res://scenes/officer.tscn")],
-			["COMPANY", _go.bind(COMPANY_SCREEN)], ["PLAN", _go.bind(PLAN)], ["WAGON", func(): _logistics.open()], ["SCOUTS", _open_scouts],
+			["COMPANY", _go.bind(COMPANY_SCREEN)], ["PLAN", _go.bind(PLAN)], ["WAGON", func(): _logistics.open()], ["SCOUTS", _open_scouts], ["LORDS", _show_lords],
 			["CAMP", _go.bind(CAMP)], ["MENU", _go.bind(MENU)]]:
 		right.add_child(_button(spec[0], spec[1]))
 	var br := HBoxContainer.new()
@@ -782,7 +782,9 @@ func _update_parties() -> void:
 		n.visible = seen
 		if seen:
 			n.position = _world_pos(Vector2(p["x"], p["y"]))
-			(n.get_node("label") as Label3D).text = World.party_label(p)
+			var lab := n.get_node("label") as Label3D
+			lab.text = World.party_label(p)
+			lab.modulate = Color(1, 0.6, 0.5) if World.hostile_to_us(p) else (Color(1.0, 0.88, 0.6) if p["kind"] == "army" else Color(0.9, 0.9, 1.0))
 	for id in _markers.keys():
 		if not alive.has(id):
 			_markers[id].queue_free()
@@ -1217,11 +1219,20 @@ func _meet(p: Dictionary) -> void:
 			text = "Country folk on their way to market. They tell you the lizards have been raiding to the south."
 		"traders":
 			text = "Dwarf traders with pack ponies loaded with iron. They ask, very politely, how your guns work."
+		"army":
+			var l := World.lord_of(p)
+			if not l.is_empty():
+				text = "The army of %s: a long column of spears and crossbows, his household riding at its head under his banner. He reins in to look you over: the strangers with the fire-sticks." % World.lord_full(l)
+				text += "\n\n[color=#9aa3b8]%s is %s to you.[/color]" % [World.lord_short(l), World.relation_word(int(l["relation"]))]
+				if int(l["relation"]) >= 15:
+					text += " He greets you by name, and asks what you've seen of the lizards."
+			else:
+				text = "An army of %s on the march." % Lore.FACTIONS[p["faction"]]["name"]
 	var buttons: Array = []
 	var kind := String(p["kind"])
 	if kind == "deserters":
 		text = "Ragged men in odd bits of %s kit, who ran from the war and live off the road now. Nobody would miss them." % Lore.FACTIONS[p["faction"]]["short"]
-	if kind in ["patrol", "caravan", "deserters"]:
+	if kind in ["patrol", "caravan", "deserters", "army"]:
 		var lvl := World.intel_level(p, 0.0)
 		text += "\n\n%s of them" % ("%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p))
 		if lvl >= 3:
@@ -1235,13 +1246,13 @@ func _meet(p: Dictionary) -> void:
 		buttons.append(["ATTACK", _attack_party.bind(p)])
 	buttons.append(["LEAVE", _popup_close])
 	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "traders": "traders",
-		"deserters": "deserters"}.get(kind, "road"), {"faction": p.get("faction", "vell")})
+		"deserters": "deserters", "army": "patrol"}.get(kind, "road"), {"faction": p.get("faction", "vell")})
 	_popup_open(World.party_label(p, mini(World.intel_level(p, 0.0), 2)), text, buttons)
 
 
 ## What attacking a nation's men costs you with it (and what its enemy
 ## thinks of that).
-const _ATTACK_COST := {"patrol": 40, "caravan": 30, "deserters": 0}
+const _ATTACK_COST := {"patrol": 40, "caravan": 30, "deserters": 0, "army": 50}
 
 
 func _attack_party(p: Dictionary) -> void:
@@ -1254,6 +1265,11 @@ func _attack_party(p: Dictionary) -> void:
 		Company.change_standing(String(Company.AT_WAR.get(f, "")), 10)
 		if Company.is_enemy(f) and not was:
 			note = "%s will not forget this: its patrols will hunt you now." % Lore.FACTIONS[f]["name"]
+	if kind == "army":
+		var l := World.lord_of(p)
+		World.change_relation(l, -60)
+		if not l.is_empty() and note == "":
+			note = "%s has sworn to see you hanged." % World.lord_short(l)
 	_fight(p, false)
 	if note != "" and not Company.next_battle.is_empty():
 		Company.next_battle["standing_note"] = note
@@ -1427,6 +1443,30 @@ func _on_scouts_back(r: Dictionary) -> void:
 	_popup_open("The scouts are back", t, [["CARRY ON", _popup_close]], false)
 
 
+## The nations and their lords: where you stand with each, and what you
+## know of their armies.
+func _show_lords() -> void:
+	var t := ""
+	for f in ["aurest", "vell"]:
+		t += "[b]%s[/b]: %s to you.\n" % [Lore.FACTIONS[f]["name"], Company.standing_word(f)]
+		for l in World.lords:
+			if l["faction"] != f:
+				continue
+			var state := ""
+			var p := World.party_by_id(int(l["army"]))
+			if p.is_empty():
+				state = "raising a new army"
+			elif World.can_see(p):
+				state = "his army in sight: %s" % World.party_label(p, mini(World.intel_level(p), 2)).split("\n")[0]
+			else:
+				state = "his army in the field"
+			t += "   %s: %s; %s.\n" % [World.lord_full(l), World.relation_word(int(l["relation"])), state]
+		t += "\n"
+	t += "[color=#9aa3b8]Aurest and Vell are at war. Help a nation's men and it warms to you; attack them and it turns on you, and its patrols and armies hunt you.[/color]"
+	_scene("patrol", {"faction": "aurest"})
+	_popup_open("The lords of the land", t, [["CLOSE", _popup_close]], false)
+
+
 ## A nation's patrol is about to fight close by (a warband, or the other
 ## nation's men): join them, and their regiments fight beside yours (theirs
 ## to lead until you give them an order), or stay out of it.
@@ -1438,6 +1478,9 @@ func _on_fight_near(friend: Dictionary, foe: Dictionary) -> void:
 	var lvl_e := World.intel_level(foe)
 	var n_f := "%d" % int(friend["size"]) if lvl_f >= 2 else World.rough_count(friend)
 	var n_e := "%d" % int(foe["size"]) if lvl_e >= 2 else World.rough_count(foe)
+	var fl := World.lord_of(friend)
+	if not fl.is_empty():
+		fname = "%s (%s)" % [fname, World.lord_full(fl)]
 	var text := "Ahead of you %s men of %s are about to fight %s %s." % [n_f, fname, n_e,
 		("men of %s" % Lore.FACTIONS[foe["faction"]]["name"]) if foe_humans else "lizards of a warband"]
 	if lvl_e >= 3:
@@ -1458,11 +1501,13 @@ func _join_fight(friend: Dictionary, foe: Dictionary) -> void:
 	_popup_close()
 	var ff := String(friend["faction"])
 	Company.change_standing(ff, 15)
+	World.change_relation(World.lord_of(friend), 15)
 	if foe["faction"] != "lizards":
 		Company.change_standing(String(foe["faction"]), -25)
+		World.change_relation(World.lord_of(foe), -30)
 	_set_battle(foe, false)
 	Company.next_battle["allies"] = {"faction": ff, "comp": World.party_comp(friend), "party": int(friend["id"]),
-		"size": int(friend["size"])}
+		"size": int(friend["size"]), "lord": int(friend.get("lord", -1))}
 	_go(BATTLE)
 
 
@@ -1482,6 +1527,8 @@ func _on_encounter(p: Dictionary) -> void:
 	var count := "%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p)
 	var humans: bool = p["faction"] != "lizards"
 	var who := "Soldiers of %s have" % Lore.FACTIONS[p["faction"]]["name"] if humans else "They've"
+	if not World.lord_of(p).is_empty():
+		who = "The army of %s has" % World.lord_full(World.lord_of(p))
 	var text := "%s caught up with you %s. %s of them against %d fit men." % [who, where, count, Company.fit_men().size()]
 	if lvl >= 3:
 		text += "\n\n[color=#c9a14a]You make them out: %s.[/color]" % World.comp_text(World.party_comp(p))
@@ -1570,7 +1617,7 @@ func _set_battle(p: Dictionary, ambush: bool) -> void:
 	var humans: bool = p["faction"] != "lizards"
 	Company.next_battle = {"enemy": int(p["size"]), "terrain": World.gen.t(c.x, c.y), "party": int(p["id"]),
 		"ambush": ambush, "enemy_kind": "humans" if humans else "lizards", "faction": String(p["faction"]),
-		"map": World.battle_map_here(), "comp": World.party_comp(p),
+		"map": World.battle_map_here(), "comp": World.party_comp(p), "lord": int(p.get("lord", -1)),
 		"party_name": World.party_name(p).split(" (")[0]}
 	Company.results_unseen = false
 
@@ -1641,7 +1688,12 @@ func _apply_battle_result() -> void:
 				fp["size"] = left
 		if bool(r.get("won", false)):
 			Company.change_standing(String(al["faction"]), 10)
-			_push_toast("%s will remember you stood with them." % Lore.FACTIONS[al["faction"]]["name"])
+			var al_lord := World.lord(int(al.get("lord", -1)))
+			World.change_relation(al_lord, 15)
+			if not al_lord.is_empty():
+				_push_toast("%s will remember you stood with him." % World.lord_short(al_lord))
+			else:
+				_push_toast("%s will remember you stood with them." % Lore.FACTIONS[al["faction"]]["name"])
 	if bool(r.get("won", false)):
 		World.remove_party(id)
 		_push_toast("The warband is destroyed." if String(nb.get("enemy_kind", "lizards")) == "lizards" else "They're beaten: the survivors scatter.")
@@ -1680,6 +1732,14 @@ func _run_test(delta: float) -> void:
 			else:
 				print("MAPTEST: leaving the siege; nest now ", World.nest(int(World.gen.stash_nest)))
 				last.emit_signal("pressed")
+				for l in World.lords:
+					var ap := World.party_by_id(int(l["army"]))
+					print("  LORD ", World.lord_full(l), " army ", World.party_name(ap) if not ap.is_empty() else "none (back at %d)" % int(l["back_at"]), " at ", [int(ap.get("x", 0)), int(ap.get("y", 0))])
+				var raided := 0
+				for id in World.places:
+					if World.is_raided(int(id)):
+						raided += 1
+				print("  raided places now: ", raided, "; news: ", World.log.slice(-6))
 				print("MAPTEST END at the nest ", World.clock())
 				get_tree().quit()
 			return

@@ -29,3 +29,10 @@ const FACTIONS := {
 		"syll": ["Ssk", "Kra", "Thss", "Ghr", "Zek", "Hiss", "Vrr", "Ka"],
 		"end": ["'ath", "'ksha", "'tor", "ssa", "'ruk", "'zil"]},
 }
+
+## The nations' lords (placeholders): a rank, given names, and the particle
+## before the family seat ("de Montval", "von Ostburg").
+const LORDS := {
+	"aurest": {"rank": "Count", "particle": "de", "given": ["Aldric", "Gaspard", "Armand", "Thibault", "Renaud", "Baudouin", "Hugues", "Amaury", "Enguerrand"]},
+	"vell": {"rank": "Margrave", "particle": "von", "given": ["Konrad", "Ulrich", "Dietmar", "Gerold", "Wendel", "Ottokar", "Brandt", "Reinhold", "Eckhart"]},
+}

@@ -57,6 +57,10 @@ var events := Events.new()
 var explored := PackedByteArray() # 1 once seen
 var in_sight := PackedByteArray() # 1 in sight right now
 var parties: Array = []
+## The nations' lords: {"id", "faction", "given", "seat", "home" (settlement),
+## "army" (party id or -1), "back_at" (hours: raising a new army), "relation"
+## (to you, -100..100)}. See the lords section.
+var lords: Array = []
 var next_party := 1
 var places := {} # settlement id -> {"raided": hours until, "known": bool}
 var grid: AStarGrid2D
@@ -81,6 +85,8 @@ func new_world(s: int) -> void:
 	log.clear()
 	for st in gen.settlements:
 		places[int(st["id"])] = {"raided": 0.0, "known": false}
+	lords.clear()
+	_make_lords()
 	# The world doesn't wait for you: warbands are already out, caravans on the roads.
 	for i in 12:
 		_spawn_tick(true)
@@ -144,7 +150,7 @@ func save() -> void:
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
-		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd}
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
@@ -179,6 +185,12 @@ func load_world() -> bool:
 	camping = bool(data.get("camping", false))
 	night_march_day = int(data.get("night_march_day", -1))
 	scouts = data.get("scouts", [])
+	lords = data.get("lords", [])
+	for l in lords:
+		for k in ["id", "home", "army", "relation"]:
+			l[k] = int(l[k])
+	if lords.is_empty():
+		_make_lords() # (a save from before the lords)
 	_event_cd = float(data.get("event_cd", 4.0))
 	var raw := Marshalls.base64_to_raw(String(data["explored"]))
 	var dec := raw.decompress(Gen.SIZE * Gen.SIZE, FileAccess.COMPRESSION_DEFLATE)
@@ -813,6 +825,7 @@ const KINDS := {
 	"hunters": {"speed": 1.05, "name": "Lizard hunting party", "hostile": true},
 	"refugees": {"speed": 0.6, "name": "Refugees", "hostile": false},
 	"deserters": {"speed": 0.85, "name": "Deserters", "hostile": false},
+	"army": {"speed": 0.7, "name": "Army", "hostile": false},
 }
 
 
@@ -848,6 +861,13 @@ static func party_comp(p: Dictionary) -> Dictionary:
 		var xb := int(round(n * 0.25))
 		var bows := int(round(n * 0.15))
 		out = {"pike": n - horse - xb - bows, "xbow": xb, "bow": bows, "cav": horse}
+	elif p["kind"] == "army":
+		# A lord's army: spearmen, crossbows, archers and a fifth of it horse
+		# (his household riding with him).
+		var hz := n / 5
+		var xa := int(round(n * 0.22))
+		var ba := int(round(n * 0.15))
+		out = {"pike": n - hz - xa - ba, "xbow": xa, "bow": ba, "cav": hz}
 	elif p["kind"] == "deserters":
 		var bw := int(round(n * 0.35))
 		out = {"pike": n - bw, "bow": bw}
@@ -927,6 +947,9 @@ func party_name(p: Dictionary) -> String:
 	var base: String = k["name"]
 	if p["kind"] == "patrol":
 		base = "%s patrol" % Lore.FACTIONS[p["faction"]]["short"]
+	elif p["kind"] == "army":
+		var lord := lord_of(p)
+		base = "%s's army" % lord_short(lord) if not lord.is_empty() else "%s army" % Lore.FACTIONS[p["faction"]]["short"]
 	elif p["kind"] == "caravan" or p["kind"] == "villagers":
 		base = "%s %s" % [Lore.FACTIONS[p["faction"]]["short"], String(k["name"]).to_lower()]
 	return "%s (%d)" % [base, int(p["size"])]
@@ -984,6 +1007,7 @@ func _spawn_tick(initial: bool) -> void:
 			"hold":
 				if _count("traders") < 4 and (initial or randf() < 0.3):
 					_new_party("traders", "dwarves", randi_range(6, 10), st)
+	_raise_armies()
 
 
 func _party_tick(p: Dictionary, dh: float) -> void:
@@ -996,7 +1020,7 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 	var kind: String = p["kind"]
 	# Hunters: lizards come for you (or anyone) when they see you; patrols
 	# go after lizards.
-	if kind == "warband" or kind == "patrol" or kind == "hunters":
+	if kind in ["warband", "patrol", "hunters", "army"]:
 		# Look around every half hour (cheaper than every step).
 		p["look"] = float(p.get("look", 0.0)) - dh
 		var prey := {}
@@ -1033,8 +1057,8 @@ func _prey_for(p: Dictionary, me: Vector2) -> Dictionary:
 func _hostile(a: Dictionary, b: Dictionary) -> bool:
 	if a["faction"] == "lizards" or b["faction"] == "lizards":
 		return a["faction"] != b["faction"]
-	# Aurest and Vell are at war: their patrols fight each other.
-	return a["kind"] == "patrol" and b["kind"] == "patrol" and a["faction"] != b["faction"]
+	# Aurest and Vell are at war: their patrols and armies fight each other.
+	return a["kind"] in ["patrol", "army"] and b["kind"] in ["patrol", "army"] and a["faction"] != b["faction"]
 
 
 ## Pick where to go next (and wait a while on arrival).
@@ -1043,6 +1067,9 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 	if p["target"] >= 0 and me.distance_to(Vector2(settlement(int(p["target"]))["x"], settlement(int(p["target"]))["y"])) < 2.0:
 		var tgt := settlement(int(p["target"]))
 		p["target"] = -1
+		if p["kind"] == "army" and tgt["faction"] != p["faction"] and tgt["kind"] in ["village", "town"]:
+			_army_arrives(p, tgt)
+			return
 		if p["kind"] == "warband" and tgt["kind"] == "village":
 			places[int(tgt["id"])]["raided"] = hours + 96.0
 			p["wait"] = 6.0
@@ -1084,6 +1111,9 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 			choices = choices.slice(0, 1)
 		"patrol":
 			choices = gen.settlements.filter(func(s): return s["faction"] == p["faction"] and s["id"] != p["target"])
+		"army":
+			_army_errand(p, me, home)
+			return
 		"caravan":
 			choices = gen.settlements.filter(func(s): return s["kind"] in ["town", "city", "hold"] and s["id"] != p["home"])
 		"villagers", "traders":
@@ -1156,8 +1186,8 @@ func _fights() -> bool:
 				continue
 			if _offer_join(a, b):
 				return true
-			var sa := float(a["size"]) * (1.2 if a["kind"] == "patrol" else 1.0) * randf_range(0.6, 1.4)
-			var sb := float(b["size"]) * (1.2 if b["kind"] == "patrol" else 1.0) * randf_range(0.6, 1.4)
+			var sa := float(a["size"]) * (1.2 if a["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4)
+			var sb := float(b["size"]) * (1.2 if b["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4)
 			var win: Dictionary = a if sa >= sb else b
 			var lose: Dictionary = b if win == a else a
 			win["size"] = maxi(2, int(win["size"]) - int(float(lose["size"]) * 0.5))
@@ -1165,6 +1195,7 @@ func _fights() -> bool:
 			parties.erase(lose)
 			_tell("%s destroyed %s." % [party_name(win).split(" (")[0], party_name(lose).split(" (")[0].to_lower()],
 				{"x": win["x"], "y": win["y"]})
+			_army_lost(lose)
 	return false
 
 
@@ -1176,7 +1207,7 @@ func _offer_join(a: Dictionary, b: Dictionary) -> bool:
 		return false
 	var cands: Array = []
 	for p in [a, b]:
-		if p["kind"] == "patrol" and not Company.is_enemy(String(p["faction"])):
+		if p["kind"] in ["patrol", "army"] and not hostile_to_us(p):
 			cands.append(p)
 	if cands.is_empty():
 		return false
@@ -1199,7 +1230,12 @@ func _offer_join(a: Dictionary, b: Dictionary) -> bool:
 func hostile_to_us(p: Dictionary) -> bool:
 	if p["faction"] == "lizards":
 		return true
-	return p["kind"] == "patrol" and Company.is_enemy(String(p["faction"]))
+	if not p["kind"] in ["patrol", "army"]:
+		return false
+	if Company.is_enemy(String(p["faction"])):
+		return true
+	var lord := lord_of(p)
+	return not lord.is_empty() and int(lord["relation"]) <= -40 # (a lord with a grudge)
 
 
 ## A hostile party close enough to catch you stops the clock.
@@ -1227,6 +1263,7 @@ func remove_party(id: int) -> void:
 	var p := party_by_id(id)
 	if not p.is_empty():
 		parties.erase(p)
+		_army_lost(p)
 
 
 func _tell(text: String, where: Dictionary) -> void:
@@ -1238,3 +1275,122 @@ func _tell(text: String, where: Dictionary) -> void:
 	if seen:
 		log.append("%s  %s" % [clock(), text])
 		news.emit(text)
+
+
+# ---------------------------------------------------------------- lords
+# Each nation has three lords, each with a seat (one of its cities or
+# towns). A lord raises an army there (40 to 70 men, more as the war drags
+# on) and marches it to war: against the other nation's villages and towns
+# near the border, or after warbands in his own lands. Beaten, he flees
+# home and raises another in a week or so. Each lord keeps his own account
+# of you (relation), besides his nation's (Company.standing).
+
+const LORDS_PER_NATION := 3
+
+
+func _make_lords() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 777
+	for f in ["aurest", "vell"]:
+		var seats: Array = gen.settlements.filter(func(s): return s.get("faction", "") == f and s["kind"] in ["city", "town"])
+		seats.sort_custom(func(a, b): return (0 if a["kind"] == "city" else 1) < (0 if b["kind"] == "city" else 1))
+		var given: Array = (Lore.LORDS[f]["given"] as Array).duplicate()
+		for i in mini(LORDS_PER_NATION, seats.size()):
+			var g: String = given.pop_at(rng.randi() % given.size())
+			var seat: Dictionary = seats[i]
+			lords.append({"id": lords.size(), "faction": f, "given": g, "seat": String(seat["name"]),
+				"home": int(seat["id"]), "army": -1, "back_at": 0.0, "relation": 0})
+
+
+func lord(id: int) -> Dictionary:
+	return lords[id] if id >= 0 and id < lords.size() else {}
+
+
+func lord_of(p: Dictionary) -> Dictionary:
+	return lord(int(p.get("lord", -1)))
+
+
+## "Count Aldric" / "Count Aldric de Montval".
+func lord_short(l: Dictionary) -> String:
+	return "%s %s" % [Lore.LORDS[l["faction"]]["rank"], l["given"]]
+
+
+func lord_full(l: Dictionary) -> String:
+	return "%s %s %s" % [lord_short(l), Lore.LORDS[l["faction"]]["particle"], l["seat"]]
+
+
+func change_relation(l: Dictionary, by: int) -> void:
+	if not l.is_empty():
+		l["relation"] = clampi(int(l["relation"]) + by, -100, 100)
+
+
+static func relation_word(r: int) -> String:
+	if r <= -40:
+		return "a sworn enemy"
+	if r < 0:
+		return "cold"
+	if r < 15:
+		return "indifferent"
+	if r < 40:
+		return "well disposed"
+	return "a friend"
+
+
+## Lords without an army raise one at their seat, when they're ready.
+func _raise_armies() -> void:
+	for l in lords:
+		if int(l["army"]) >= 0 or hours < float(l["back_at"]):
+			continue
+		var seat := settlement(int(l["home"]))
+		var size := mini(110, randi_range(40, 70) + day() / 2)
+		var p := _new_party("army", String(l["faction"]), size, seat)
+		p["lord"] = int(l["id"])
+		l["army"] = int(p["id"])
+		if hours > 12.0:
+			_tell("%s raises an army at %s." % [lord_full(l), seat["name"]], seat)
+
+
+## Where an army goes next: to war (an enemy village or town near its own
+## lands) most of the time, otherwise back to its seat or another of its
+## nation's places.
+func _army_errand(p: Dictionary, me: Vector2, home: Dictionary) -> void:
+	var f := String(p["faction"])
+	var choices: Array = []
+	if randf() < 0.65 and not home.is_empty():
+		var hp := Vector2(home["x"], home["y"])
+		var enemy: Array = gen.settlements.filter(func(s): return s.get("faction", "") == Company.AT_WAR.get(f, "") and s["kind"] in ["village", "town"] and not is_raided(int(s["id"])))
+		enemy.sort_custom(func(a, b): return Vector2(a["x"], a["y"]).distance_squared_to(hp) < Vector2(b["x"], b["y"]).distance_squared_to(hp))
+		choices = enemy.slice(0, 4)
+	if choices.is_empty():
+		choices = gen.settlements.filter(func(s): return s.get("faction", "") == f and s["id"] != p["target"])
+	if choices.is_empty():
+		p["wait"] = 12.0
+		return
+	var dest: Dictionary = choices.pick_random()
+	p["target"] = int(dest["id"])
+	p["path"] = _route(me, Vector2(dest["x"], dest["y"]))
+	if (p["path"] as Array).is_empty():
+		p["wait"] = 24.0
+
+
+## An army at an enemy village burns it; at a town, it sits before the walls
+## a day and burns the fields round it.
+func _army_arrives(p: Dictionary, tgt: Dictionary) -> void:
+	var l := lord_of(p)
+	var who := lord_short(l) if not l.is_empty() else "An army"
+	places[int(tgt["id"])]["raided"] = hours + (96.0 if tgt["kind"] == "village" else 48.0)
+	p["wait"] = 10.0 if tgt["kind"] == "village" else 24.0
+	_tell("%s burns %s!" % [who, tgt["name"]] if tgt["kind"] == "village" else "%s lays waste round %s." % [who, tgt["name"]], tgt)
+
+
+## An army is gone (beaten by anyone): its lord gets away and raises
+## another in a week or so.
+func _army_lost(p: Dictionary) -> void:
+	if p["kind"] != "army":
+		return
+	var l := lord_of(p)
+	if l.is_empty():
+		return
+	l["army"] = -1
+	l["back_at"] = hours + 24.0 * randf_range(6.0, 10.0)
+	_tell("%s's army is broken; he gets away with his household." % lord_short(l), {"x": p["x"], "y": p["y"]})
