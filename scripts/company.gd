@@ -147,7 +147,22 @@ const ITEMS := {
 }
 ## Weight (kg) and space of a unit of each kind of store.
 const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01],
-	"arrows": [0.06, 0.005], "bolts": [0.08, 0.005], "powder": [1.0, 0.02], "lead": [1.0, 0.008]}
+	"arrows": [0.06, 0.005], "bolts": [0.08, 0.005], "powder": [1.0, 0.02], "lead": [1.0, 0.008],
+	# What the land gives (world.gd RESOURCES), for making things (RECIPES):
+	"saltpetre": [1.0, 0.015], "sulphur": [1.0, 0.012], "charcoal": [0.5, 0.03], "ore": [1.0, 0.01], "meat": [1.0, 0.04]}
+const MATERIALS := ["saltpetre", "sulphur", "charcoal", "ore", "meat"]
+## Making things in camp (CRAFT on the map): what it takes, what it makes,
+## and the hours the men spend at it (less with your Logistics).
+const RECIPES := {
+	"powder": {"name": "Grind black powder", "needs": {"saltpetre": 8, "charcoal": 2, "sulphur": 1}, "makes": {"powder": 10}, "hours": 6,
+		"text": "Saltpetre, charcoal and sulphur, ground wet and corned: ten pounds of powder."},
+	"lead": {"name": "Smelt lead", "needs": {"ore": 6, "charcoal": 3}, "makes": {"lead": 4}, "hours": 5,
+		"text": "Galena roasted in a charcoal fire: the lead runs out of it."},
+	"cartridges": {"name": "Roll cartridges", "needs": {"powder": 1, "lead": 3}, "makes": {"ammo": 40}, "hours": 3,
+		"text": "Balls cast in the mould, powder measured into paper tubes."},
+	"rations": {"name": "Smoke meat", "needs": {"meat": 6, "charcoal": 1}, "makes": {"rations": 6}, "hours": 4,
+		"text": "Fresh meat and fish spoil in days; smoked over the fire they keep."},
+}
 ## Stores that refill a man's pack "ammo" by what his weapon shoots.
 const SHOT_STORE := {"ball": "ammo", "arrow": "arrows", "bolt": "bolts"}
 const SHOT_WORD := {"ammo": "cartridges", "arrows": "arrows", "bolts": "bolts"}
@@ -212,7 +227,7 @@ var officer := {"kills": 0, "battles": 0, "rank": "Ensign"}
 ## The baggage wagon: spare gear by item id, water (and whether it's foul),
 ## rations, cartridges, rum, and whether the water is served as grog.
 var stores := {"items": {}, "water": 0, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true,
-	"arrows": 0, "bolts": 0, "powder": 0, "lead": 0}
+	"arrows": 0, "bolts": 0, "powder": 0, "lead": 0, "saltpetre": 0, "sulphur": 0, "charcoal": 0, "ore": 0, "meat": 0}
 var prologue := false # the opening battle is still to be fought
 ## The ship's stores the lizards carried off (muskets, cartridges, guns,
 ## rum): recovering them is the first great objective. Empty once recovered.
@@ -307,7 +322,7 @@ func new_campaign(start: Dictionary = {}) -> void:
 	# Captain Harrow's company at full strength, before the battle: a sergeant,
 	# some veterans, mostly musketeers, a few green recruits. All in uniform.
 	stores = {"items": {}, "water": WATER_CART, "rations": 0, "ammo": 0, "rum": 0, "foul": false, "grog": true,
-		"arrows": 0, "bolts": 0, "powder": 0, "lead": 0}
+		"arrows": 0, "bolts": 0, "powder": 0, "lead": 0, "saltpetre": 0, "sulphur": 0, "charcoal": 0, "ore": 0, "meat": 0}
 	for i in PROLOGUE_MEN:
 		var m := make_recruit()
 		var rank := 3 if i == 0 else (2 if i < 4 else (1 if i < 13 else 0))
@@ -697,7 +712,7 @@ func apply_battle(result: Dictionary) -> void:
 		# A beaten company loses a quarter of its purse and half its baggage;
 		# what the men carry on their backs is all that's sure.
 		summary["pay"] = -int(money * 0.25)
-		for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"]:
+		for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"] + MATERIALS:
 			stores[k] = int(stores.get(k, 0)) / 2
 		var items: Dictionary = stores["items"]
 		for id in items.keys():
@@ -738,7 +753,7 @@ func _after_prologue(summary: Dictionary) -> void:
 	money = int(round(40 * Officer.diff("money"))) # the regiment's pay chest, what's left of it
 	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1},
 		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true,
-		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6}
+		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6, "saltpetre": 0, "sulphur": 0, "charcoal": 0, "ore": 0, "meat": 0}
 	summary["pay"] = 0
 
 
@@ -1047,6 +1062,11 @@ static func item_label(id: String) -> String:
 		"powder": return Lang.t("Powder (lb)")
 		"lead": return Lang.t("Lead (lb)")
 		"crowns": return Lang.t("Crowns")
+		"saltpetre": return Lang.t("Saltpetre (lb)")
+		"sulphur": return Lang.t("Sulphur (lb)")
+		"charcoal": return Lang.t("Charcoal (lb)")
+		"ore": return Lang.t("Lead ore (lb)")
+		"meat": return Lang.t("Fresh meat and fish (lb)")
 	return item_name(id)
 
 
@@ -1199,6 +1219,34 @@ func make_cartridges(batches := 1) -> int:
 	stores["ammo"] = int(stores["ammo"]) + b * CARTRIDGE_BATCH
 	save()
 	return b * CARTRIDGE_BATCH
+
+
+## Making things (RECIPES): how many batches the stores allow.
+func craft_count(id: String) -> int:
+	var r: Dictionary = RECIPES[id]
+	var n := 999
+	for k in r["needs"]:
+		n = mini(n, int(stores.get(k, 0)) / int(r["needs"][k]))
+	return n
+
+
+## Hours one batch takes (your Logistics: -5% a level).
+func craft_hours(id: String) -> float:
+	return float(RECIPES[id]["hours"]) * maxf(0.5, 1.0 - 0.05 * Officer.skill("logistics"))
+
+
+## Make `n` batches (as many as the stores allow). Returns how many were made.
+func craft(id: String, n := 1) -> int:
+	var b := mini(n, craft_count(id))
+	if b <= 0:
+		return 0
+	var r: Dictionary = RECIPES[id]
+	for k in r["needs"]:
+		stores[k] = int(stores[k]) - b * int(r["needs"][k])
+	for k in r["makes"]:
+		stores[k] = int(stores.get(k, 0)) + b * int(r["makes"][k])
+	save()
+	return b
 
 
 ## Two men to haul the wagon if nobody has been given the job: the two
@@ -1419,6 +1467,12 @@ func march_days() -> int:
 func pass_day(water: String) -> PackedStringArray:
 	day += 1
 	var notes: PackedStringArray = []
+	# Fresh meat and fish go off: a third of it a day, unless it's smoked.
+	var meat := int(stores.get("meat", 0))
+	if meat > 0:
+		var off := maxi(1, meat / 3)
+		stores["meat"] = meat - off
+		notes.append(Lang.t("%d lb of fresh meat went off. Smoke it (CRAFT) to keep it.") % off)
 	var dn := _road_day(water)
 	if int(dn["thirsty"]) > 0:
 		notes.append(Lang.t("%d men went thirsty.") % int(dn["thirsty"]))
@@ -1627,7 +1681,7 @@ func load_campaign() -> bool:
 	var items: Dictionary = stores["items"]
 	for id in items:
 		items[id] = int(items[id])
-	for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"]:
+	for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"] + MATERIALS:
 		stores[k] = int(stores.get(k, 0))
 	active = true
 	if in_battle and difficulty == "ironman" and not prologue:

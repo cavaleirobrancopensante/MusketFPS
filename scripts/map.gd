@@ -403,6 +403,7 @@ func _build_settlements() -> void:
 		_box(c + Vector3(1.5, 4.5 if st["kind"] != "city" else 10.5, 1.5), Vector3(0.15, 3.0, 0.15), Color(0.3, 0.25, 0.2))
 		_box(c + Vector3(2.3, 5.4 if st["kind"] != "city" else 11.4, 1.5), Vector3(1.6, 1.0, 0.08), banner)
 		_label_for(st, c)
+	_build_resources()
 	var cube := BoxMesh.new()
 	cube.material = _mat
 	var mm := MultiMesh.new()
@@ -416,6 +417,63 @@ func _build_settlements() -> void:
 	var inst := MultiMeshInstance3D.new()
 	inst.multimesh = mm
 	add_child(inst)
+
+
+## The places that give what you need (world.gd RESOURCES): a small model of
+## each, and its name once you've seen it.
+var _res_labels := {} # resource id -> Label3D
+
+
+func _build_resources() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = World.seed + 11
+	for r in World.gen.resources:
+		var c := _world_pos(Vector2(r["x"], r["y"]) + Vector2(0.5, 0.5))
+		match String(r["kind"]):
+			"saltpetre":
+				_box(c + Vector3(0, 2.0, 0), Vector3(7, 4, 5), Color(0.42, 0.4, 0.38), 0.3)
+				_box(c + Vector3(0.5, 1.2, 2.6), Vector3(2.6, 2.4, 0.3), Color(0.08, 0.07, 0.07), 0.3) # the cave mouth
+				_box(c + Vector3(-2.0, 3.6, 1.5), Vector3(2.0, 0.4, 1.6), Color(0.92, 0.92, 0.88), 0.3)
+			"sulphur":
+				_box(c + Vector3(0, 0.15, 0), Vector3(5, 0.3, 4), Color(0.85, 0.78, 0.2), 0.5)
+				_box(c + Vector3(0, 0.3, 0), Vector3(2.6, 0.2, 2.0), Color(0.45, 0.62, 0.55), 0.5)
+				for k in 3:
+					_box(c + Vector3(rng.randf_range(-2, 2), 0.6, rng.randf_range(-2, 2)), Vector3(0.8, 1.0, 0.8), Color(0.9, 0.82, 0.25), rng.randf() * TAU)
+			"charcoal":
+				_box(c + Vector3(0, 1.0, 0), Vector3(4, 2, 4), Color(0.15, 0.13, 0.11), 0.7) # the clamp under turf
+				for k in 4:
+					_box(c + Vector3(3.5, 0.3 + k * 0.45, -1.5), Vector3(3.0, 0.4, 0.4), Color(0.4, 0.27, 0.15), 0.2)
+			"lead":
+				for k in 4:
+					_box(c + Vector3(rng.randf_range(-3, 3), 1.0, rng.randf_range(-3, 3)), Vector3(2.4, 2.0, 2.0), Color(0.36, 0.38, 0.42), rng.randf() * TAU, 0.2)
+			"game":
+				for k in 3:
+					var a := Vector3(rng.randf_range(-3, 3), 0, rng.randf_range(-3, 3))
+					_box(c + a + Vector3(0, 1.0, 0), Vector3(1.6, 0.8, 0.6), Color(0.48, 0.34, 0.2), rng.randf() * TAU)
+					_box(c + a + Vector3(0.7, 1.6, 0), Vector3(0.4, 0.8, 0.3), Color(0.45, 0.32, 0.19))
+			"fish":
+				_box(c + Vector3(0, 0.3, 0), Vector3(1.4, 0.5, 4.0), Color(0.4, 0.28, 0.16), 0.6) # a beached boat
+				_box(c + Vector3(2.5, 1.0, 0), Vector3(0.15, 2.0, 0.15), Color(0.35, 0.25, 0.15))
+				_box(c + Vector3(2.5, 1.3, 1.2), Vector3(0.05, 1.2, 2.4), Color(0.75, 0.7, 0.55)) # the net
+			"spring":
+				_box(c + Vector3(0, 0.12, 0), Vector3(3.2, 0.24, 3.2), Color(0.35, 0.6, 0.85), 0.8)
+				for k in 5:
+					var a2 := TAU * k / 5.0
+					_box(c + Vector3(cos(a2) * 2.0, 0.3, sin(a2) * 2.0), Vector3(0.8, 0.6, 0.8), Color(0.55, 0.53, 0.5), a2)
+		var l := Label3D.new()
+		l.text = Lang.t(World.RESOURCES[r["kind"]]["name"])
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.fixed_size = true
+		l.pixel_size = 0.0011
+		l.font_size = 20
+		l.font = UI.display_font()
+		l.outline_size = 8
+		l.modulate = Color(0.75, 0.9, 1.0)
+		l.no_depth_test = true
+		l.position = c + Vector3(0, 6.0, 0)
+		l.visible = false
+		add_child(l)
+		_res_labels[int(r["id"])] = l
 
 
 func _houses(c: Vector3, n: int, spread: float, rng: RandomNumberGenerator, wall: Color, roof: Color) -> void:
@@ -581,7 +639,7 @@ func _build_hud() -> void:
 	for spec in [[Lang.t("YOU"), func():
 				get_tree().set_meta("officer_back", "res://scenes/map.tscn")
 				_go("res://scenes/officer.tscn")],
-			[Lang.t("COMPANY"), _go.bind(COMPANY_SCREEN)], [Lang.t("PLAN"), _go.bind(PLAN)], [Lang.t("WAGON"), func(): _logistics.open()], [Lang.t("SCOUTS"), _open_scouts], [Lang.t("LORDS"), _show_lords],
+			[Lang.t("COMPANY"), _go.bind(COMPANY_SCREEN)], [Lang.t("PLAN"), _go.bind(PLAN)], [Lang.t("WAGON"), func(): _logistics.open()], [Lang.t("CRAFT"), _open_craft], [Lang.t("SCOUTS"), _open_scouts], [Lang.t("LORDS"), _show_lords],
 			[Lang.t("CAMP"), _go.bind(CAMP)], [Lang.t("MENU"), _go.bind(MENU)]]:
 		right.add_child(_button(spec[0], spec[1]))
 	var br := HBoxContainer.new()
@@ -716,7 +774,8 @@ func _push_toast(t: String) -> void:
 
 func _process(delta: float) -> void:
 	Music.set_context("camp" if World.camping else "map")
-	if not _popup.visible and not _logistics.visible and (_scout_panel == null or not _scout_panel.visible):
+	if not _popup.visible and not _logistics.visible and (_scout_panel == null or not _scout_panel.visible) \
+			and (_craft_panel == null or not _craft_panel.visible):
 		World.tick(delta)
 	if _rest_until > 0.0 and World.hours >= _rest_until:
 		World.waiting = false
@@ -824,6 +883,14 @@ func _update_light() -> void:
 
 
 func _update_labels() -> void:
+	for rid in _res_labels:
+		var r := World.resource(rid)
+		var seen: bool = World.explored[Gen.idx(int(r["x"]), int(r["y"]))] == 1
+		var rl: Label3D = _res_labels[rid]
+		rl.visible = seen and _dist < 240.0
+		if rl.visible:
+			var wait := World.harvest_wait(rid)
+			rl.text = Lang.t(World.RESOURCES[r["kind"]]["name"]) + (Lang.t("  (worked out: %d days)") % ceili(wait / 24.0) if wait > 0.0 else "")
 	for id in _labels:
 		var l: Label3D = _labels[id]
 		var st: Dictionary = World.settlement(id)
@@ -936,6 +1003,11 @@ func _tap(screen: Vector2) -> void:
 			World.go_to(Vector2i(st["x"], st["y"]), {"kind": "settlement", "id": int(st["id"])})
 			_follow = true
 			return
+	for r in World.gen.resources:
+		if World.explored[Gen.idx(int(r["x"]), int(r["y"]))] == 1 and tap.distance_to(Vector2(r["x"], r["y"]) + Vector2(0.5, 0.5)) < 3.0:
+			World.go_to(Vector2i(int(r["x"]), int(r["y"])), {"kind": "resource", "id": int(r["id"])})
+			_follow = true
+			return
 	if not World.go_to(cell):
 		_push_toast(Lang.t("No way there."))
 	_follow = true
@@ -986,6 +1058,8 @@ func _on_arrived(g: Dictionary) -> void:
 	match String(g["kind"]):
 		"settlement":
 			_visit(World.settlement(int(g["id"])))
+		"resource":
+			_visit_resource(int(g["id"]))
 		"party":
 			var p := World.party_by_id(int(g["id"]))
 			_chase = {}
@@ -1040,6 +1114,139 @@ func _popup_close() -> void:
 	_popup.visible = false
 	for ch in _popup_scene.get_children():
 		ch.queue_free()
+
+
+## At a resource site: what it gives, and the men set to work (the hours
+## pass while they do).
+func _visit_resource(id: int) -> void:
+	var r := World.resource(id)
+	if r.is_empty():
+		return
+	var spec: Dictionary = World.RESOURCES[r["kind"]]
+	var text := Lang.t(String(spec["text"]))
+	var wait := World.harvest_wait(id)
+	var buttons: Array = []
+	if wait > 0.0:
+		text += "\n\n" + Lang.t("[i]You've worked it out for now: it gives again in %d days.[/i]") % ceili(wait / 24.0)
+	else:
+		var a: Array = spec["amount"]
+		var hands := clampf(Company.fit_men().size() / 12.0, 0.4, 2.2)
+		if String(spec["store"]) != "water":
+			text += "\n\n" + Lang.t("%d hours' work for about %d to %d of %s, with %d fit men.") % [int(spec["hours"]),
+				int(round(int(a[0]) * hands)), int(round(int(a[1]) * hands)), Company.item_label(String(spec["store"])).to_lower(), Company.fit_men().size()]
+		var verb := Lang.t("FILL THE CART") if String(spec["store"]) == "water" else Lang.t("SET TO WORK")
+		buttons.append([verb, func():
+			var got := World.gather(id)
+			_popup_close()
+			if got.is_empty():
+				return
+			if String(got["store"]) == "water":
+				_push_toast(Lang.t("The water cart is full of clean water."))
+			else:
+				_push_toast(Lang.t("The men set to work: %d %s by the end of it.") % [int(got["n"]), Company.item_label(String(got["store"])).to_lower()])
+			World.waiting = true
+			_rest_until = World.hours + float(got["hours"])])
+	buttons.append([Lang.t("CRAFT"), func(): _popup_close(); _open_craft()])
+	buttons.append([Lang.t("LEAVE"), _popup_close])
+	_popup_open(Lang.t(String(spec["name"])), text, buttons)
+
+
+# ---------------------------------------------------------------- craft
+
+var _craft_panel: PanelContainer
+var _craft_list: VBoxContainer
+var _craft_head: Label
+
+
+## CRAFT: what the company can make from what it carries, in camp. Making
+## takes hours (they pass at once on the map; the stores change now).
+func _open_craft() -> void:
+	if _craft_panel == null:
+		_craft_panel = _panel(Color(UI.WOOL, 0.98))
+		_craft_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		_craft_panel.custom_minimum_size = Vector2(900, 560)
+		_craft_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_craft_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+		_popup.get_parent().add_child(_craft_panel)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 10)
+		_craft_panel.add_child(v)
+		var top := HBoxContainer.new()
+		v.add_child(top)
+		var t := _label(Lang.t("CRAFT"), 28, Color(0.95, 0.8, 0.45))
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top.add_child(t)
+		top.add_child(_button(Lang.t("CLOSE"), func(): _craft_panel.visible = false))
+		_craft_head = _label("", 16, Color(0.8, 0.84, 0.9))
+		_craft_head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.add_child(_craft_head)
+		var sc := UI.scroll()
+		sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		v.add_child(sc)
+		_craft_list = VBoxContainer.new()
+		_craft_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_craft_list.add_theme_constant_override("separation", 10)
+		sc.add_child(_craft_list)
+	World.stop()
+	_fill_craft()
+	_craft_panel.visible = true
+	_center(_craft_panel)
+
+
+func _fill_craft() -> void:
+	var st: Dictionary = Company.stores
+	var have: Array = []
+	for k in Company.MATERIALS + ["powder", "lead"]:
+		have.append("%s %d" % [Company.item_label(k), int(st.get(k, 0))])
+	_craft_head.text = Lang.t("In the wagon: ") + "  ·  ".join(have) + "\n" + Lang.t("Gather materials at the caves, springs, woods and hunting grounds on the map (their names show when you're close).")
+	for c in _craft_list.get_children():
+		c.queue_free()
+	for id in Company.RECIPES:
+		var r: Dictionary = Company.RECIPES[id]
+		var card := _panel(Color(0.15, 0.2, 0.33))
+		_craft_list.add_child(card)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 10)
+		card.add_child(h)
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(tv)
+		tv.add_child(_label(Lang.t(String(r["name"])), 21, Color(0.95, 0.8, 0.45)))
+		var needs: Array = []
+		for k in r["needs"]:
+			needs.append("%d %s" % [int(r["needs"][k]), Company.item_label(k)])
+		var makes: Array = []
+		for k in r["makes"]:
+			makes.append("%d %s" % [int(r["makes"][k]), Company.item_label(k)])
+		var l := _label(Lang.t("%s  →  %s   ·   %.0f hours") % [" + ".join(needs), ", ".join(makes), Company.craft_hours(id)], 16, Color.WHITE)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tv.add_child(l)
+		var d := _label(Lang.t(String(r["text"])), 14, Color(0.7, 0.75, 0.85))
+		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tv.add_child(d)
+		var n := Company.craft_count(id)
+		for want in [1, n]:
+			if want == n and (n <= 1):
+				continue
+			var b := _button(Lang.t("MAKE ×%d") % maxi(1, want), _do_craft.bind(id, maxi(1, want)))
+			b.disabled = n < 1
+			b.custom_minimum_size = Vector2(130, 56)
+			h.add_child(b)
+
+
+func _do_craft(id: String, n: int) -> void:
+	var made := Company.craft(id, n)
+	if made <= 0:
+		return
+	var hrs := Company.craft_hours(id) * made
+	var what: Array = []
+	for k in Company.RECIPES[id]["makes"]:
+		what.append("%d %s" % [made * int(Company.RECIPES[id]["makes"][k]), Company.item_label(k).to_lower()])
+	_push_toast(Lang.t("The men work at it for %d hours: %s.") % [int(hrs), ", ".join(what)])
+	_craft_panel.visible = false
+	World.waiting = true
+	_rest_until = World.hours + hrs
 
 
 ## Arriving at a settlement: what it is, and what you can do there.

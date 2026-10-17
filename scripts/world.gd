@@ -66,6 +66,9 @@ var lords: Array = []
 var war := {"truce_until": 0.0, "next_truce": 24.0 * 18.0}
 var next_party := 1
 var places := {} # settlement id -> {"raided": hours until, "known": bool}
+## Resource sites (world_gen.gd's resources) worked out: id (as a string) ->
+## the hour they give again.
+var harvest := {}
 var grid: AStarGrid2D
 var log: Array = [] # recent news
 var _day_water := "" # best water passed today: "clean" > "foul" > ""
@@ -85,6 +88,7 @@ func new_world(s: int) -> void:
 	parties.clear()
 	next_party = 1
 	places.clear()
+	harvest.clear()
 	log.clear()
 	for st in gen.settlements:
 		places[int(st["id"])] = {"raided": 0.0, "known": false}
@@ -154,7 +158,7 @@ func save() -> void:
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
-		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war}
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
@@ -200,6 +204,7 @@ func load_world() -> bool:
 	if lords.is_empty():
 		_make_lords() # (a save from before the lords)
 	_event_cd = float(data.get("event_cd", 4.0))
+	harvest = data.get("harvest", {})
 	var raw := Marshalls.base64_to_raw(String(data["explored"]))
 	var dec := raw.decompress(Gen.SIZE * Gen.SIZE, FileAccess.COMPRESSION_DEFLATE)
 	if dec.size() == explored.size():
@@ -527,6 +532,75 @@ func _walk(dh: float) -> void:
 			places[int(g["id"])]["known"] = true
 			_inside = int(g["id"])
 		arrived.emit(g)
+
+
+# ---------------------------------------------------------------- living off the land
+
+## What each kind of site gives (world_gen.gd places them): the store it
+## fills, how much (a range, for a dozen men: more hands, more), the hours
+## it takes, and the days before it gives again.
+const RESOURCES := {
+	"saltpetre": {"name": "Saltpetre cave", "store": "saltpetre", "amount": [10, 18], "hours": 8.0, "regrow": 10.0,
+		"text": "White crust on the walls of a cave where bats roost: scraped, leached and boiled down, it's saltpetre. Three parts in four of gunpowder."},
+	"sulphur": {"name": "Sulphur spring", "store": "sulphur", "amount": [4, 8], "hours": 6.0, "regrow": 8.0,
+		"text": "Yellow crystals round a hot spring that stinks of rotten eggs. A tenth of gunpowder is sulphur."},
+	"charcoal": {"name": "Woodland", "store": "charcoal", "amount": [8, 14], "hours": 10.0, "regrow": 3.0,
+		"text": "Good hardwood. Cut, stacked and burned slowly under turf, it makes charcoal: for powder, for smelting, for smoking meat."},
+	"lead": {"name": "Lead outcrop", "store": "ore", "amount": [8, 14], "hours": 10.0, "regrow": 12.0,
+		"text": "Grey, heavy galena in the rock. Smelted with charcoal, it gives lead for musket balls."},
+	"game": {"name": "Hunting grounds", "store": "meat", "amount": [10, 22], "hours": 8.0, "regrow": 4.0,
+		"text": "Tracks everywhere: deer and big flightless birds. A day's hunting feeds the company; the meat keeps only if it's smoked."},
+	"fish": {"name": "Fishing water", "store": "meat", "amount": [8, 16], "hours": 6.0, "regrow": 3.0,
+		"text": "Fish in the shallows. Nets of cord and a few hours: fresh fish, which spoils as fast as meat."},
+	"spring": {"name": "Fresh spring", "store": "water", "amount": [0, 0], "hours": 1.0, "regrow": 0.0,
+		"text": "Clear, cold water out of the rock. The water cart is filled, and nobody falls sick of it."},
+}
+const RESOURCE_REACH := 3.0
+
+
+func resource(id: int) -> Dictionary:
+	return gen.resources[id] if id >= 0 and id < gen.resources.size() else {}
+
+
+## Hours until site `id` gives again (0: now).
+func harvest_wait(id: int) -> float:
+	return maxf(0.0, float(harvest.get(str(id), 0.0)) - hours)
+
+
+## Work site `id` with the fit men: fills the store at once (the hours then
+## pass, map.gd). Returns {"store", "n", "hours"} or {} if it's spent.
+func gather(id: int) -> Dictionary:
+	var r := resource(id)
+	if r.is_empty() or harvest_wait(id) > 0.0:
+		return {}
+	var spec: Dictionary = RESOURCES[r["kind"]]
+	var store := String(spec["store"])
+	var n := 0
+	if store == "water":
+		Company.stores["water"] = maxi(int(Company.stores["water"]), Company.WATER_CART)
+		Company.stores["foul"] = false
+		_day_water = "clean"
+	else:
+		var hands := clampf(Company.fit_men().size() / 12.0, 0.4, 2.2)
+		var a: Array = spec["amount"]
+		n = maxi(1, int(round(randi_range(int(a[0]), int(a[1])) * hands)))
+		Company.stores[store] = int(Company.stores.get(store, 0)) + n
+		Company.save()
+	harvest[str(id)] = hours + float(spec["hours"]) + float(spec["regrow"]) * 24.0
+	save()
+	return {"store": store, "n": n, "hours": float(spec["hours"])}
+
+
+## The nearest resource site to the party, if it's within reach.
+func resource_here() -> int:
+	var best := -1
+	var bd := RESOURCE_REACH
+	for r in gen.resources:
+		var d := pos.distance_to(Vector2(r["x"], r["y"]) + Vector2(0.5, 0.5))
+		if d < bd:
+			bd = d
+			best = int(r["id"])
+	return best
 
 
 ## How far a settlement's ground reaches, in cells (matches the models on the map).

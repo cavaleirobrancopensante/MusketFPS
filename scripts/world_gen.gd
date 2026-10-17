@@ -38,6 +38,8 @@ var settlements: Array = [] # {id, name, kind, faction, x, y}
 var start := Vector2i.ZERO # where the castaways come up from the beach
 var wreck := Vector2i.ZERO # the beach itself
 var stash_nest := -1 # settlement id of the nest that holds the ship's stores
+## Places to gather what the land gives (world.gd RESOURCES): {id, kind, x, y}.
+var resources: Array = []
 var rivers := 0
 var road_cells := 0
 var _rng := RandomNumberGenerator.new()
@@ -64,6 +66,7 @@ func generate(s: int) -> void:
 	_place_settlements()
 	_roads()
 	_fords()
+	_resources()
 
 
 ## The same, a phase at a time, calling `report(fraction, what's next)` (and
@@ -84,9 +87,9 @@ func generate_staged(s: int, report: Callable) -> void:
 		[_heights, Lang.t("Raising hills and mountains...")], [_rivers, Lang.t("Cutting the rivers...")],
 		[_terrain, Lang.t("Forests, swamps and plains...")], [_regions, Lang.t("Drawing the borders...")],
 		[_place_settlements, Lang.t("Founding villages and towns...")], [_roads, Lang.t("Laying the roads...")],
-		[_fords, Lang.t("Finding the fords...")]]
+		[_fords, Lang.t("Finding the fords...")], [_resources, Lang.t("Caves, springs and hunting grounds...")]]
 	# How long each phase takes, roughly (ms on a desktop), so the bar keeps pace.
-	var cost := [550, 270, 50, 180, 120, 250, 10]
+	var cost := [550, 270, 50, 180, 120, 250, 10, 30]
 	var total := 0.0
 	for c in cost:
 		total += c
@@ -505,6 +508,61 @@ func _site(reg: int, kind: String, spacing: int) -> Vector2i:
 			best_score = score
 			best = Vector2i(x, y)
 	return best
+
+
+# ---------------------------------------------------------------- resources
+
+## What the land gives, where (kind: [how many, terrains it's found on]).
+## Its own random stream, so older lands keep their settlements as they were.
+const RES_PLAN := {
+	"saltpetre": [14, [T.HILLS, T.MOUNTAIN]], "sulphur": [10, [T.HILLS, T.MOUNTAIN, T.SWAMP]],
+	"charcoal": [16, [T.FOREST]], "lead": [10, [T.HILLS, T.MOUNTAIN]],
+	"game": [18, [T.FOREST, T.PLAINS]], "fish": [14, [T.PLAINS, T.BEACH, T.FOREST, T.SWAMP]],
+	"spring": [18, [T.PLAINS, T.FOREST, T.HILLS]],
+}
+
+
+func _resources() -> void:
+	resources = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed * 31 + 5
+	for kind in RES_PLAN:
+		var want: int = RES_PLAN[kind][0]
+		var ok_t: Array = RES_PLAN[kind][1]
+		var tries := 0
+		var got := 0
+		while got < want and tries < 3000:
+			tries += 1
+			var x := rng.randi_range(8, SIZE - 8)
+			var y := rng.randi_range(8, SIZE - 8)
+			var i := idx(x, y)
+			if not terrain[i] in ok_t or river[i] != 0:
+				continue
+			if kind == "fish" and not _near_water(x, y, 3) and not _near_sea(x, y, 3):
+				continue
+			if kind == "sulphur" and terrain[i] == T.SWAMP and rng.randf() < 0.5:
+				continue
+			var crowded := false
+			for s in settlements:
+				if Vector2(s["x"] - x, s["y"] - y).length() < 7:
+					crowded = true
+					break
+			for r in resources:
+				if Vector2(r["x"] - x, r["y"] - y).length() < 10:
+					crowded = true
+					break
+			if crowded:
+				continue
+			resources.append({"id": resources.size(), "kind": kind, "x": x, "y": y})
+			got += 1
+
+
+func _near_sea(x: int, y: int, r: int) -> bool:
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if inside(x + dx, y + dy) and terrain[idx(x + dx, y + dy)] == T.SEA:
+				return true
+	return false
 
 
 func _near_water(x: int, y: int, r: int) -> bool:

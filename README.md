@@ -529,6 +529,30 @@ town's menu). **Lead** is sold in towns, cities and holds. **Powder** is sold
 only by the **dwarves**, who blast their mines with it, and it's dear.
 You start with a pound of powder and a little lead saved from the wreck.
 
+### Living off the land: resources and CRAFT
+
+The land has places that give what the company needs (`world_gen.gd`
+places about a hundred, `world.gd` RESOURCES): **saltpetre caves** and
+**sulphur springs** in the hills, **woodland** to burn for charcoal,
+**lead outcrops**, **hunting grounds** and **fishing water**, and **fresh
+springs**. Each has a small model on the map and its name once you're
+close. Tap one to march there: SET TO WORK takes some hours (more fit men,
+more yield) and fills the wagon; then it's worked out for days (a spring
+just fills the water cart with clean water).
+
+**CRAFT** (on the map, and at any site) turns materials into what you need,
+the hours passing while the men work (Logistics shortens them):
+
+| Recipe | Takes | Makes |
+|---|---|---|
+| Grind black powder | 8 saltpetre, 2 charcoal, 1 sulphur | 10 lb powder |
+| Smelt lead | 6 lead ore, 3 charcoal | 4 lb lead |
+| Roll cartridges | 1 lb powder, 3 lb lead | 40 cartridges |
+| Smoke meat | 6 meat, 1 charcoal | 6 rations |
+
+Fresh meat and fish lose a third a day until smoked. With these a company
+can keep itself in powder, shot, food and water without a market.
+
 ### Markets
 
 A town's MARKET sells food and rum, arrows (villages and towns), bolts and
