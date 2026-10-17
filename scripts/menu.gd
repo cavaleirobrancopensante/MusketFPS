@@ -58,7 +58,8 @@ func _ready() -> void:
 			Settings.siege_test = false
 			Company.active = false
 			Settings.slot = 99
-			get_tree().change_scene_to_file.call_deferred(BATTLE)
+			# Through the loading screen, as from the setup screen.
+			Loading.change.call_deferred(BATTLE)
 			return
 	if "--maptest" in args:
 		# Headless check of the map: a new campaign straight after the beach.

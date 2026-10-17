@@ -138,6 +138,7 @@ func make_sprites() -> void:
 		var spec := _sprite_spec(k, s)
 		var frames: Dictionary = await Impostor.render(battle, spec)
 		if frames.is_empty():
+			print("field: no rendered sprite for %s, keeping the drawn one" % name)
 			continue
 		sprites[name] = [battle.batcher.add_sprite_kind(name, frames), float(spec["cell_m"])]
 
