@@ -241,7 +241,7 @@ func _offer(key: String) -> Array:
 	var m := World.market_here()
 	if m.is_empty():
 		return []
-	for o in Company.market_offers(String(m["kind"]), String(m["faction"])):
+	for o in Company.market_offers(String(m["kind"]), String(m["faction"]), int(m["id"])):
 		if String(o[0]) == key:
 			return [o[1], Company.price(int(o[2]))]
 	return []
@@ -255,6 +255,9 @@ func _on_buy(key: String) -> void:
 		return
 	Company.money -= int(offer[1])
 	Company.stow(key, int(offer[0]))
+	var m := World.market_here()
+	if not m.is_empty():
+		preload("res://scripts/economy.gd").bought(int(m["id"]), key, int(offer[0]))
 	Company.save()
 	refresh()
 	changed.emit()

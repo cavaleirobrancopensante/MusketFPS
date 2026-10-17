@@ -130,6 +130,14 @@ blocking, grenades, going to the Major, the orders and the command view).
    (the red colour marks it) while the horde comes on behind. Broken
    companies run for the path too.
 
+Lose it, and a short cutscene follows the rout: the run along the sand
+with men turning to fire, a last volley at the foot of the path that turns
+the pursuit, the beach through the Major's glass (the lizards stripping the
+dead, and worse), the ammunition cart recovered from a gully, the horde
+pulling down the works and breaking up the boats, and the column turning
+inland. Everyone who speaks in the cutscenes and in battle has a voice
+(a synthesised mumble of syllables, each speaker his own).
+
 You start the campaign as castaways: low morale, a few days' food, and the
 ship's stores (muskets, powder, two guns, rum) in the lizards' hands.
 Getting them back is the first great objective.
@@ -175,10 +183,14 @@ with every seed.
   Tactics 3 or more, what it's made of (warriors, javelins, brutes,
   raptor riders). Scouts report rough counts. The warband you meet is the
   army you fight: its make-up becomes the enemy regiments.
-- **Scouts:** send one man a day's ride, or two men twice as far, in any of
-  eight directions. They come back to the company wherever it is with what
-  they found (land, towns, warbands) and map it, unless they don't come
-  back at all (likelier in the lizards' country or near a warband).
+- **Scouts:** choose how many **days** they're out (1 to 8: the longer, the
+  further they go) and **who goes** (soldiers or labourers, listed best
+  first by their scouting: fitness, stamina, a good eye, more for a hunter
+  by trade or someone born here), and a direction. They take a ration and a
+  day's water each for every day. They come back to the company wherever it
+  is with what they found (land, towns, warbands) and map it: more of them
+  sweep a wider circle and are safer; longer trips are riskier, and so are
+  the lizards' country and warbands nearby. Some don't come back.
 - **Water:** passing rivers and lakes refills the barrels with clean water,
   swamps with foul water; a dry day leaves you with what you carry.
 - **The land's powers** (placeholder names in `lore.gd`): the Kingdom of
@@ -560,6 +572,18 @@ soldiers there drive them off, but a party of labourers alone loses a
 third of its people and half its stock. Leave some men at the lead and
 some at the fishing, and march on with the rest.
 
+**Choosing who.** CHOOSE WHO lists everyone who can work, best at this
+site first (★: strength and stamina, more for a labourer at his own
+trade); tap to put someone in or take them out, or use the stepper (it
+takes the best first). The same goes for scouts and runners: the list is
+always ranked by the skill that matters.
+
+**Calling them back costs a man.** Either march back to the site and RECALL
+THEM (or tap a single person to bring just him), or, on the COMPANY screen,
+SEND A RUNNER: pick one (the quickest first); he goes to them, and the
+whole party marches back to wherever you are. On the road they can be
+caught by lizards.
+
 **Labourers.** HIRE LABOURERS in a village or town (12 crowns, then a
 crown a week; a few each week): **woodcutters, miners, hunters, fishers**
 (by what's round the place) and **farmhands**. They don't fight and never
@@ -599,6 +623,34 @@ may break with it). Tire it and bring it to the bank. A deer is 30-45 lb
 of meat, a fish 3-6. END THE HUNT puts it in the wagon
 (four hours pass). With these a company
 can keep itself in powder, shot, food and water without a market.
+
+### The land's economy
+
+Every village has its own sites near it (fields, and a wood, a pit, a
+fishing water or a hunting ground by what's round it), dwarf holds their
+mines, towns a field or a wood (`world_gen.gd`), and wild sites belong to
+the nearest village. Each settlement keeps stores (`economy.gd`):
+
+- **Labourers** walk out from the village to one of its sites, work it a
+  day and carry what they got home (you'll see them on the map: "Aurest
+  labourers, with ore and charcoal").
+- **Villagers** take a village's surplus to market in the nearest towns.
+- Towns, cities and holds **refine** it: lead from ore and charcoal, powder
+  from saltpetre, sulphur and charcoal (cities and holds), tools at the
+  smithy, bread and smoked meat, arrows. **Caravans** carry what a town has
+  spare to the next, and dwarf **traders** bring the holds' powder, lead
+  and tools. Everyone eats, tools wear out, gluts rot.
+- **The lizards** have their own: hunting parties bring meat and hides home
+  to the nest, warbands carry off half of a raided village's stores. A nest
+  with meat in it sends out bigger warbands. Beat a party and what it
+  carried is on the loot pile; burn a nest and its hoard is yours. Lizards
+  who beat a caravan or labourers take their goods home.
+
+A settlement's **market** follows its stores: what it has plenty of is
+cheap, what's scarce is dear, and what it hasn't got isn't for sale. Raw
+goods it has spare are for sale by the 10 lb, and it buys the raw goods it
+is short of (THEY'LL BUY). Your site's panel shows whose it is and their
+stores; the market shows them too.
 
 ### Markets
 

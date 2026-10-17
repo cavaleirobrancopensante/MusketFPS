@@ -1111,16 +1111,35 @@ func _fill_menu(people := false, market := false, labour := false) -> void:
 		_menu_box.add_child(_label(Lang.t("THE MARKET  ·  %d crowns") % Company.money, 20, GOLD))
 		var load := Company.wagon_load()
 		_menu_box.add_child(_label(Lang.t("Wagon %d / %d kg") % [int(load[0]), int(Company.wagon_kg())], 15, DIM))
-		for o in Company.market_offers(kind, fac):
+		var Econ = preload("res://scripts/economy.gd")
+		var sl := _label(Lang.t("Their stores: %s") % Econ.stock_line(sid), 14, DIM)
+		_menu_box.add_child(sl)
+		for o in Company.market_offers(kind, fac, sid):
 			var cr := Company.price(int(o[2]))
 			var have := int(Company.stores.get(o[0], 0)) if Company.CONSUMABLES.has(o[0]) else Company.item_count(String(o[0]))
 			var b := _button(Lang.t("%s  ·  %d cr   (have %d)") % [o[3], cr, have], func():
-				var why := Company.buy_offer(o)
+				var why := Company.buy_offer(o, sid)
 				_show_toast(why if why != "" else Lang.t("Bought %s.") % o[3])
 				_fill_menu(false, true))
 			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 			b.disabled = Company.money < cr
 			_menu_box.add_child(b)
+		# What they'll buy from you: the raw goods they're short of.
+		var sells: Array = []
+		for g in Company.MATERIALS + ["lead", "powder"]:
+			var pr: int = Econ.sell_price(sid, g)
+			if pr > 0 and int(Company.stores.get(g, 0)) >= Econ.LOT:
+				sells.append([g, pr])
+		if not sells.is_empty():
+			_menu_box.add_child(_label(Lang.t("THEY'LL BUY"), 18, GOLD))
+			for sg in sells:
+				var g2: String = sg[0]
+				var sb := _button(Lang.t("Sell %d lb of %s  ·  %d cr   (have %d)") % [Econ.LOT, Econ.good_name(g2), int(sg[1]), int(Company.stores.get(g2, 0))], func():
+					var got: int = Company.sell_material(g2, sid)
+					_show_toast(Lang.t("Sold for %d crowns.") % got if got > 0 else Lang.t("They won't buy that."))
+					_fill_menu(false, true))
+				sb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+				_menu_box.add_child(sb)
 		_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
 		return
 	if people:

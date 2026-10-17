@@ -17,6 +17,7 @@ const Gen := preload("res://scripts/world_gen.gd")
 const Lore := preload("res://scripts/lore.gd")
 const Men := preload("res://scripts/men.gd")
 const Events := preload("res://scripts/events.gd")
+const Econ := preload("res://scripts/economy.gd")
 
 const HOURS_PER_SEC := 1.2 # game hours per real second while moving
 const WAIT_HOURS_PER_SEC := 4.0
@@ -69,6 +70,7 @@ var places := {} # settlement id -> {"raided": hours until, "known": bool}
 ## Resource sites (world_gen.gd's resources) worked out: id (as a string) ->
 ## the hour they give again.
 var harvest := {}
+var econ := {} # settlement id (string) -> its stores (economy.gd)
 var grid: AStarGrid2D
 var log: Array = [] # recent news
 var _day_water := "" # best water passed today: "clean" > "foul" > ""
@@ -89,6 +91,7 @@ func new_world(s: int) -> void:
 	next_party = 1
 	places.clear()
 	harvest.clear()
+	econ.clear()
 	log.clear()
 	for st in gen.settlements:
 		places[int(st["id"])] = {"raided": 0.0, "known": false}
@@ -158,7 +161,7 @@ func save() -> void:
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
-		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest}
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest, "econ": econ}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
@@ -205,6 +208,7 @@ func load_world() -> bool:
 		_make_lords() # (a save from before the lords)
 	_event_cd = float(data.get("event_cd", 4.0))
 	harvest = data.get("harvest", {})
+	econ = data.get("econ", {})
 	var raw := Marshalls.base64_to_raw(String(data["explored"]))
 	var dec := raw.decompress(Gen.SIZE * Gen.SIZE, FileAccess.COMPRESSION_DEFLATE)
 	if dec.size() == explored.size():
@@ -552,6 +556,8 @@ const RESOURCES := {
 		"text": "Tracks everywhere: deer and big flightless birds. A day's hunting feeds the company; the meat keeps only if it's smoked."},
 	"fish": {"name": "Fishing water", "store": "meat", "amount": [8, 16], "hours": 6.0, "regrow": 3.0, "tools": ["fishing_rod"], "daily": 0.9, "post_store": "rations",
 		"text": "Fish in the shallows. Rods and lines and a few hours: fresh fish, which spoils as fast as meat."},
+	"farm": {"name": "Fields", "store": "grain", "amount": [12, 22], "hours": 8.0, "regrow": 5.0, "tools": ["shovel"], "daily": 0.8,
+		"text": "Strips of barley and oats, a village's bread for the year. Its people work them; you can lend a hand (and take a share)."},
 	"spring": {"name": "Fresh spring", "store": "water", "amount": [0, 0], "hours": 1.0, "regrow": 0.0,
 		"text": "Clear, cold water out of the rock. The water cart is filled, and nobody falls sick of it."},
 }
@@ -569,14 +575,16 @@ func harvest_wait(id: int) -> float:
 
 ## How much `n` people (labourers first, then fit soldiers; -1: everyone)
 ## would make at site `id`: {"lo", "hi", "eff", "used", "bare", "people"}.
-func work_estimate(id: int, n := -1) -> Dictionary:
+func work_estimate(id: int, n = -1) -> Dictionary:
 	var r := resource(id)
 	if r.is_empty():
 		return {}
 	var spec: Dictionary = RESOURCES[r["kind"]]
 	var people: Array = Company.hands_for_work()
-	if n >= 0:
-		people = people.slice(0, n)
+	if n is Array:
+		people = n # (the very people chosen)
+	elif int(n) >= 0:
+		people = people.slice(0, int(n))
 	var wf: Dictionary = Company.work_force(String(r["kind"]), people, Company.wagon_tools())
 	var hands := clampf(float(wf["eff"]) / 10.0, 0.0, 3.0)
 	var a: Array = spec["amount"]
@@ -590,7 +598,7 @@ func work_estimate(id: int, n := -1) -> Dictionary:
 ## Work site `id` with `n` people (see work_estimate): fills the store at
 ## once (the hours then pass, map.gd); their tools may break. Returns
 ## {"store", "n", "hours", "broke"} or {} if it's spent.
-func gather(id: int, n_people := -1) -> Dictionary:
+func gather(id: int, n_people = -1) -> Dictionary:
 	var r := resource(id)
 	if r.is_empty() or harvest_wait(id) > 0.0:
 		return {}
@@ -703,6 +711,7 @@ func _midnight() -> void:
 				n["garrison"] = mini(int(n["max_garrison"]), int(n["garrison"]) + 3)
 				n["walls"] = minf(1.0, float(n["walls"]) + 0.05)
 	_day_water = ""
+	Econ.day()
 	_spawn_tick(false)
 	day_passed.emit(notes)
 	save()
@@ -730,37 +739,76 @@ const SCOUT_NEAR := 25.0
 const SCOUT_FAR := 50.0
 
 
-## Men who could go: fit, not already out; the fittest first, sergeants last.
+const SCOUT_PER_DAY := 13.0 # cells out (and as many back) for each day they're gone
+const SCOUT_MAX_DAYS := 8
+
+
+## Who could go: fit soldiers and labourers not already out, the best
+## scouts first (fitness above all, stamina, a good eye; a hunter by trade,
+## someone born in this land).
 func scout_candidates() -> Array:
-	var men: Array = Company.fit_men().filter(func(m): return int(m["rank"]) < 3)
-	men.sort_custom(func(a, b): return Men.attr(a, "fitness") > Men.attr(b, "fitness"))
-	return men
+	var people: Array = Company.fit_men() + Company.workers.filter(func(w): return not w.get("away", false))
+	return Company.ranked(people, "scout")
 
 
-## Send one man (near) or two (far) in a direction. They come back to the
-## company wherever it is, with what they found, unless they don't.
-func send_scouts(dir: Vector2, far: bool) -> Dictionary:
-	var men := scout_candidates()
-	var n := 2 if far else 1
-	if men.size() < n + 2:
-		return {}
-	var dist := SCOUT_FAR if far else SCOUT_NEAR
+## What `n` scouts out for `days` days take with them: a ration and a day's
+## water each, a day.
+static func scout_supplies(n: int, days: int) -> Dictionary:
+	return {"rations": n * days, "water": n * days}
+
+
+## Send `people` (records from scout_candidates) out for `days` days in a
+## direction. The longer, the further they go and the more they see; the
+## more of them and the better they are, the safer. They come back to the
+## company wherever it is. Returns the scouting, or {"error": why}.
+func send_scouts(dir: Vector2, days: int, people: Array) -> Dictionary:
+	if people.is_empty():
+		return {"error": Lang.t("Choose who goes.")}
+	if Company.fit_men().size() - people.filter(func(m): return not Company.workers.has(m)).size() < 2:
+		return {"error": Lang.t("Not enough fit men would be left with the company.")}
+	var need := scout_supplies(people.size(), days)
+	for k in need:
+		if int(Company.stores.get(k, 0)) < int(need[k]):
+			return {"error": Lang.t("Not enough food and water in the wagon for them.")}
+	for k in need:
+		Company.stores[k] = int(Company.stores[k]) - int(need[k])
+	var dist := SCOUT_PER_DAY * days
 	var tgt := pos + dir.normalized() * dist
 	tgt = Vector2(clampf(tgt.x, 2, Gen.SIZE - 3), clampf(tgt.y, 2, Gen.SIZE - 3))
-	# They ride as far as the land goes: back off from the sea.
+	# They go as far as the land goes: back off from the sea.
 	while tgt.distance_to(pos) > 4.0 and gen.t(int(tgt.x), int(tgt.y)) in [T.SEA, T.LAKE]:
 		tgt = tgt.move_toward(pos, 2.0)
 	var ids: Array = []
 	var names: Array = []
-	for m in men.slice(0, n):
+	var best := 0.0
+	for m in people:
 		m["away"] = true
 		ids.append(int(m["id"]))
-		names.append(Company.surname_title(m))
-	var out := {"ids": ids, "names": names, "target": [tgt.x, tgt.y], "far": far,
-		"back": hours + dist * 2.0 / (BASE_SPEED * 0.9) + 3.0}
+		names.append(Company.surname_title(m) if not Company.workers.has(m) else String(m["name"]))
+		best = maxf(best, Company.aptitude(m, "scout"))
+	var out := {"ids": ids, "names": names, "target": [tgt.x, tgt.y], "days": days, "best": best,
+		"back": hours + days * 24.0}
 	scouts.append(out)
 	Company.save()
 	return out
+
+
+## How likely a scouting is to go wrong (shown before they go, and rolled
+## when they come back).
+func scout_risk(days: int, n: int, best: float, tgt := Vector2(-1, -1)) -> float:
+	var risk := 0.04 + 0.025 * days
+	if tgt.x >= 0.0:
+		var tc := Vector2i(int(tgt.x), int(tgt.y))
+		if gen.inside(tc.x, tc.y) and gen.region[Gen.idx(tc.x, tc.y)] == 4:
+			risk += 0.14 # the lizards' country
+		for p in parties:
+			if p["faction"] == "lizards" and tgt.distance_to(Vector2(p["x"], p["y"])) < 14.0:
+				risk += 0.12
+				break
+	risk -= 0.012 * (best - 8.5)
+	risk -= 0.03 if n >= 2 else 0.0
+	risk -= 0.02 if n >= 3 else 0.0
+	return clampf(risk * Company.Officer.scout_risk_mult(), 0.02, 0.6)
 
 
 func _scouts_tick() -> void:
@@ -774,18 +822,10 @@ func _scouts_tick() -> void:
 func _scout_report(sc: Dictionary) -> Dictionary:
 	var tgt := Vector2(sc["target"][0], sc["target"][1])
 	var tc := Vector2i(int(tgt.x), int(tgt.y))
-	var risk := 0.06 + (0.06 if sc["far"] else 0.0)
-	if gen.region[Gen.idx(tc.x, tc.y)] == 4:
-		risk += 0.14 # the lizards' country
-	for p in parties:
-		if p["faction"] == "lizards" and tgt.distance_to(Vector2(p["x"], p["y"])) < 14.0:
-			risk += 0.12
-			break
-	var men: Array = Company.roster.filter(func(m): return int(m["id"]) in sc["ids"])
-	var fit := 5.0
-	for m in men:
-		fit = Men.attr(m, "fitness")
-	risk = clampf((risk - 0.02 * (fit - 5.0)) * Company.Officer.scout_risk_mult(), 0.02, 0.6)
+	var days := int(sc.get("days", 2 if sc.get("far", false) else 1))
+	var men: Array = Company.roster.filter(func(m): return int(m["id"]) in sc["ids"]) \
+		+ Company.workers.filter(func(w): return int(w["id"]) in sc["ids"])
+	var risk := scout_risk(days, men.size(), float(sc.get("best", 8.5)), tgt)
 	var report := {"names": sc["names"], "lost": [], "found": [], "parties": [], "terrain": ""}
 	for m in men:
 		m.erase("away")
@@ -793,6 +833,10 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 		# Lost: killed, or one comes back wounded with half a story.
 		for m in men:
 			if randf() < 0.7 or men.size() == 1:
+				if Company.workers.has(m):
+					Company.workers.erase(m)
+					report["lost"].append(String(m["name"]))
+					continue
 				Company.fallen.append({"name": m["name"], "rank": Company.RANKS[int(m["rank"])], "day": Company.day,
 					"battles": m["battles"], "kills": m["kills"], "cause": Lang.t("lost scouting")})
 				Company.roster.erase(m)
@@ -803,12 +847,13 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 			Company.save()
 			return report
 	# What they saw: a wide circle round where they went, and the way there.
-	_reveal(tgt, 24.0 if sc["far"] else 18.0)
+	# (more eyes see more: a wider sweep with more of them, and further out)
+	_reveal(tgt, 12.0 + 3.0 * mini(men.size(), 4) + 1.5 * days)
 	var steps := int(pos.distance_to(tgt) / 6.0)
 	for k in steps:
 		_reveal(pos.lerp(tgt, float(k) / maxf(1, steps)), 6.0)
 	for st in gen.settlements:
-		if tgt.distance_to(Vector2(st["x"], st["y"])) < 24.0:
+		if tgt.distance_to(Vector2(st["x"], st["y"])) < 14.0 + 3.0 * mini(men.size(), 4) + 1.5 * days:
 			places[int(st["id"])]["known"] = true
 			report["found"].append("%s (%s%s)" % [st["name"], Lang.t(st["kind"]), Lang.t(", raided") if is_raided(int(st["id"])) else ""])
 	for p in parties:
@@ -939,6 +984,8 @@ const KINDS := {
 	"refugees": {"speed": 0.6, "name": "Refugees", "hostile": false},
 	"deserters": {"speed": 0.85, "name": "Deserters", "hostile": false},
 	"army": {"speed": 0.7, "name": "Army", "hostile": false},
+	"labourers": {"speed": 0.75, "name": "Labourers", "hostile": false},
+	"detachment": {"speed": 0.8, "name": "Your work party", "hostile": false},
 }
 
 
@@ -1071,6 +1118,13 @@ func party_name(p: Dictionary) -> String:
 		base = Lang.t("%s's army") % lord_short(lord) if not lord.is_empty() else Lang.t("%s army") % Lore.FACTIONS[p["faction"]]["short"]
 	elif p["kind"] == "caravan" or p["kind"] == "villagers":
 		base = (Lang.t("%s caravan") if p["kind"] == "caravan" else Lang.t("%s villagers")) % Lore.FACTIONS[p["faction"]]["short"]
+	elif p["kind"] == "labourers":
+		base = Lang.t("%s labourers") % Lore.FACTIONS[p["faction"]]["short"]
+	elif p["kind"] == "detachment":
+		return "%s (%d)" % [base, int(p["size"])]
+	var cw := Econ.cargo_words(p.get("cargo", {}))
+	if cw != "":
+		base += Lang.t(", with %s") % cw
 	return "%s (%d)" % [base, int(p["size"])]
 
 
@@ -1101,7 +1155,8 @@ func _spawn_tick(initial: bool) -> void:
 				if nest_destroyed(id) or int(nest(id)["siege_days"]) > 0:
 					continue # burned, or penned in by your siege
 				if _count("warband", "", id) < 2 and (initial or randf() < 0.5):
-					_new_party("warband", "lizards", 8 + randi_range(0, 6) + day() / 3, st)
+					# (a nest with meat in it sends out more)
+					_new_party("warband", "lizards", 8 + randi_range(0, 6) + day() / 3 + Econ.nest_feed(id), st)
 				# Small hunting parties range far and wide.
 				for k in (2 if initial else 1):
 					if _count("hunters", "", id) < 2 and (initial or randf() < 0.6):
@@ -1110,22 +1165,22 @@ func _spawn_tick(initial: bool) -> void:
 				if _count("patrol", st["faction"]) < 6 and (initial or randf() < 0.35):
 					_new_party("patrol", st["faction"], randi_range(14, 26), st)
 				if _count("caravan") < 14 and (initial or randf() < 0.35):
-					_new_party("caravan", st["faction"], randi_range(6, 12), st)
+					Econ.load_caravan(id, _new_party("caravan", st["faction"], randi_range(6, 12), st))
 				if _count("deserters") < 4 and randf() < (0.3 if initial else 0.15):
 					_new_party("deserters", st["faction"], randi_range(3, 8), st)
 			"town":
 				if _count("caravan") < 14 and randf() < (0.15 if initial else 0.25):
-					_new_party("caravan", st["faction"], randi_range(5, 10), st)
+					Econ.load_caravan(id, _new_party("caravan", st["faction"], randi_range(5, 10), st))
 			"village":
 				if is_raided(id):
 					# The burned-out leave for the nearest town.
 					if _count("refugees") < 6 and randf() < 0.4:
 						_new_party("refugees", st["faction"], randi_range(5, 14), st)
-				elif _count("villagers") < 16 and randf() < (0.12 if initial else 0.18):
-					_new_party("villagers", st["faction"], randi_range(3, 6), st)
+				# (labourers to the fields and pits, villagers to market: economy.gd)
 			"hold":
 				if _count("traders") < 4 and (initial or randf() < 0.3):
-					_new_party("traders", "dwarves", randi_range(6, 10), st)
+					Econ.load_caravan(id, _new_party("traders", "dwarves", randi_range(6, 10), st))
+		Econ.spawn(st, initial)
 	_raise_armies()
 
 
@@ -1142,6 +1197,9 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 		_tell(Lang.t("%s takes his leave and marches off.") % (lord_short(el) if not el.is_empty() else Lang.t("The army")), {"x": p["x"], "y": p["y"]})
 	if float(p["wait"]) > 0.0:
 		p["wait"] = float(p["wait"]) - dh
+		return
+	if p["kind"] == "detachment":
+		_detachment_tick(p, dh)
 		return
 	var me := Vector2(float(p["x"]), float(p["y"]))
 	var kind: String = p["kind"]
@@ -1162,6 +1220,32 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 			p["chase"] = float(p["chase"]) - dh
 	if (p["path"] as Array).is_empty():
 		_next_errand(p, me)
+	_move_party(p, dh)
+
+
+## A work party called back (Company.send_runner): it waits while the
+## runner gets there, then marches to wherever you are.
+func recall_party(sid: int, post: Dictionary, runner: String, pace := 1.0) -> void:
+	var r := resource(sid)
+	var p := _new_party("detachment", "ours", int(post["men"].size() + post["workers"].size()), {"x": r["x"], "y": r["y"], "id": -1})
+	p["post"] = post
+	p["site"] = sid
+	var d := pos.distance_to(Vector2(r["x"], r["y"]))
+	p["wait"] = d / (BASE_SPEED * 0.9 * pace) # (the runner on his way to them: a fit man is quicker)
+	_tell(Lang.t("%s runs to call the work party back.") % runner, {"x": pos.x, "y": pos.y})
+
+
+func _detachment_tick(p: Dictionary, dh: float) -> void:
+	var me := Vector2(float(p["x"]), float(p["y"]))
+	if me.distance_to(pos) < CONTACT * 1.5:
+		var n: int = Company.rejoin(p["post"]) if Company.active else 0
+		parties.erase(p)
+		_tell(Lang.t("The work party is back with you: %d of them.") % n, {"x": pos.x, "y": pos.y})
+		return
+	p["look"] = float(p.get("look", 0.0)) - dh
+	if float(p["look"]) <= 0.0 or (p["path"] as Array).is_empty():
+		p["look"] = 1.5
+		p["path"] = _route(me, pos)
 	_move_party(p, dh)
 
 
@@ -1193,6 +1277,9 @@ func _hostile(a: Dictionary, b: Dictionary) -> bool:
 
 ## Pick where to go next (and wait a while on arrival).
 func _next_errand(p: Dictionary, me: Vector2) -> void:
+	if p["kind"] == "labourers":
+		Econ.labourers_errand(p, me)
+		return
 	var home := settlement(int(p["home"])) if int(p["home"]) >= 0 else {}
 	if p["target"] >= 0 and me.distance_to(Vector2(settlement(int(p["target"]))["x"], settlement(int(p["target"]))["y"])) < 2.0:
 		var tgt := settlement(int(p["target"]))
@@ -1203,11 +1290,27 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 		if p["kind"] == "warband" and tgt["kind"] == "village":
 			places[int(tgt["id"])]["raided"] = hours + 96.0
 			p["wait"] = 6.0
+			Econ.plunder(p, int(tgt["id"]))
 			_tell(Lang.t("%s is raided by lizards!") % tgt["name"], tgt)
+			# Home to the nest with what they took.
+			if not home.is_empty():
+				p["target"] = int(home["id"])
+				p["path"] = _route(me, Vector2(home["x"], home["y"]))
+			return
+		if p["kind"] in ["warband", "hunters"] and tgt["id"] == p["home"]:
+			Econ.unload(int(tgt["id"]), p)
+			parties.erase(p) # back in the nest
 			return
 		if p["kind"] in ["villagers", "caravan", "traders"] and tgt["id"] == p["home"]:
+			Econ.unload(int(tgt["id"]), p)
 			parties.erase(p) # home again
 			return
+		if p["kind"] in ["villagers", "caravan", "traders"]:
+			# To market: what they brought goes into the stores here; a
+			# caravan loads what this place has spare for the next.
+			Econ.unload(int(tgt["id"]), p)
+			if p["kind"] == "caravan":
+				Econ.load_caravan(int(tgt["id"]), p)
 		p["wait"] = randf_range(6.0, 14.0)
 		return
 	var choices: Array = []
@@ -1223,7 +1326,15 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 				p["path"] = _route(me, roam)
 				return
 		"hunters":
-			# Hunting parties wander far from the nest, anywhere they like.
+			# Hunting parties wander far from the nest, anywhere they like,
+			# hunting as they go; after a few days they take the meat home.
+			p["legs"] = int(p.get("legs", 0)) + 1
+			if int(p["legs"]) > 1:
+				Econ.hunt_leg(p)
+			if int(p["legs"]) > 4 and not home.is_empty():
+				p["target"] = int(home["id"])
+				p["path"] = _route(me, Vector2(home["x"], home["y"]))
+				return
 			var far := Vector2(home["x"], home["y"]) + Vector2(randf_range(-110, 110), randf_range(-110, 110))
 			p["path"] = _route(me, far)
 			if (p["path"] as Array).is_empty():
@@ -1320,9 +1431,17 @@ func _fights() -> bool:
 			var sb := float(b["size"]) * (1.2 if b["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4)
 			var win: Dictionary = a if sa >= sb else b
 			var lose: Dictionary = b if win == a else a
+			if win["faction"] == "lizards" and not (lose.get("cargo", {}) as Dictionary).is_empty():
+				# What the beaten carried goes back to the nest with the winners.
+				var wc: Dictionary = win.get("cargo", {})
+				for g in lose["cargo"]:
+					wc[g] = float(wc.get(g, 0.0)) + float(lose["cargo"][g])
+				win["cargo"] = wc
 			win["size"] = maxi(2, int(win["size"]) - int(float(lose["size"]) * 0.5))
 			win["path"] = []
 			parties.erase(lose)
+			if lose["kind"] == "detachment":
+				_tell(Lang.t("Lizards caught your work party on the road. None of them came back."), {"x": lose["x"], "y": lose["y"]})
 			_tell(Lang.t("%s destroyed %s.") % [party_name(win).split(" (")[0], party_name(lose).split(" (")[0].to_lower()],
 				{"x": win["x"], "y": win["y"]})
 			_army_lost(lose)

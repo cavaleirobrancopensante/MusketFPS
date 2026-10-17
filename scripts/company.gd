@@ -20,6 +20,7 @@ extends Node
 ## the company, and you lead what's left of it out.
 
 const Men := preload("res://scripts/men.gd")
+const Econ := preload("res://scripts/economy.gd")
 const Lore := preload("res://scripts/lore.gd")
 const Officer := preload("res://scripts/officer.gd")
 ## Saved in the current slot's folder (see Settings.slot_dir()).
@@ -160,8 +161,8 @@ const ITEMS := {
 const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01],
 	"arrows": [0.06, 0.005], "bolts": [0.08, 0.005], "powder": [1.0, 0.02], "lead": [1.0, 0.008],
 	# What the land gives (world.gd RESOURCES), for making things (RECIPES):
-	"saltpetre": [1.0, 0.015], "sulphur": [1.0, 0.012], "charcoal": [0.5, 0.03], "ore": [1.0, 0.01], "meat": [1.0, 0.04], "wood": [0.6, 0.03]}
-const MATERIALS := ["saltpetre", "sulphur", "charcoal", "ore", "meat", "wood"]
+	"saltpetre": [1.0, 0.015], "sulphur": [1.0, 0.012], "charcoal": [0.5, 0.03], "ore": [1.0, 0.01], "meat": [1.0, 0.04], "wood": [0.6, 0.03], "grain": [1.0, 0.025]}
+const MATERIALS := ["saltpetre", "sulphur", "charcoal", "ore", "meat", "wood", "grain"]
 ## Making things in camp (CRAFT on the map): what it takes, what it makes,
 ## and the hours the men spend at it (less with your Logistics).
 const RECIPES := {
@@ -175,6 +176,8 @@ const RECIPES := {
 		"text": "No lead? Hard wood whittled round and rolled in cartridges. They fly short and hit soft (about half a lead ball), but they fly."},
 	"rations": {"name": "Smoke meat", "needs": {"meat": 6, "charcoal": 1}, "makes": {"rations": 6}, "hours": 4,
 		"text": "Fresh meat and fish spoil in days; smoked over the fire they keep."},
+	"bread": {"name": "Bake bread", "needs": {"grain": 6, "wood": 1}, "makes": {"rations": 8}, "hours": 4,
+		"text": "Grain ground on a quern and baked in a field oven: hard bread that keeps for weeks."},
 	"fishing_rod": {"name": "Make a fishing rod", "needs": {"wood": 3}, "makes": {"fishing_rod": 1}, "hours": 2,
 		"text": "A straight length of ash, cut, dried and tapered, a line plaited from horsehair, and a hook filed from a nail."},
 }
@@ -726,6 +729,20 @@ func apply_battle(result: Dictionary) -> void:
 		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
 		if String(result.get("enemy", "lizards")) == "lizards":
 			_free_captives(summary, int(result.get("assault", -1)) >= 0)
+		# What they were carrying (economy.gd): a caravan's goods, a
+		# warband's plunder, a hunting party's meat, a nest's hoard.
+		var carried := {}
+		var pid := int(next_battle.get("party", -1))
+		if pid >= 0 and World.is_ready:
+			carried = World.party_by_id(pid).get("cargo", {})
+		var nid := int(result.get("assault", -1))
+		if nid >= 0 and World.is_ready:
+			carried = Econ.stock(nid).duplicate()
+			World.econ[str(nid)] = {}
+		for l in Econ.as_loot(carried):
+			_add_loot(String(l[0]), int(l[1]))
+		if not carried.is_empty() and Econ.cargo_words(carried) != "":
+			summary["carried"] = Econ.cargo_words(carried)
 		if int(result.get("assault", -1)) >= 0:
 			# A burned nest: what they'd hoarded from a dozen raids.
 			summary["nest_burned"] = String(result.get("nest_name", Lang.t("the nest")))
@@ -1104,6 +1121,7 @@ static func item_label(id: String) -> String:
 		"ore": return Lang.t("Lead ore (lb)")
 		"meat": return Lang.t("Fresh meat and fish (lb)")
 		"wood": return Lang.t("Hardwood (lb)")
+		"grain": return Lang.t("Grain (lb)")
 		"wood_shot": return Lang.t("of them wooden balls")
 	return item_name(id)
 
@@ -1198,7 +1216,7 @@ static func _row(men: Array, y: float, gap: float, officer_gap: bool) -> void:
 ## Trade, label]. Food everywhere; rum in towns; arrows where people hunt;
 ## bolts, lead and the town watch's kit in towns; and gunpowder only from the
 ## dwarves, who blast their mines with it and sell it dear.
-static func market_offers(kind: String, fac: String) -> Array:
+static func market_offers(kind: String, fac: String, sid := -1) -> Array:
 	var out: Array = []
 	var food: Array = {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}.get(kind, [10, 6])
 	out.append(["rations", food[0], food[1], Lang.t("%d rations") % food[0]])
@@ -1216,6 +1234,8 @@ static func market_offers(kind: String, fac: String) -> Array:
 		out.append(["crossbow", 1, 34, Lang.t("a crossbow")])
 		out.append(["jack", 1, 10, Lang.t("a padded jack")])
 		out.append(["kettle_hat", 1, 11, Lang.t("a kettle hat")])
+		if kind == "city":
+			out.append(["powder", 1, 30, Lang.t("1 lb of powder")]) # (the city's powder mill)
 	if fac == "vell" and kind != "village":
 		out.append(["war_bow", 1, 22, Lang.t("a war bow")])
 	elif kind != "hold":
@@ -1228,11 +1248,13 @@ static func market_offers(kind: String, fac: String) -> Array:
 	if kind != "hold":
 		out.append(["axe", 1, 7, Lang.t("a felling axe")])
 		out.append(["fishing_rod", 1, 4, Lang.t("a fishing rod")])
+	if sid >= 0:
+		out = Econ.adjust_offers(sid, out) # (what's in their stores, and what it costs: economy.gd)
 	return out
 
 
-## Buy one lot of an offer. Returns "" or why not.
-func buy_offer(offer: Array) -> String:
+## Buy one lot of an offer (from settlement `sid`'s stores). Returns "" or why not.
+func buy_offer(offer: Array, sid := -1) -> String:
 	var id := String(offer[0])
 	var n := int(offer[1])
 	var cr := price(int(offer[2]))
@@ -1242,8 +1264,22 @@ func buy_offer(offer: Array) -> String:
 		return Lang.t("The wagon is full.")
 	money -= cr
 	stow(id, n)
+	if sid >= 0:
+		Econ.bought(sid, id, n)
 	save()
 	return ""
+
+
+## Sell them a lot (Econ.LOT) of a material. Returns crowns got (0: no sale).
+func sell_material(good: String, sid: int) -> int:
+	var cr := Econ.sell_price(sid, good)
+	if cr <= 0 or int(stores.get(good, 0)) < Econ.LOT:
+		return 0
+	stores[good] = int(stores[good]) - Econ.LOT
+	Econ.add(sid, good, Econ.LOT)
+	money += cr
+	save()
+	return cr
 
 
 ## How many batches of cartridges the wagon's powder and lead make.
@@ -1359,7 +1395,7 @@ const BARE_HANDS := 0.35
 const TRADE_BONUS := 1.5
 ## A labourer's trade, and the sites (RESOURCES kinds) he's best at.
 const TRADES := {"woodcutter": ["charcoal"], "miner": ["lead", "sulphur", "saltpetre"], "hunter": ["game"],
-	"fisher": ["fish"], "farmer": []}
+	"fisher": ["fish"], "farmer": ["farm"]}
 const TRADE_NAMES := {"woodcutter": "Woodcutter", "miner": "Miner", "hunter": "Hunter", "fisher": "Fisher", "farmer": "Farmhand"}
 const LABOURER_COST := 12
 const LABOURER_WAGE := 1 # a week
@@ -1376,7 +1412,47 @@ func make_worker(trade: String, nm := "", fac := "") -> Dictionary:
 		nm = "%s %s" % [FIRST_NAMES.pick_random(), LAST_NAMES.pick_random()]
 	var w := {"id": next_id, "name": nm, "trade": trade, "hunger": 0, "native": fac}
 	next_id += 1
+	ensure_worker(w)
 	return w
+
+
+## A labourer has the soldiers' attributes too (strength for the work,
+## fitness for running and scouting...), and what Men.attr needs.
+static func ensure_worker(w: Dictionary) -> void:
+	if not w.has("attrs"):
+		w["attrs"] = Men.new_attrs()
+		match String(w.get("trade", "")):
+			"miner", "woodcutter":
+				w["attrs"]["strength"] = int(w["attrs"]["strength"]) + 2
+			"hunter":
+				w["attrs"]["fitness"] = int(w["attrs"]["fitness"]) + 2
+				w["attrs"]["aim"] = int(w["attrs"]["aim"]) + 1
+			"fisher", "farmer":
+				w["attrs"]["constitution"] = int(w["attrs"]["constitution"]) + 2
+	for k in ["thirst", "hunger", "sick"]:
+		if not w.has(k):
+			w[k] = 0
+
+
+## How good someone is at a task, for ranking who to send: "scout",
+## "runner", or a site's kind (world.gd RESOURCES) for the work there.
+static func aptitude(m: Dictionary, task: String) -> float:
+	var a := func(k: String) -> float: return float(Men.attr(m, k)) if m.has("attrs") else 5.0
+	var trade := String(m.get("trade", ""))
+	match task:
+		"scout":
+			return a.call("fitness") * 1.0 + a.call("constitution") * 0.4 + a.call("aim") * 0.3 \
+				+ (3.0 if trade == "hunter" else 0.0) + (1.0 if m.has("native") and String(m.get("native", "")) != "" else 0.0)
+		"runner":
+			return a.call("fitness") * 1.0 + a.call("constitution") * 0.5
+	return a.call("strength") * 1.0 + a.call("constitution") * 0.5 + (5.0 if task in TRADES.get(trade, []) else 0.0)
+
+
+## People ranked for a task, best first.
+static func ranked(people: Array, task: String) -> Array:
+	var out := people.duplicate()
+	out.sort_custom(func(x, y): return aptitude(x, task) > aptitude(y, task))
+	return out
 
 
 func can_hire_labourer() -> bool:
@@ -1395,7 +1471,7 @@ func hire_labourer(trade: String, nm := "", fac := "") -> Dictionary:
 
 ## Everyone who can work a site now: labourers first, then fit soldiers.
 func hands_for_work() -> Array:
-	return workers + fit_men()
+	return workers.filter(func(w): return not w.get("away", false)) + fit_men()
 
 
 ## The tools in the wagon, {id: n}.
@@ -1431,6 +1507,8 @@ static func work_force(kind: String, people: Array, tools: Dictionary) -> Dictio
 				used[t] = int(used.get(t, 0)) + 1
 		if kind in TRADES.get(String(w.get("trade", "")), []):
 			e *= TRADE_BONUS
+		if w.has("attrs"):
+			e *= clampf(1.0 + 0.05 * (Men.attr(w, "strength") - 5), 0.7, 1.5) # (a strong back)
 		eff += e
 	return {"eff": eff, "used": used, "bare": bare}
 
@@ -1467,16 +1545,17 @@ static func broke_note(broke: Array) -> String:
 	return Lang.t("Broken: %s.") % ", ".join(bits)
 
 
-## Leave a work party of `n` at site `sid` (labourers first, then soldiers),
-## with the wagon's tools for the work. Returns how many stayed.
-func post_party(sid: int, n: int) -> int:
+## Leave a work party at site `sid`: `n` people (labourers first, then
+## soldiers), or the very people in `n` if it's an array, with the wagon's
+## tools for the work. Returns how many stayed.
+func post_party(sid: int, n) -> int:
 	var r := World.resource(sid)
-	if r.is_empty() or n <= 0:
+	if r.is_empty() or (n is Array and n.is_empty()) or (not n is Array and int(n) <= 0):
 		return 0
 	var kind := String(r["kind"])
 	var key := str(sid)
 	var post: Dictionary = posts.get(key, {"men": [], "workers": [], "tools": {}, "stock": {}, "since": day, "kind": kind})
-	var people := hands_for_work().slice(0, n)
+	var people: Array = n if n is Array else hands_for_work().slice(0, int(n))
 	var need: Array = World.RESOURCES[kind].get("tools", [])
 	for w in people:
 		if workers.has(w):
@@ -1540,6 +1619,74 @@ func recall_post(sid: int) -> Dictionary:
 	posts.erase(key)
 	save()
 	return got
+
+
+## Send a runner to call a work party back to you: one fit soldier leaves
+## now (it costs a man while he's gone), finds them, and they march back to
+## wherever you are; lizards on the road may catch them. Or march there and
+## RECALL them yourself. Returns "" or why not.
+func send_runner(sid: int, runner_id := -1) -> String:
+	var post: Dictionary = posts.get(str(sid), {})
+	if post.is_empty():
+		return Lang.t("Nobody's there.")
+	var fit := ranked(fit_men(), "runner")
+	if runner_id >= 0:
+		fit = fit.filter(func(m): return int(m["id"]) == runner_id)
+	if fit.is_empty():
+		return Lang.t("You've nobody fit to send.")
+	var runner: Dictionary = fit[0]
+	roster.erase(runner)
+	post["men"].append(runner)
+	posts.erase(str(sid))
+	World.recall_party(sid, post, String(runner["name"]), 0.7 + 0.06 * Men.attr(runner, "fitness"))
+	ensure_wagon_crew()
+	save()
+	return ""
+
+
+## A work party (or what's left of it) reaches you: everyone back on the
+## roll, their tools and what they made into the wagon.
+func rejoin(post: Dictionary) -> int:
+	for m in post.get("men", []):
+		roster.append(m)
+	for w in post.get("workers", []):
+		workers.append(w)
+	for t in post.get("tools", {}):
+		add_item(String(t), int(post["tools"][t]))
+	for k in post.get("stock", {}):
+		var n := int(floor(float(post["stock"][k])))
+		if n > 0:
+			stow(String(k), n)
+	save()
+	return post.get("men", []).size() + post.get("workers", []).size()
+
+
+## Call one person back from a work party (a tool comes back with him if
+## there are more tools than people left). Returns true if found.
+func recall_one(sid: int, id: int) -> bool:
+	var key := str(sid)
+	var post: Dictionary = posts.get(key, {})
+	if post.is_empty():
+		return false
+	for list in ["men", "workers"]:
+		for m in post[list]:
+			if int(m["id"]) == id:
+				post[list].erase(m)
+				(roster if list == "men" else workers).append(m)
+				var tools_n := 0
+				for t in post["tools"]:
+					tools_n += int(post["tools"][t])
+				if tools_n > post_size(post) and not post["tools"].is_empty():
+					var t2: String = post["tools"].keys()[0]
+					post["tools"][t2] = int(post["tools"][t2]) - 1
+					if int(post["tools"][t2]) <= 0:
+						post["tools"].erase(t2)
+					add_item(t2, 1)
+				if post_size(post) == 0:
+					recall_post(sid)
+				save()
+				return true
+	return false
 
 
 ## A day for every work party: they work (with their tools wearing out),
@@ -2022,6 +2169,8 @@ func load_campaign() -> bool:
 	towns = data.get("towns", {})
 	visiting = int(data.get("visiting", -1))
 	workers = data.get("workers", [])
+	for w in workers:
+		ensure_worker(w)
 	posts = data.get("posts", {})
 	for l in loot:
 		l["n"] = int(l["n"])

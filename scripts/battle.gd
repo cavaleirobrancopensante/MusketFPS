@@ -1166,7 +1166,10 @@ func _end_battle(won: bool) -> void:
 
 ## Leave the field for the aftermath screen (campaign) or replay (otherwise).
 func finish() -> void:
-	if Company.active:
+	if Company.active and bool(Company.last_result.get("prologue", false)) and field != null and field.prologue:
+		# The first battle lost: the retreat from the beach (retreat.gd).
+		Loading.change("res://scenes/retreat.tscn")
+	elif Company.active:
 		Loading.change(AFTERMATH)
 	else:
 		restart()
@@ -1539,6 +1542,30 @@ func _update_lines(delta: float) -> void:
 		var l: Array = _lines[0]
 		_line_t = float(l[2])
 		hud.show_story(l[0], l[1], l[2])
+		if String(l[0]) != "":
+			speak(String(l[0]), float(l[2]))
+
+
+## A voice for a line of dialogue: each speaker his own (by name), a
+## mumble of syllables under the caption (sound_factory.gd's talk).
+func speak(who: String, seconds: float) -> void:
+	var h: int = absi(hash(who))
+	var v := "talk%d" % (1 + h % 4)
+	_voice(v, 0.86 + float(h % 23) / 100.0)
+	if seconds > 3.2:
+		get_tree().create_timer(1.8).timeout.connect(func(): _voice("talk%d" % (1 + (h + 1) % 4), 0.86 + float(h % 23) / 100.0))
+
+
+func _voice(name: String, pitch: float) -> void:
+	if not sounds.has(name):
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = sounds[name]
+	p.volume_db = -6.0
+	p.pitch_scale = pitch
+	add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
 
 
 func _prologue_process(delta: float) -> void:

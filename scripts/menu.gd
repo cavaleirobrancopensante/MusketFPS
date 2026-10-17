@@ -34,9 +34,13 @@ func _ready() -> void:
 	#   -- --autotest --patrol [--vell] [--army] [--allied]  against a nation's patrol or a lord's army (or beside it)
 	#   -- --contracttest, -- --siegetest  headless checks of contracts and town sieges
 	var args := OS.get_cmdline_user_args()
-	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
+	for a in ["--intro", "--intro-render", "--retreat-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
 		if a in args:
 			Settings.slot = 99 # tests never touch the player's saves
+	if "--retreat-render" in args:
+		Company.new_campaign(_test_start())
+		get_tree().change_scene_to_file.call_deferred("res://scenes/retreat.tscn")
+		return
 	if "--intro" in args or "--intro-render" in args:
 		if "--intro" in args:
 			Engine.time_scale = 4.0

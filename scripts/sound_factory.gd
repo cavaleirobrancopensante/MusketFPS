@@ -49,6 +49,10 @@ static func build_all() -> Dictionary:
 		"plop": plop(),
 		"splash": splash(),
 		"reel": reel(),
+		"talk1": talk(1, 1.5, 118.0),
+		"talk2": talk(2, 1.7, 132.0),
+		"talk3": talk(3, 1.3, 104.0),
+		"talk4": talk(4, 1.8, 150.0),
 	}
 
 
@@ -288,6 +292,64 @@ static func shout() -> AudioStreamWAV:
 			s[0] = out
 			y += out * float(formants[k][2])
 		var env := smoothstep(0.0, 0.04, t) * (1.0 - smoothstep(0.35, 0.72, t)) * (1.0 + 0.4 * exp(-t / 0.12))
+		b[i] = y * env
+	return _to_wav(b)
+
+
+## Someone talking: a run of syllables through the voice's formants, the
+## pitch rising and falling like speech (no words: the captions carry them).
+## `seed_n` makes each a different voice; play them at different pitches
+## for different men (battle.say, the cutscenes).
+const _VOWELS := [[730.0, 1090.0, 2440.0], [530.0, 1840.0, 2480.0], [570.0, 840.0, 2410.0],
+	[300.0, 870.0, 2240.0], [660.0, 1720.0, 2410.0], [440.0, 1020.0, 2240.0]]
+
+
+static func talk(seed_n: int, seconds: float, base: float) -> AudioStreamWAV:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 900 + seed_n
+	var b := _buf(seconds)
+	# The syllables: [start, length, vowel, pitch], with little gaps between words.
+	var syl: Array = []
+	var t0 := 0.03
+	while t0 < seconds - 0.15:
+		var l := rng.randf_range(0.09, 0.2)
+		syl.append([t0, l, rng.randi() % _VOWELS.size(), rng.randf_range(0.9, 1.15)])
+		t0 += l + (rng.randf_range(0.08, 0.16) if rng.randf() < 0.25 else rng.randf_range(0.01, 0.03))
+	var ph := 0.0
+	var st: Array = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+	var si := 0
+	var vf: Array = _VOWELS[0].duplicate()
+	for i in b.size():
+		var t := float(i) / RATE
+		while si < syl.size() - 1 and t > float(syl[si][0]) + float(syl[si][1]):
+			si += 1
+		var sy: Array = syl[si]
+		var local := (t - float(sy[0])) / float(sy[1])
+		var on := 1.0 if local >= 0.0 and local <= 1.0 else 0.0
+		var env := on * smoothstep(0.0, 0.15, local) * (1.0 - smoothstep(0.7, 1.0, local))
+		# The sentence falls toward its end; each syllable has its own lilt.
+		var f0 := base * float(sy[3]) * lerpf(1.08, 0.88, t / seconds) * (1.0 + 0.03 * sin(t * 31.0))
+		ph += f0 / RATE
+		ph -= floorf(ph)
+		var target: Array = _VOWELS[int(sy[2])]
+		for k in 3:
+			vf[k] = lerpf(float(vf[k]), float(target[k]), 0.004) # (glide between vowels)
+		var src := (ph * 2.0 - 1.0) * 0.6 + _noise() * 0.12
+		# A consonant's hiss at the start of some syllables.
+		if local >= 0.0 and local < 0.12 and int(sy[2]) % 2 == 0:
+			src += _noise() * 0.5 * (1.0 - local / 0.12)
+		var y := 0.0
+		for k in 3:
+			var fr: float = vf[k]
+			var bw: float = [80.0, 100.0, 140.0][k]
+			var r := exp(-PI * bw / RATE)
+			var a1 := 2.0 * r * cos(TAU * fr / RATE)
+			var a2 := -r * r
+			var s2: Array = st[k]
+			var out := src + a1 * float(s2[0]) + a2 * float(s2[1])
+			s2[1] = s2[0]
+			s2[0] = out
+			y += out * [1.0, 0.5, 0.2][k]
 		b[i] = y * env
 	return _to_wav(b)
 

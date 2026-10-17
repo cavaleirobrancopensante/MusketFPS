@@ -622,6 +622,9 @@ func _build_right() -> Control:
 	return col
 
 
+var _runner_for := -1 # the work party whose runner you're choosing
+
+
 func _fill_list() -> void:
 	for c in _list.get_children():
 		c.queue_free()
@@ -671,6 +674,30 @@ func _fill_list() -> void:
 			var l2 := _label(Lang.t("At the %s: %s") % [Lang.t(String(spec.get("name", "site"))).to_lower(), ", ".join(names)], 15, DIM)
 			l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			_list.add_child(l2)
+			# Calling them back costs a man: a runner goes to fetch them.
+			var sid := int(key)
+			var rb := _button(Lang.t("SEND A RUNNER TO CALL THEM BACK"), 15, func():
+				_runner_for = -1 if _runner_for == sid else sid
+				_fill_list())
+			rb.disabled = Company.fit_men().is_empty()
+			_list.add_child(rb)
+			if _runner_for == sid:
+				# Who runs: the fastest first (fitness, then stamina).
+				_list.add_child(_label(Lang.t("Who goes? The quickest first. He's gone until they're back."), 14, DIM))
+				for m in Company.ranked(Company.fit_men(), "runner").slice(0, 6):
+					var mid := int(m["id"])
+					var mb := _button(Lang.t("%s  ★%d") % [Company.title(m), int(round(Company.aptitude(m, "runner")))], 15, func():
+						var why := Company.send_runner(sid, mid)
+						_runner_for = -1
+						if why == "":
+							World.save()
+						_fill_list())
+					_list.add_child(mb)
+	var coming: Array = World.parties.filter(func(p): return p["kind"] == "detachment") if World.is_ready else []
+	for p in coming:
+		var l3 := _label(Lang.t("A work party is on its way back to you: %d of them.") % int(p["size"]), 15, GOLD)
+		l3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_list.add_child(l3)
 
 
 func _refresh_wagon() -> void:

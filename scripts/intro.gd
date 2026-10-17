@@ -84,6 +84,11 @@ var _major: Node3D
 var _major_rig
 var _flag: Array = [] # flag strips to wave
 var _birds: Array = [] # [node, velocity]
+## Voices: shouts on deck and in the surf, the Major's speech, the men's cheer.
+var _voices := [[8.2, "shout", 1.1, -8.0], [9.6, "shout", 0.9, -9.0], [16.0, "shout", 1.0, -10.0], [17.4, "talk2", 1.0, -12.0],
+	[24.5, "shout", 1.05, -12.0], [33.2, "shout", 0.95, -8.0], [34.6, "shout", 1.1, -9.0], [36.0, "shout", 0.9, -8.0],
+	[42.5, "talk1", 1.0, -12.0], [50.8, "talk3", 0.9, -4.0], [52.6, "talk4", 0.88, -4.0], [54.4, "shout", 0.85, -2.0],
+	[55.0, "shout", 1.0, -5.0], [55.2, "shout", 1.12, -6.0], [55.4, "shout", 0.95, -6.0], [55.7, "shout", 1.05, -7.0]]
 var _drums := [58.6, 59.3, 61.0, 61.5, 62.3, 63.4, 63.9, 64.4, 64.8]
 
 
@@ -98,6 +103,9 @@ func _ready() -> void:
 	add_child(batcher)
 	_sounds = {"thunder": SoundFactory.thunder(), "crack": SoundFactory.crack(), "cannon": SoundFactory.cannon(),
 		"drum": SoundFactory.drum()}
+	var all := SoundFactory.cached()
+	for k in ["shout", "talk1", "talk2", "talk3", "talk4"]:
+		_sounds[k] = all[k]
 
 	_env = Environment.new()
 	_env.background_mode = Environment.BG_COLOR
@@ -641,6 +649,9 @@ func _process(delta: float) -> void:
 		_env.background_color = Color(0.03, 0.04, 0.06).lerp(Color(0.6, 0.65, 0.8), lit)
 		_env.ambient_light_energy = 0.5 + lit * 2.0
 		_sun.light_energy = 0.15 + lit * 3.0
+	for v in _voices:
+		if t - delta < float(v[0]) and t >= float(v[0]):
+			_play(String(v[1]), float(v[3]), float(v[2]))
 	for d in _drums:
 		if t - delta < d and t >= d:
 			_play("drum", -4.0 + (d - 58.0) * 0.6, randf_range(0.95, 1.05))

@@ -555,6 +555,91 @@ func _resources() -> void:
 				continue
 			resources.append({"id": resources.size(), "kind": kind, "x": x, "y": y})
 			got += 1
+	_home_sites()
+
+
+## The settlements' own sites: every village has its fields and one or two
+## more places its people work (woods, a pit, a fishing water, a hunting
+## ground, by what's round it), a dwarf hold its mines, a town a field or a
+## wood. They belong to that settlement ("owner"): its people go out to
+## work them, and the goods go to market (economy.gd). Wild sites (above)
+## have the nearest village or hold within reach as their owner, if any.
+## (Its own random stream again, and appended, so older sites keep their ids.)
+func _home_sites() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed * 37 + 11
+	for r in resources:
+		var best := -1
+		var bd := 14.0
+		for st in settlements:
+			if st["kind"] in ["village", "hold"]:
+				var d := Vector2(st["x"] - r["x"], st["y"] - r["y"]).length()
+				if d < bd:
+					bd = d
+					best = int(st["id"])
+		r["owner"] = best
+	for st in settlements:
+		var k: String = st["kind"]
+		if not k in ["village", "town", "hold"]:
+			continue
+		var sx: int = st["x"]
+		var sy: int = st["y"]
+		# What's round it.
+		var count := {}
+		for dy in range(-8, 9, 2):
+			for dx in range(-8, 9, 2):
+				if inside(sx + dx, sy + dy):
+					var t: int = terrain[idx(sx + dx, sy + dy)]
+					count[t] = int(count.get(t, 0)) + 1
+		var want: Array = []
+		if k == "hold":
+			want = ["lead", ["saltpetre", "sulphur"][rng.randi() % 2]]
+		else:
+			if int(count.get(T.PLAINS, 0)) + int(count.get(T.FOREST, 0)) > 6:
+				want.append("farm")
+			if k == "village":
+				var extra: Array = []
+				if int(count.get(T.FOREST, 0)) > 6:
+					extra += ["charcoal", "game"]
+				if int(count.get(T.HILLS, 0)) + int(count.get(T.MOUNTAIN, 0)) > 6:
+					extra += ["lead", "saltpetre", "sulphur"]
+				if _near_water(sx, sy, 6) or _near_sea(sx, sy, 6):
+					extra.append("fish")
+				if extra.is_empty():
+					extra = ["game"]
+				want.append(extra[rng.randi() % extra.size()])
+				if extra.size() > 2 and rng.randf() < 0.5:
+					var e2: String = extra[rng.randi() % extra.size()]
+					if not e2 in want:
+						want.append(e2)
+			elif int(count.get(T.FOREST, 0)) > 4:
+				want.append("charcoal")
+		for kind in want:
+			for tries in 60:
+				var a := rng.randf() * TAU
+				var dist := rng.randf_range(4.0, 8.5)
+				var x := sx + int(round(cos(a) * dist))
+				var y := sy + int(round(sin(a) * dist))
+				if not inside(x, y):
+					continue
+				var i := idx(x, y)
+				if terrain[i] in [T.SEA, T.LAKE] or river[i] != 0 or road[i] != 0:
+					continue
+				if kind == "fish" and not _near_water(x, y, 2) and not _near_sea(x, y, 2):
+					continue
+				var crowded := false
+				for o in settlements:
+					if Vector2(o["x"] - x, o["y"] - y).length() < 3.5:
+						crowded = true
+						break
+				for r2 in resources:
+					if Vector2(r2["x"] - x, r2["y"] - y).length() < 3.5:
+						crowded = true
+						break
+				if crowded:
+					continue
+				resources.append({"id": resources.size(), "kind": kind, "x": x, "y": y, "owner": int(st["id"])})
+				break
 
 
 func _near_sea(x: int, y: int, r: int) -> bool:

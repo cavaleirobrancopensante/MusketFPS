@@ -456,6 +456,11 @@ func _build_resources() -> void:
 				_box(c + Vector3(0, 0.3, 0), Vector3(1.4, 0.5, 4.0), Color(0.4, 0.28, 0.16), 0.6) # a beached boat
 				_box(c + Vector3(2.5, 1.0, 0), Vector3(0.15, 2.0, 0.15), Color(0.35, 0.25, 0.15))
 				_box(c + Vector3(2.5, 1.3, 1.2), Vector3(0.05, 1.2, 2.4), Color(0.75, 0.7, 0.55)) # the net
+			"farm":
+				for k in 3:
+					_box(c + Vector3(-3.0 + k * 3.0, 0.2, 0), Vector3(2.6, 0.4, 6.0), Color(0.82, 0.72, 0.32) if k != 1 else Color(0.5, 0.6, 0.25), 0.15)
+				_box(c + Vector3(4.2, 0.9, -2.0), Vector3(1.6, 1.8, 1.4), Color(0.55, 0.42, 0.28))
+				_box(c + Vector3(4.2, 2.0, -2.0), Vector3(1.8, 0.5, 1.6), Color(0.72, 0.6, 0.3))
 			"spring":
 				_box(c + Vector3(0, 0.12, 0), Vector3(3.2, 0.24, 3.2), Color(0.35, 0.6, 0.85), 0.8)
 				for k in 5:
@@ -579,7 +584,7 @@ func _marker_for(p: Dictionary) -> Node3D:
 	var id := int(p["id"])
 	if _markers.has(id):
 		return _markers[id]
-	var fac: Dictionary = Lore.FACTIONS[p["faction"]]
+	var fac: Dictionary = Lore.FACTIONS.get(p["faction"], {"color": preload("res://scripts/colours.gd").flag()["field"]}) # ("ours": your work party)
 	var body := Color(0.3, 0.5, 0.2) if p["faction"] == "lizards" else Color(0.45, 0.4, 0.34)
 	var n := _figure(body, fac["color"], 0.9 + minf(float(p["size"]) / 25.0, 1.0))
 	var l := Label3D.new()
@@ -1128,7 +1133,7 @@ func _on_arrived(g: Dictionary) -> void:
 		"party":
 			var p := World.party_by_id(int(g["id"]))
 			_chase = {}
-			if not p.is_empty() and p["faction"] != "lizards":
+			if not p.is_empty() and p["faction"] != "lizards" and p["kind"] != "detachment":
 				_meet(p)
 
 
@@ -1189,7 +1194,16 @@ func _popup_close() -> void:
 var _work_panel: PanelContainer
 var _work_box: VBoxContainer
 var _work_id := -1
-var _work_n := -1
+var _work_sel: Array = [] # ids of the people chosen to work
+var _work_sel_set := false
+var _work_pick_open := false
+
+
+## The stepper: the first `n` hands (labourers first, then soldiers).
+func _work_set_count(n: int) -> void:
+	var kind := String(World.resource(_work_id).get("kind", ""))
+	_work_sel = Company.ranked(Company.hands_for_work(), kind).slice(0, n).map(func(m): return int(m["id"]))
+	_work_sel_set = true
 
 
 func _visit_resource(id: int) -> void:
@@ -1201,7 +1215,8 @@ func _visit_resource(id: int) -> void:
 		_visit_spring(id, spec)
 		return
 	if _work_id != id:
-		_work_n = -1
+		_work_sel = []
+		_work_sel_set = false
 	_work_id = id
 	if _work_panel == null:
 		_work_panel = _panel(Color(UI.WOOL, 0.98))
@@ -1262,6 +1277,13 @@ func _fill_work() -> void:
 	var d := _label(Lang.t(String(spec["text"])), 16, dim)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_work_box.add_child(d)
+	var owner := int(r.get("owner", -1))
+	if owner >= 0:
+		var ost := World.settlement(owner)
+		var ol := _label(Lang.t("The people of %s work it, and take what they get to market. Its stores: %s.") % [ost["name"],
+			preload("res://scripts/economy.gd").stock_line(owner)], 15, dim)
+		ol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_work_box.add_child(ol)
 	var need: Array = spec.get("tools", [])
 	var store_name := Company.item_label(String(spec.get("post_store", spec["store"]))).to_lower()
 	var wrap := func(l: Label) -> Label:
@@ -1289,6 +1311,18 @@ func _fill_work() -> void:
 		cv.add_child(_label(Lang.t("YOUR WORK PARTY HERE"), 20, gold))
 		cv.add_child(wrap.call(_label(Lang.t("%d soldiers and %d labourers, here since day %d.  Tools: %s.  Made so far: %s.") % [post["men"].size(), post["workers"].size(), int(post["since"]),
 			", ".join(tl) if not tl.is_empty() else Lang.t("none"), ", ".join(made) if not made.is_empty() else Lang.t("nothing yet")], 16, Color.WHITE)))
+		# Who's there: tap one to bring him back with you.
+		var who := HFlowContainer.new()
+		who.add_theme_constant_override("h_separation", 6)
+		who.add_theme_constant_override("v_separation", 6)
+		cv.add_child(who)
+		for m in post["workers"] + post["men"]:
+			var mid := int(m["id"])
+			var nm: String = String(m["name"]) if m.has("trade") else Company.title(m)
+			var rb := _button(Lang.t("%s  ↩") % nm, func(): Company.recall_one(id, mid); _fill_work())
+			rb.add_theme_font_size_override("font_size", 15)
+			rb.custom_minimum_size = Vector2(0, 44)
+			who.add_child(rb)
 		var row := HFlowContainer.new()
 		row.add_theme_constant_override("h_separation", 10)
 		cv.add_child(row)
@@ -1300,43 +1334,82 @@ func _fill_work() -> void:
 			var got := Company.recall_post(id)
 			_push_toast(Lang.t("The work party packs up and falls in with the wagon.") + ("  " + _got_text(got) if not got.is_empty() else ""))
 			_fill_work()))
-	# Who works: a stepper.
-	var avail: Array = Company.hands_for_work()
-	if _work_n < 0 or _work_n > avail.size():
-		_work_n = avail.size()
+	# Who works: everyone you choose, one by one (labourers, and which
+	# soldiers), or a number with the stepper (the best at it first: strong
+	# backs, and a labourer at his own trade).
+	var avail: Array = Company.ranked(Company.hands_for_work(), kind)
+	var ids: Array = avail.map(func(m): return int(m["id"]))
+	if _work_sel.is_empty() and not _work_sel_set:
+		_work_sel = ids.duplicate()
+		_work_sel_set = true
+	_work_sel = _work_sel.filter(func(x): return x in ids)
+	var chosen: Array = avail.filter(func(m): return int(m["id"]) in _work_sel)
+	var nsel := chosen.size()
 	var nl := Company.workers.size()
 	var step := HBoxContainer.new()
 	step.add_theme_constant_override("separation", 10)
 	_work_box.add_child(step)
 	step.add_child(_label(Lang.t("Hands:"), 20, gold))
 	for dn in [-5, -1]:
-		var b := _button("%d" % dn, func(): _work_n = maxi(0, _work_n + dn); _fill_work())
+		var b := _button("%d" % dn, func(): _work_set_count(maxi(0, nsel + dn)); _fill_work())
 		b.custom_minimum_size = Vector2(70, 54)
-		b.disabled = _work_n <= 0
+		b.disabled = nsel <= 0
 		step.add_child(b)
-	var nlab := _label("%d" % _work_n, 28, Color.WHITE)
+	var nlab := _label("%d" % nsel, 28, Color.WHITE)
 	nlab.custom_minimum_size = Vector2(60, 0)
 	nlab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	step.add_child(nlab)
 	for dn in [1, 5]:
-		var b2 := _button("+%d" % dn, func(): _work_n = mini(avail.size(), _work_n + dn); _fill_work())
+		var b2 := _button("+%d" % dn, func(): _work_set_count(mini(avail.size(), nsel + dn)); _fill_work())
 		b2.custom_minimum_size = Vector2(70, 54)
-		b2.disabled = _work_n >= avail.size()
+		b2.disabled = nsel >= avail.size()
 		step.add_child(b2)
-	var who := mini(_work_n, nl)
 	step.add_child(_label(Lang.t("of %d  (%d labourers, %d fit soldiers)") % [avail.size(), nl, avail.size() - nl], 17, dim))
-	var est := World.work_estimate(id, _work_n)
+	var pick := _button(Lang.t("HIDE THE LIST") if _work_pick_open else Lang.t("CHOOSE WHO"), func(): _work_pick_open = not _work_pick_open; _fill_work())
+	_work_box.add_child(pick)
+	if _work_pick_open:
+		_work_box.add_child(_label(Lang.t("Best at it first (★: strength and stamina, more for a labourer at his own trade)."), 14, dim))
+	if _work_pick_open:
+		# A button per person: tap to put them in or take them out.
+		var grid := HFlowContainer.new()
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
+		_work_box.add_child(grid)
+		for m in avail:
+			var mid := int(m["id"])
+			var on := mid in _work_sel
+			var txt := ""
+			var score := "★%d" % int(round(Company.aptitude(m, kind)))
+			if Company.workers.has(m):
+				txt = "%s\n%s  %s" % [m["name"], Company.trade_name(String(m["trade"])).to_lower(), score]
+			else:
+				txt = "%s\n%s  %s" % [Company.title(m), Lang.t(String(m.get("tag", "Musketeers"))), score]
+			var tb := _button(("✔ " if on else "") + txt, func():
+				if mid in _work_sel:
+					_work_sel.erase(mid)
+				else:
+					_work_sel.append(mid)
+				_fill_work())
+			tb.custom_minimum_size = Vector2(205, 62)
+			tb.add_theme_font_size_override("font_size", 15)
+			tb.modulate = Color(1, 1, 1) if on else Color(0.62, 0.62, 0.66)
+			grid.add_child(tb)
+		var allrow := HBoxContainer.new()
+		allrow.add_theme_constant_override("separation", 10)
+		_work_box.add_child(allrow)
+		allrow.add_child(_button(Lang.t("ALL"), func(): _work_sel = ids.duplicate(); _fill_work()))
+		allrow.add_child(_button(Lang.t("NONE"), func(): _work_sel = []; _fill_work()))
+		allrow.add_child(_button(Lang.t("LABOURERS ONLY"), func(): _work_sel = Company.workers.map(func(w): return int(w["id"])); _fill_work()))
+	var est := World.work_estimate(id, chosen)
 	var info := ""
 	var wait := World.harvest_wait(id)
 	if wait > 0.0:
 		info = Lang.t("You've worked it out for now: it gives again in %d days. A work party left here still brings in a little every day.") % ceili(wait / 24.0)
-	elif _work_n > 0:
+	elif nsel > 0:
 		info = Lang.t("%d hours' work for about %d to %d %s.") % [int(spec["hours"]), int(est["lo"]), int(est["hi"]), Company.item_label(String(spec["store"])).to_lower()]
-	if _work_n > 0 and not need.is_empty() and int(est["bare"]) > 0:
+	if nsel > 0 and not need.is_empty() and int(est["bare"]) > 0:
 		info += "  " + Lang.t("%d of them without a tool.") % int(est["bare"])
-	if who > 0:
-		info += "  " + Lang.t("%d labourers first, then soldiers.") % who
-	if _work_n > 0:
+	if nsel > 0:
 		info += "\n" + Lang.t("Left here as a work party: about %.1f %s a day (they feed themselves).") % [float(spec.get("daily", 0.3)) * float(est["eff"]), store_name]
 	if info != "":
 		_work_box.add_child(wrap.call(_label(info, 17, Color.WHITE)))
@@ -1345,7 +1418,7 @@ func _fill_work() -> void:
 	row2.add_theme_constant_override("v_separation", 10)
 	_work_box.add_child(row2)
 	var bw := _button(Lang.t("SET TO WORK"), func():
-		var got := World.gather(id, _work_n)
+		var got := World.gather(id, chosen)
 		_close_work()
 		if got.is_empty():
 			return
@@ -1356,15 +1429,16 @@ func _fill_work() -> void:
 		_push_toast(msg)
 		World.waiting = true
 		_rest_until = World.hours + float(got["hours"]))
-	bw.disabled = wait > 0.0 or _work_n <= 0
+	bw.disabled = wait > 0.0 or nsel <= 0
 	row2.add_child(bw)
 	var bp := _button(Lang.t("LEAVE THEM HERE"), func():
-		var n := Company.post_party(id, _work_n)
-		_work_n = -1
+		var n := Company.post_party(id, chosen)
+		_work_sel = []
+		_work_sel_set = false
 		_push_toast(Lang.t("%d stay behind to work the %s. Come back to collect what they make.") % [n, Lang.t(String(spec["name"])).to_lower()])
 		_refresh_resource_labels()
 		_fill_work())
-	bp.disabled = _work_n <= 0
+	bp.disabled = nsel <= 0
 	row2.add_child(bp)
 	if kind in ["game", "fish"]:
 		# Or go after it yourself.
@@ -1695,6 +1769,11 @@ func _meet(p: Dictionary) -> void:
 			text = Lang.t("Soldiers of %s. They watch you closely: strangers in red coats, armed with something they've never seen.") % Lore.FACTIONS[p["faction"]]["name"]
 		"villagers":
 			text = Lang.t("Country folk on their way to market. They tell you the lizards have been raiding to the south.")
+		"labourers":
+			var hs := World.settlement(int(p["home"]))
+			var site := World.resource(int(p.get("site", -1)))
+			text = Lang.t("People of %s with picks, axes and baskets, going to work the %s, or coming home from it.") % [hs.get("name", "?"),
+				Lang.t(String(World.RESOURCES.get(String(site.get("kind", "")), {}).get("name", "fields"))).to_lower()]
 		"traders":
 			text = Lang.t("Dwarf traders with pack ponies loaded with iron. They ask, very politely, how your guns work.")
 		"army":
@@ -1734,7 +1813,7 @@ func _meet(p: Dictionary) -> void:
 				_push_toast(Lang.t("%s's army will march with you for four days.") % World.lord_short(World.lord_of(p)))])
 		buttons.append([Lang.t("ATTACK"), _attack_party.bind(p)])
 	buttons.append([Lang.t("LEAVE"), _popup_close])
-	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "traders": "traders",
+	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "labourers": "villagers", "traders": "traders",
 		"deserters": "deserters", "army": "patrol"}.get(kind, "road"), {"faction": p.get("faction", "vell")})
 	_popup_open(World.party_label(p, mini(World.intel_level(p, 0.0), 2)), text, buttons)
 
@@ -1858,7 +1937,9 @@ func _event_choice(ev: Dictionary, key: String) -> void:
 ## Scouts: pick a direction and how far.
 var _scout_panel: PanelContainer
 var _scout_info: Label
-var _scout_far := false
+var _scout_days := 1
+var _scout_sel: Array = [] # ids chosen to go
+var _scout_people: HFlowContainer
 var _scout_shade: ColorRect # dims the map; tapping it closes the panel
 
 
@@ -1901,23 +1982,37 @@ func _build_scout_panel() -> void:
 	var x := _button("✕", _close_scouts)
 	x.custom_minimum_size = Vector2(58, 58)
 	head.add_child(x)
-	_scout_info = _label("", 18, Color.WHITE)
+	_scout_info = _label("", 16, Color.WHITE)
 	_scout_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_scout_info.custom_minimum_size = Vector2(560, 0)
 	v.add_child(_scout_info)
+	# How long they're gone: the longer, the further they go and the more they see.
 	var range_row := HBoxContainer.new()
 	range_row.add_theme_constant_override("separation", 10)
 	v.add_child(range_row)
-	var near := _button(Lang.t("NEAR: 1 man, a day"), func():
-		_scout_far = false
-		_refresh_scouts())
-	var far := _button(Lang.t("FAR: 2 men, two days"), func():
-		_scout_far = true
-		_refresh_scouts())
-	near.name = "near"
-	far.name = "far"
-	range_row.add_child(near)
-	range_row.add_child(far)
+	range_row.add_child(_label(Lang.t("Days out:"), 19, Color(0.95, 0.8, 0.45)))
+	var minus := _button("-", func(): _scout_days = maxi(1, _scout_days - 1); _refresh_scouts())
+	minus.custom_minimum_size = Vector2(64, 54)
+	range_row.add_child(minus)
+	var dl := _label("1", 26, Color.WHITE)
+	dl.name = "days"
+	dl.custom_minimum_size = Vector2(44, 0)
+	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	range_row.add_child(dl)
+	var plus := _button("+", func(): _scout_days = mini(World.SCOUT_MAX_DAYS, _scout_days + 1); _refresh_scouts())
+	plus.custom_minimum_size = Vector2(64, 54)
+	range_row.add_child(plus)
+	# Who goes: the best scouts first; tap to choose.
+	v.add_child(_label(Lang.t("Who goes (best scouts first: fitness, stamina, a good eye; hunters and natives know the land):"), 15, Color(0.72, 0.74, 0.8)))
+	var psc := UI.scroll()
+	psc.custom_minimum_size = Vector2(620, 104)
+	psc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(psc)
+	_scout_people = HFlowContainer.new()
+	_scout_people.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scout_people.add_theme_constant_override("h_separation", 6)
+	_scout_people.add_theme_constant_override("v_separation", 6)
+	psc.add_child(_scout_people)
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 8)
@@ -1943,27 +2038,54 @@ func _build_scout_panel() -> void:
 
 func _refresh_scouts() -> void:
 	var cands := World.scout_candidates()
-	var n := 2 if _scout_far else 1
-	var t := Lang.t("Scouts ride out, look around, and come back to the company wherever it is, with word of what they found: towns, roads, warbands. Some never come back, more often in the lizards' country.\n\n")
-	if cands.size() < n + 2:
-		t += Lang.t("Not enough fit men to spare.")
-	else:
-		var names: Array = cands.slice(0, n).map(func(m): return Company.surname_title(m))
-		t += Lang.t("Going: %s.") % ", ".join(names)
+	var ids: Array = cands.map(func(m): return int(m["id"]))
+	_scout_sel = _scout_sel.filter(func(x): return x in ids)
+	if _scout_sel.is_empty() and not cands.is_empty():
+		_scout_sel = [int(cands[0]["id"])]
+	(_scout_panel.find_child("days", true, false) as Label).text = "%d" % _scout_days
+	for c in _scout_people.get_children():
+		_scout_people.remove_child(c)
+		c.queue_free()
+	for m in cands.slice(0, 16):
+		var mid := int(m["id"])
+		var on := mid in _scout_sel
+		var nm: String = String(m["name"]) if Company.workers.has(m) else Company.surname_title(m)
+		var b := _button(("✔ " if on else "") + "%s  ★%d" % [nm, int(round(Company.aptitude(m, "scout")))], func():
+			if mid in _scout_sel:
+				_scout_sel.erase(mid)
+			else:
+				_scout_sel.append(mid)
+			_refresh_scouts())
+		b.add_theme_font_size_override("font_size", 15)
+		b.custom_minimum_size = Vector2(0, 46)
+		b.modulate = Color.WHITE if on else Color(0.62, 0.62, 0.66)
+		_scout_people.add_child(b)
+	var chosen: Array = cands.filter(func(m): return int(m["id"]) in _scout_sel)
+	var best := 0.0
+	for m in chosen:
+		best = maxf(best, Company.aptitude(m, "scout"))
+	var need := World.scout_supplies(chosen.size(), _scout_days)
+	var risk := World.scout_risk(_scout_days, chosen.size(), best)
+	var t := Lang.t("The longer they're out, the further they go and the more they see; more of them see more, and are safer.\n")
+	t += Lang.t("%d going for %d days: about %d leagues out. They take %d rations and %d days' water (you have %d and %d). Risk: %s.") % [
+		chosen.size(), _scout_days, int(World.SCOUT_PER_DAY * _scout_days * 0.5), int(need["rations"]), int(need["water"]),
+		int(Company.stores.get("rations", 0)), int(Company.stores.get("water", 0)),
+		Lang.t("low") if risk < 0.1 else (Lang.t("some") if risk < 0.2 else (Lang.t("high") if risk < 0.35 else Lang.t("very high")))]
 	for sc in World.scouts:
 		t += Lang.t("\nOut now: %s, back around day %d.") % [", ".join(sc["names"]), 1 + int(float(sc["back"]) / 24.0)]
 	_scout_info.text = t
-	(_scout_panel.find_child("near", true, false) as Button).modulate = Color(1, 0.85, 0.4) if not _scout_far else Color.WHITE
-	(_scout_panel.find_child("far", true, false) as Button).modulate = Color(1, 0.85, 0.4) if _scout_far else Color.WHITE
 
 
 func _send_scouts(dir: Vector2) -> void:
-	var sc := World.send_scouts(dir, _scout_far)
+	var cands := World.scout_candidates()
+	var chosen: Array = cands.filter(func(m): return int(m["id"]) in _scout_sel)
+	var sc := World.send_scouts(dir, _scout_days, chosen)
+	if sc.has("error"):
+		_push_toast(String(sc["error"]))
+		return
 	_close_scouts()
-	if sc.is_empty():
-		_push_toast(Lang.t("Not enough fit men to spare."))
-	else:
-		_push_toast(Lang.t("%s set out.") % ", ".join(sc["names"]))
+	_scout_sel = []
+	_push_toast(Lang.t("%s set out.") % ", ".join(sc["names"]))
 
 
 func _on_scouts_back(r: Dictionary) -> void:
@@ -2379,7 +2501,7 @@ func _run_test(delta: float) -> void:
 		return
 	if int(get_meta("scouted", 0)) == 0 and _test_t > 1.0:
 		set_meta("scouted", 1)
-		var sc := World.send_scouts(Vector2(1, -1), true)
+		var sc := World.send_scouts(Vector2(1, -1), 2, World.scout_candidates().slice(0, 2))
 		print("MAPTEST: scouts out: ", sc.get("names", []))
 	if not World.moving() and not World.waiting:
 		var stage := int(get_meta("stage", 0))
