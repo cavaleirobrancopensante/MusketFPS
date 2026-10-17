@@ -502,6 +502,11 @@ func _draw() -> void:
 
 ## A gold marker over where you need to go (or an arrow at the edge of the
 ## screen if it's behind you), with its name and distance.
+## The gold marker for where you should go (the fallen Major, the cliff
+## path...). In view: a diamond over it, with its name and distance, and a
+## small arrow bobbing down at it. Out of view (to the side, or behind
+## you): a big arrow at the edge of the screen pointing the way to turn,
+## "TURN LEFT/RIGHT" under it, pulsing so it can't be missed.
 func _draw_objective() -> void:
 	var obj: Dictionary = battle.objective
 	if obj.is_empty():
@@ -513,21 +518,49 @@ func _draw_objective() -> void:
 	var dist: float = player.global_position.distance_to(obj["pos"])
 	var label := "%s  %d m" % [obj["label"], int(dist)]
 	var gold := Color(0.95, 0.78, 0.3, 0.95)
-	var margin := 70.0
-	if not cam.is_position_behind(world):
-		var p := cam.unproject_position(world)
-		p.x = clampf(p.x, margin, size.x - margin)
-		p.y = clampf(p.y, margin + 60.0, size.y - margin)
-		draw_colored_polygon(PackedVector2Array([p + Vector2(0, -14), p + Vector2(11, 0), p + Vector2(0, 14), p + Vector2(-11, 0)]), gold)
-		_text_center(label, p + Vector2(2, -30), 20, Color(0, 0, 0, 0.6))
-		_text_center(label, p + Vector2(0, -32), 20, gold)
-		return
-	# Behind you: an arrow at the bottom of the screen, toward the side it's on.
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.008)
+	var margin := 90.0
 	var local: Vector3 = cam.global_transform.affine_inverse() * world
-	var x := size.x * 0.5 + clampf(local.x * 8.0, -size.x * 0.3, size.x * 0.3)
-	var p2 := Vector2(x, size.y - 40.0)
-	draw_colored_polygon(PackedVector2Array([p2 + Vector2(-16, -10), p2 + Vector2(16, -10), p2 + Vector2(0, 10)]), gold)
-	_text_center(label + "  (behind you)", p2 + Vector2(0, -30), 20, gold)
+	var in_view := false
+	var p := Vector2.ZERO
+	if not cam.is_position_behind(world):
+		p = cam.unproject_position(world)
+		in_view = p.x > margin and p.x < size.x - margin and p.y > margin and p.y < size.y - margin
+	if in_view:
+		var bob := 6.0 * pulse
+		draw_colored_polygon(PackedVector2Array([p + Vector2(0, -14), p + Vector2(11, 0), p + Vector2(0, 14), p + Vector2(-11, 0)]), gold)
+		var a := p + Vector2(0, -58 - bob)
+		draw_colored_polygon(PackedVector2Array([a + Vector2(-13, -14), a + Vector2(13, -14), a + Vector2(0, 6)]), gold)
+		_text_center(label, p + Vector2(2, -82 - bob), 20, Color(0, 0, 0, 0.6))
+		_text_center(label, p + Vector2(0, -84 - bob), 20, gold)
+		return
+	# Off screen: which way to turn. (Behind you counts as whichever side
+	# it's nearer; straight behind, the right.)
+	# (Mostly sideways: it's which way to turn that matters, not up or down.)
+	var dir := Vector2(local.x, clampf(-local.y, -absf(local.x), absf(local.x)) * 0.35)
+	if local.z > 0.0:
+		dir.x = (1.0 if local.x >= 0.0 else -1.0) * maxf(absf(dir.x), absf(local.z))
+	if dir.length() < 0.001:
+		dir = Vector2.RIGHT
+	dir = dir.normalized()
+	# Kept to the screen's sides (where your eye goes when turning), never
+	# under the buttons along the top.
+	var c := size * 0.5
+	var half := Vector2(size.x * 0.5 - 70.0, size.y * 0.5 - 150.0)
+	var k := minf(half.x / maxf(absf(dir.x), 0.001), half.y / maxf(absf(dir.y), 0.001))
+	var at := c + dir * k
+	var r := 34.0 + 8.0 * pulse
+	var side := dir.orthogonal()
+	var tri := PackedVector2Array([at + dir * r, at - dir * r * 0.6 + side * r * 0.8, at - dir * r * 0.6 - side * r * 0.8])
+	draw_colored_polygon(tri, Color(0, 0, 0, 0.45))
+	var tri2 := PackedVector2Array([at + dir * (r - 5.0), at - dir * (r - 5.0) * 0.6 + side * (r - 5.0) * 0.8, at - dir * (r - 5.0) * 0.6 - side * (r - 5.0) * 0.8])
+	draw_colored_polygon(tri2, gold)
+	var turn := "TURN RIGHT" if dir.x > 0.0 else "TURN LEFT"
+	var tp := at - dir * (r + 34.0) + Vector2(0, 6)
+	tp.x = clampf(tp.x, 160.0, size.x - 160.0)
+	_text_center(label, tp + Vector2(2, 2), 20, Color(0, 0, 0, 0.6))
+	_text_center(label, tp, 20, gold)
+	_text_center(turn, tp + Vector2(0, 24), 17, Color(gold, 0.7 + 0.3 * pulse))
 
 
 func _draw_hint() -> void:

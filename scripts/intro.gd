@@ -123,6 +123,12 @@ func _ready() -> void:
 	_ship = Props.ship()
 	_ship.position = Vector3(-25, 0, 300)
 	add_child(_ship)
+	# A rail along both sides of the waist, for the men to hold on to.
+	for sx in [-1.0, 1.0]:
+		Props._box(_ship, Vector3(0.1, 0.1, 17.0), Props.WOOD, Vector3(sx * 2.42, 3.3, 0.0))
+		for k in 9:
+			Props._box(_ship, Vector3(0.08, 0.95, 0.08), Props.WOOD, Vector3(sx * 2.42, 2.85, -8.0 + k * 2.0))
+	_build_storm_crew()
 
 	_cam = Camera3D.new()
 	_cam.fov = 60.0
@@ -269,70 +275,116 @@ func _build_shore() -> void:
 	Look.far_hills(_beach, rng, 230.0, Color(0.32, 0.38, 0.32), 14, true)
 
 
-## On the wreck: a spar run out over the low rail, a tackle, a gun swaying
-## down into a boat; men hauling on the fall on deck, two in the boat.
+## The storm: men at the rail holding on with both hands, legs braced,
+## riding the roll with the ship (they're parented to her, posed by hand, so
+## nothing in them twitches).
+var _storm_crew: Array = []
+
+
+func _build_storm_crew() -> void:
+	var spots := [[1.6, -3.0, 1.0], [1.7, -1.4, 1.0], [-1.7, 0.8, -1.0], [-1.6, 2.6, -1.0], [1.6, 4.2, 1.0]]
+	for sp in spots:
+		var r = _man(_ship, Vector3(float(sp[0]), 2.35, float(sp[1])), Vector3(float(sp[2]), 0, 0),
+			{"torso": "coat", "head": "shako", "primary": "none"}, true)
+		r.t_hand_r = Vector3(0.24, 1.02, -0.62)
+		r.t_hand_l = Vector3(-0.24, 1.02, -0.62)
+		r.t_lean = 0.28
+		r.pose_rate = 4.0
+		_storm_crew.append(r)
+
+
+## On the wreck: a derrick, its boom stepped on the deck and swung out over
+## the side, a block at its head; the tackle from the block to a sling round
+## the gun. The gun is hoisted off the deck, the boom swings out, and the
+## men on the fall ease it down hand over hand into the launch alongside,
+## two men in her steadying it in.
+const BOOM_HEEL := Vector3(1.9, 2.4, 1.5) # (ship-local)
+const BOOM_LEN := 6.0
+const BOOM_ELEV := 0.82 # (radians above the deck)
+const BOOM_IN := 2.27 # its swing when the gun is hoisted off the deck (inboard)
+const BOOM_OUT := 0.17 # ...and out over the side
+const HOOK := 1.6 # from the gun's sling hook down to the ground under it
+
+
 func _build_lowering() -> void:
 	var deck_men: Array = []
 	for i in 3:
-		var r = _man(_ship, Vector3(-0.6 + i * 0.55, 2.35, 0.2 + i * 0.9), Vector3(-1, 0, 0.3), {"head": "" if i == 1 else "shako", "torso": "shirt"}, false)
-		r.anim = "haul"
+		var r = _man(_ship, BOOM_HEEL + Vector3(-1.3 - i * 0.75, -0.05, -0.4 + i * 0.25), Vector3(1, 0, 0.1),
+			{"head": "" if i == 1 else "shako", "torso": "shirt", "primary": "none"}, true)
 		deck_men.append(r)
-	var spar := Props._box(_ship, Vector3(0.18, 0.18, 4.2), Props.WOOD, Vector3(3.4, 4.0, 1.5), Vector3(0, 90, -22))
-	var boat := _make_boat(false, 3)
+	var boom := Node3D.new()
+	boom.position = BOOM_HEEL
+	_ship.add_child(boom)
+	Props._box(boom, Vector3(0.2, 0.2, BOOM_LEN), Props.WOOD, Vector3(0, 0, -BOOM_LEN * 0.5))
+	Props._box(boom, Vector3(0.34, 0.3, 0.34), Props.WOOD_DARK, Vector3(0, -0.1, -BOOM_LEN)) # the block
+	var boat := _make_boat(false, 3, true)
 	add_child(boat["node"])
 	var gun := Props.cannon()
 	add_child(gun)
 	var in_boat: Array = []
 	for i in 2:
-		var r2 = _man(boat["node"], Vector3(-0.35 + i * 0.7, 0.05, 0.9 - i * 1.6), Vector3(0, 0, -1), {"torso": "shirt", "head": ""}, true)
+		var r2 = _man(boat["node"], Vector3(0.0, 0.05, -2.2 + i * 4.4), Vector3(0, 0, 1 if i == 0 else -1), {"torso": "shirt", "head": ""}, true)
 		in_boat.append(r2)
-	_lower = {"spar": spar, "boat": boat, "gun": gun, "rope": _rope(self), "fall": _rope(self), "deck": deck_men, "hands": in_boat}
+	var ropes := {}
+	for k in ["tackle_a", "tackle_b", "sling_a", "sling_b", "along", "fall", "guy_a", "guy_b"]:
+		ropes[k] = _rope(self)
+	_lower = {"boom": boom, "boat": boat, "gun": gun, "ropes": ropes, "deck": deck_men, "hands": in_boat}
 	(boat["node"] as Node3D).visible = false
 	gun.visible = false
-	spar.visible = false
+	boom.visible = false
 
 
 ## A ship's boat, open, with thwarts and an oar for every rower; with a gun
 ## lashed amidships. Returns {"node", "oars", "cox", "bow_man", "length"};
 ## each oar is [pivot, side, rower].
-func _make_boat(with_gun: bool, rows: int) -> Dictionary:
+## The rowers face the stern; each sits on a thwart with his rowlock just
+## aft of him, so the oar's handle is in front of his chest: at the catch
+## he leans forward with his arms out toward the stern, at the finish he
+## has leant back and drawn the handle in to his ribs. A launch (`big`) is
+## broad and long enough to take a gun amidships, the rowers fore and aft.
+func _make_boat(with_gun: bool, rows: int, big := false) -> Dictionary:
 	var b := Node3D.new()
-	var length := 7.4 if with_gun else 5.8
+	big = big or with_gun
+	var length := 9.0 if big else 5.8
+	var beam := 2.5 if big else 1.7
+	var hw := beam * 0.5
 	var hull := Props.WOOD.darkened(0.15)
-	Props._box(b, Vector3(1.7, 0.12, length), hull, Vector3(0, 0.0, 0)) # bottom
+	Props._box(b, Vector3(beam, 0.12, length), hull, Vector3(0, 0.0, 0)) # bottom
 	for side in [-1.0, 1.0]:
-		Props._box(b, Vector3(0.08, 0.55, length), hull, Vector3(side * 0.86, 0.25, 0))
-		Props._box(b, Vector3(0.12, 0.06, length), Props.WOOD, Vector3(side * 0.86, 0.55, 0)) # gunwale
-	Props._box(b, Vector3(1.0, 0.55, 1.2), hull, Vector3(0, 0.25, -length * 0.5 - 0.35), Vector3(0, 45, 0)) # bow
-	Props._box(b, Vector3(1.72, 0.55, 0.1), hull, Vector3(0, 0.25, length * 0.5)) # transom
+		Props._box(b, Vector3(0.08, 0.6, length), hull, Vector3(side * hw, 0.27, 0))
+		Props._box(b, Vector3(0.12, 0.06, length), Props.WOOD, Vector3(side * hw, 0.6, 0)) # gunwale
+	Props._box(b, Vector3(beam * 0.6, 0.6, beam * 0.7), hull, Vector3(0, 0.27, -length * 0.5 - beam * 0.2), Vector3(0, 45, 0)) # bow
+	Props._box(b, Vector3(beam + 0.02, 0.6, 0.1), hull, Vector3(0, 0.27, length * 0.5)) # transom
 	var oars: Array = []
 	var zs: Array = []
-	var n := rows + (1 if with_gun else 0)
-	for i in n:
-		var z := -length * 0.5 + 1.2 + i * ((length - 2.7) / maxf(n - 1, 1))
-		if with_gun and absf(z - 0.1) < 1.15:
-			continue
-		zs.append(z)
+	if big:
+		# Two banks forward of the gun's place and two aft of it.
+		zs = [-length * 0.5 + 1.3, -length * 0.5 + 2.4, length * 0.5 - 2.3, length * 0.5 - 1.2]
+		zs = zs.slice(0, maxi(2, rows))
+	else:
+		for i in rows:
+			zs.append(-length * 0.5 + 1.1 + i * ((length - 2.6) / maxf(rows - 1, 1)))
 	for z in zs:
-		Props._box(b, Vector3(1.6, 0.06, 0.25), Props.WOOD, Vector3(0, 0.32, z - 0.15)) # thwart
+		Props._box(b, Vector3(beam - 0.1, 0.06, 0.26), Props.WOOD, Vector3(0, 0.34, z)) # thwart
 		for side in [-1.0, 1.0]:
 			var pivot := Node3D.new()
-			pivot.position = Vector3(side * 0.86, 0.6, z - 0.45)
+			pivot.position = Vector3(side * hw, 0.66, z + 0.5) # the rowlock, aft of him
 			b.add_child(pivot)
+			var inboard := hw - 0.12
 			# The oar: the handle inboard, the loom across the gunwale, the blade out.
-			Props._box(pivot, Vector3(3.3, 0.05, 0.05), Props.WOOD.lightened(0.15), Vector3(side * 0.9, 0, 0))
-			Props._box(pivot, Vector3(0.6, 0.02, 0.14), Props.WOOD.lightened(0.15), Vector3(side * 2.35, 0, 0))
-			var rower = _man(b, Vector3(side * 0.32, 0.06, z), Vector3(0, 0, 1),
+			Props._box(pivot, Vector3(inboard + 2.6, 0.05, 0.05), Props.WOOD.lightened(0.15), Vector3(side * (2.6 - inboard) * 0.5, 0, 0))
+			Props._box(pivot, Vector3(0.6, 0.02, 0.15), Props.WOOD.lightened(0.15), Vector3(side * 2.35, 0, 0))
+			var rower = _man(b, Vector3(side * hw * 0.42, 0.06, z), Vector3(0, 0, 1),
 				{"primary": "none", "torso": "shirt" if randf() < 0.5 else "coat", "head": "" if randf() < 0.4 else "cap"}, true)
 			rower.anim = "kneel"
-			oars.append([pivot, side, rower])
+			oars.append([pivot, side, rower, inboard])
 	if with_gun:
 		var g := Props.cannon()
 		g.scale = Vector3.ONE * 0.85
-		g.position = Vector3(0, 0.05, 0.1)
+		g.position = Vector3(0, 0.1, 0.0)
 		b.add_child(g)
-	var cox = _man(b, Vector3(0, 0.06, length * 0.5 - 0.4), Vector3(0, 0, -1), {"head": "tricorne", "torso": "coat", "primary": "none"}, true)
-	var bow_man = _man(b, Vector3(0, 0.06, -length * 0.5 + 0.2), Vector3(0, 0, -1), {}, false)
+	var cox = _man(b, Vector3(0, 0.06, length * 0.5 - 0.45), Vector3(0, 0, -1), {"head": "tricorne", "torso": "coat", "primary": "none"}, true)
+	var bow_man = _man(b, Vector3(0, 0.06, -length * 0.5 + 0.3), Vector3(0, 0, -1), {}, false)
 	bow_man.anim = "idle"
 	return {"node": b, "oars": oars, "cox": cox, "bow_man": bow_man, "length": length}
 
@@ -411,7 +463,7 @@ func _build_landing() -> void:
 				r2.anim = "haul"
 				men.append([r2, side, k])
 		hauls.append({"gun": gun, "men": men, "ropes": ropes, "x": gun.position.x})
-	var major = _man(root, Vector3(10, 0, 30), Vector3(-0.6, 0, 1), {}, true, "officer")
+	var major = _man(root, Vector3(-7.5, 0, 33), Vector3(0.3, 0, 1), {}, true, "officer") # (off to the side, clear of the shot)
 	_landing = {"root": root, "boats": boats, "waders": waders, "hauls": hauls, "major": major}
 
 
@@ -602,7 +654,9 @@ func _process(delta: float) -> void:
 			_surf.volume_db = -12.0
 			(_lower["boat"]["node"] as Node3D).visible = true
 			(_lower["gun"] as Node3D).visible = true
-			(_lower["spar"] as Node3D).visible = true
+			(_lower["boom"] as Node3D).visible = true
+			for r in _storm_crew:
+				(r.get_parent() as Node3D).visible = false
 		_shot_guns(t - T_GUNS, delta)
 	elif t < T_LANDING:
 		_shot_boats(t - T_BOATS, delta)
@@ -663,41 +717,112 @@ func _rock_ship(t: float, amount: float) -> void:
 	_ship.position.y = sin(t * 1.1) * 0.8 * amount
 
 
-## The guns: from the spar over the wreck's low rail, a gun swings down on
-## its tackle into the boat below; men on deck haul on the fall, the two in
-## the boat reach up to guide it in. Low from the water, looking up.
+## The guns: the derrick on the wreck hoists a gun off the deck, swings it
+## out over the side, and the men on the fall lower it hand over hand into
+## the launch alongside, where two men take it and guide it onto its chocks.
+## Low from the water, looking up.
+##   0.0-1.8  hoist off the deck
+##   1.8-4.0  the boom swings out
+##   4.0-8.0  lowered, steadily, swaying less as it nears the boat
+func _boom_tip(swing: float) -> Vector3:
+	var d := Vector3(cos(BOOM_ELEV) * cos(swing), sin(BOOM_ELEV), cos(BOOM_ELEV) * sin(swing))
+	return BOOM_HEEL + d * BOOM_LEN
+
+
 func _shot_guns(t: float, delta: float) -> void:
-	var tip: Vector3 = _ship.global_transform * Vector3(5.3, 4.9, 1.5) # the spar's end, over the high side
+	var boom: Node3D = _lower["boom"]
+	var swing := lerpf(BOOM_IN, BOOM_OUT, smoothstep(1.8, 4.0, t))
+	var tip_l := _boom_tip(swing)
+	boom.transform = Transform3D(Basis.looking_at(tip_l - BOOM_HEEL, Vector3.UP), BOOM_HEEL)
+	var xf := _ship.global_transform
+	var tip: Vector3 = xf * tip_l
+	var yaw := atan2(-(xf.basis.z).x, -(xf.basis.z).z) + PI # the ship's heading, laid flat
+	# The launch lies alongside under the boom's outboard reach.
+	var out_tip: Vector3 = xf * _boom_tip(BOOM_OUT)
 	var boat: Node3D = _lower["boat"]["node"]
-	var boat_at := Vector3(tip.x, 0.1 + sin(t * 1.4) * 0.12, tip.z)
-	boat.position = boat_at
-	boat.rotation = Vector3(sin(t * 1.1) * 0.03, _ship.rotation.y + PI * 0.5, sin(t * 1.3) * 0.05)
-	var k := smoothstep(0.5, 7.5, t)
+	boat.position = Vector3(out_tip.x, 0.08 + sin(t * 1.4) * 0.08, out_tip.z)
+	boat.rotation = Vector3(sin(t * 1.1) * 0.02, yaw, sin(t * 1.3) * 0.03)
+	var seat := boat.global_transform * Vector3(0, 0.12, 0)
+	# Where the gun sat on the deck: under the boom's inboard reach.
+	var in_tip: Vector3 = xf * _boom_tip(BOOM_IN)
+	var deck_y := (xf * Vector3((xf.affine_inverse() * in_tip).x, 2.35, (xf.affine_inverse() * in_tip).z)).y
+	var lifted := in_tip.y - (deck_y + 1.3) - HOOK # rope out when it's clear of the deck
+	var drop: float
+	if t < 1.8:
+		drop = lerpf(in_tip.y - deck_y - HOOK, lifted, smoothstep(0.0, 1.8, t))
+	elif t < 4.0:
+		drop = lifted
+	else:
+		drop = lerpf(lifted, tip.y - seat.y - HOOK, smoothstep(4.0, 8.0, t))
+	var hook := tip - Vector3(0, drop, 0)
 	var gun: Node3D = _lower["gun"]
-	var hang := tip + Vector3(0, -1.6, 0)
-	var seat := boat.global_transform * Vector3(0, 0.15, 0.0)
-	var sway := Vector3(sin(t * 1.7), 0, cos(t * 1.3)) * 0.25 * (1.0 - k)
-	gun.global_position = hang.lerp(seat, k) + sway
-	gun.rotation = Vector3(sin(t * 1.2) * 0.12 * (1.0 - k), boat.rotation.y + 0.3 * (1.0 - k), sin(t * 0.9) * 0.1 * (1.0 - k))
-	_rope_between(_lower["rope"], tip, gun.global_position + Vector3(0, 1.05, 0))
-	var deck_man: Node3D = _lower["deck"][0]
-	_rope_between(_lower["fall"], tip, deck_man.global_position + Vector3(0, 1.0, 0))
-	# The men in the boat: hands up to the gun as it comes down.
-	for r in _lower["hands"]:
-		var g := gun.global_position + Vector3(0, 0.9, 0)
-		var to: Vector3 = (g - r.global_position) * Vector3(1, 0, 1)
-		if to.length_squared() > 0.01:
-			r.facing = to.normalized()
-		_hands(r, g + Vector3(0.12, 0, 0), g - Vector3(0.12, 0, 0))
+	# It swings a little on the tackle, less once the boat men have it.
+	var free := 1.0 - smoothstep(6.5, 8.0, t)
+	var sway := Vector3(sin(t * 1.6), 0, cos(t * 1.2)) * 0.12 * free
+	gun.global_position = hook - Vector3(0, HOOK, 0) + sway
+	gun.rotation = Vector3(sin(t * 1.3) * 0.05 * free, yaw + sin(t * 0.7) * 0.12 * free, sin(t * 1.1) * 0.04 * free)
+	var g := gun.global_transform
+	var rp: Dictionary = _lower["ropes"]
+	var hook_at := gun.global_position + Vector3(0, HOOK, 0)
+	# The tackle (two parts from the block to the hook), the sling round the
+	# barrel, the fall from the block back along the boom to the heel and
+	# down to the men on deck.
+	var side := (xf.basis * Vector3(1, 0, 0)).normalized() * 0.07
+	_rope_between(rp["tackle_a"], tip + side, hook_at + side)
+	_rope_between(rp["tackle_b"], tip - side, hook_at - side)
+	_rope_between(rp["sling_a"], hook_at, g * Vector3(0, 0.95, -1.0))
+	_rope_between(rp["sling_b"], hook_at, g * Vector3(0, 0.95, 0.55))
+	var heel: Vector3 = xf * (BOOM_HEEL + Vector3(0, 0.25, 0))
+	_rope_between(rp["along"], tip + Vector3(0, 0.15, 0), heel)
+	var deck_men: Array = _lower["deck"]
+	var lead: Node3D = deck_men[deck_men.size() - 1]
+	_rope_between(rp["fall"], heel, lead.global_position + Vector3(0, 1.0, 0))
+	# The guys that swing the boom, from its head to the ship's side.
+	_rope_between(rp["guy_a"], tip, xf * Vector3(2.4, 3.3, -3.5))
+	_rope_between(rp["guy_b"], tip, xf * Vector3(2.4, 3.3, 6.5))
+	# The men on the fall: hand over hand, leaning back against the weight.
+	for i in deck_men.size():
+		var r = deck_men[i]
+		var u := t * 1.4 + i * 0.35
+		var reach := 0.5 + 0.5 * sin(u * TAU * 0.5)
+		r.t_hand_r = Vector3(0.05, 1.05 + 0.12 * reach, -0.45 - 0.15 * reach)
+		r.t_hand_l = Vector3(-0.05, 0.98 - 0.08 * reach, -0.25 + 0.1 * reach)
+		r.t_lean = -0.22
+		r.pose_rate = 8.0
 		r.anim_time += delta
+	# The men in the boat: arms up to the gun as it comes within reach.
+	for r2 in _lower["hands"]:
+		var near: float = clampf(1.0 - (gun.global_position.y - (r2.global_position.y + 0.3)) / 2.5, 0.0, 1.0)
+		var gp: Vector3 = gun.global_transform * Vector3(0, 0.95, 0)
+		var to: Vector3 = (gp - r2.global_position) * Vector3(1, 0, 1)
+		if to.length_squared() > 0.01:
+			r2.facing = to.normalized()
+		if near > 0.05:
+			var rest_r: Vector3 = r2.global_transform * Vector3(0.28, 0.9, -0.1)
+			var rest_l: Vector3 = r2.global_transform * Vector3(-0.28, 0.9, -0.1)
+			_hands(r2, rest_r.lerp(gp + Vector3(0.15, 0, 0), near), rest_l.lerp(gp - Vector3(0.15, 0, 0), near))
+		else:
+			r2.t_hand_r = Vector3(0.25, 0.92, -0.2)
+			r2.t_hand_l = Vector3(-0.25, 0.92, -0.2)
+		r2.anim_time += delta
+	# The launch's rowers sit easy, oars tossed upright.
 	for o in _lower["boat"]["oars"]:
-		(o[0] as Node3D).rotation = Vector3(0, 0.0, 0.3 * float(o[1]))
-		_hands(o[2], (o[0] as Node3D).global_position + Vector3(0, 0.3, 0), (o[0] as Node3D).global_position + Vector3(0, 0.1, 0))
-	# Low on the water off the wreck's bow quarter, looking up at the hull,
-	# the spar and the gun coming down; a slow drift.
-	var at: Vector3 = _ship.global_transform * Vector3(12.0 + t * 0.15, 2.2, -6.0 + t * 0.3)
-	at.y = 1.4
-	_set_cam(at, gun.global_position.lerp(tip, 0.3) + Vector3(0, 0.3, 0), 46.0)
+		var pv: Node3D = o[0]
+		pv.rotation = Vector3(0, 0.0, 1.25 * float(o[1]))
+		var rw = o[2]
+		rw.t_hand_r = Vector3(0.12, 0.85, -0.3)
+		rw.t_hand_l = Vector3(-0.12, 0.8, -0.3)
+		rw.t_lean = 0.1
+	# Low on the water off the bow quarter, looking up at the hull, the boom
+	# and the gun coming down; a slow drift.
+	# Out from the launch, away from the hull, a little toward the bow.
+	var outward := (boat.global_position - xf.origin) * Vector3(1, 0, 1)
+	outward = outward.normalized()
+	var fwd := Vector3(-sin(yaw), 0, -cos(yaw))
+	var at: Vector3 = boat.global_position + outward * (10.5 - t * 0.15) + fwd * 4.5
+	at.y = 1.9
+	var look := tip.lerp(seat, 0.55)
+	_set_cam(at, look + Vector3(0, -0.4, 0), 44.0)
 
 
 ## Rowing: every boat pulls in time to its cox's beat; oars dip, sweep and
@@ -718,39 +843,44 @@ func _shot_boats(t: float, delta: float) -> void:
 	_set_cam(at, hero.global_position + Vector3(-1.0, 1.1, -2.0 + t * 0.12), 58.0)
 
 
-## One stroke cycle for a boat's oars and rowers.
+## One stroke cycle for a boat's oars and rowers. The drive (blade in the
+## water, the rower leaning back and drawing the handle to his ribs) takes
+## a little under half the cycle; the recovery (blade feathered just clear
+## of the water, the rower swinging forward with his arms out) the rest.
 func _row(bd: Dictionary, t: float, delta: float) -> void:
-	var period := 2.3
+	var period := 2.4
 	var u := fmod(t / period + float(bd.get("phase", 0.0)), 1.0)
-	# Drive (blade in, pulling) for the first half, recovery after.
-	var sweep := 0.0
+	var sweep := 0.0 # + toward the stern (the catch), - toward the bow (the finish)
 	var dip := 0.0
 	var lean := 0.0
-	if u < 0.45:
-		var d := smoothstep(0.0, 0.45, u)
-		sweep = lerpf(0.42, -0.34, d)
-		dip = 0.13
-		lean = lerpf(0.42, -0.28, d)
+	if u < 0.42:
+		var d := smoothstep(0.0, 0.42, u)
+		sweep = lerpf(0.5, -0.38, d)
+		dip = 0.16 * sin(d * PI) + 0.04
+		lean = lerpf(0.42, -0.2, d)
 	else:
-		var r := smoothstep(0.45, 1.0, u)
-		sweep = lerpf(-0.34, 0.42, r)
-		dip = -0.06
-		lean = lerpf(-0.28, 0.42, r)
+		var r := smoothstep(0.42, 1.0, u)
+		sweep = lerpf(-0.38, 0.5, r)
+		dip = -0.08 # (feathered, clear of the water)
+		lean = lerpf(-0.2, 0.42, r)
 	for o in bd["oars"]:
 		var pivot: Node3D = o[0]
 		var side: float = o[1]
+		var inboard: float = o[3] if o.size() > 3 else 0.72
 		pivot.rotation = Vector3(0.0, sweep * side, -dip * side)
 		var rower = o[2]
-		var handle := pivot.global_transform * Vector3(-side * 0.72, 0.0, 0.0)
-		var along := (pivot.global_transform.basis * Vector3(side, 0, 0)).normalized()
-		_hands(rower, handle - along * 0.06, handle - along * 0.32)
+		# Both hands on the handle, a hand's breadth apart.
+		var handle: Vector3 = pivot.global_transform * Vector3(-side * (inboard - 0.08), 0.0, 0.0)
+		var along: Vector3 = (pivot.global_transform.basis * Vector3(side, 0, 0)).normalized()
+		_hands(rower, handle - along * 0.04, handle - along * 0.26)
 		rower.t_lean = lean
+		rower.pose_rate = 12.0
 		rower.anim = "kneel"
 		rower.anim_time += delta
-	# The cox in the stern, beating time with his arm.
+	# The cox in the stern, calling the stroke with a sweep of his arm.
 	var cox = bd["cox"]
 	var beat := sin(u * TAU)
-	cox.t_hand_r = Vector3(0.28, 1.35 + 0.25 * maxf(0.0, beat), -0.35)
+	cox.t_hand_r = Vector3(0.28, 1.3 + 0.22 * maxf(0.0, beat), -0.32)
 	cox.t_hand_l = Vector3(-0.25, 0.95, 0.0)
 	cox.anim_time += delta
 
@@ -797,7 +927,7 @@ func _shot_landing(t: float, delta: float) -> void:
 	mj.t_grip = Vector3(0.38, 1.85, -0.5)
 	mj.t_dir = Vector3(0.1, 0.55, -1)
 	mj.t_hand_l = Vector3(-0.25, 1.0, 0.0)
-	mj.facing = Vector3(-0.3, 0, -1)
+	mj.facing = Vector3(0.35, 0, -1)
 	mj.anim_time += delta
 	var at := Vector3(14.0 - t * 0.6, 1.7, 22.0 + t * 0.4)
 	_set_cam(at, Vector3(0.0, 1.0, SHORE_Z - 6.0 - t * 1.2), 55.0)

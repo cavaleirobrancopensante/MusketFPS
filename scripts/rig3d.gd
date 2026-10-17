@@ -868,7 +868,10 @@ func _update(delta: float, snap: bool) -> void:
 	var parent_yaw := 0.0
 	var p := get_parent() as Node3D
 	if p != null:
-		parent_yaw = p.global_rotation.y
+		# The parent's heading, from its forward axis laid flat: on a rolling,
+		# pitching deck the Euler yaw jumps about; this doesn't.
+		var pf := -p.global_transform.basis.z
+		parent_yaw = atan2(-pf.x, -pf.z) if Vector2(pf.x, pf.z).length_squared() > 0.0001 else p.global_rotation.y
 	var kt := 1.0 if snap else 1.0 - exp(-9.0 * delta)
 	_turn = lerpf(_turn, t_turn, kt)
 	body.rotation.y = lerp_angle(body.rotation.y, want - parent_yaw + _turn, 1.0 if snap else 1.0 - exp(-10.0 * delta))
