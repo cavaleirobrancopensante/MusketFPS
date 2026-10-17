@@ -186,7 +186,10 @@ func _refresh() -> void:
 			_hex(RED), int(st.get("muskets", 0)), int(st.get("ammo", 0)), int(st.get("cannons", 0)), int(st.get("rum", 0))]
 		t += "\n[color=#%s]%d pieces of kit were dropped in the rout. The little wagon you saved holds the Major's rifle and a few days' food. See to your men on the COMPANY & KIT screen.[/color]\n" % [_hex(GOLD), int(r.get("lost_gear", 0))]
 	elif fresh:
-		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
+		var humans := String(r.get("enemy", "lizards")) == "humans"
+		t += "%s slain: [b]%d[/b]\n" % ["Enemy soldiers" if humans else "Lizardmen", int(r["slain"])]
+		if r.has("standing_note"):
+			t += "[color=#%s]%s[/color]\n" % [_hex(RED), r["standing_note"]]
 		if r.has("nest_burned"):
 			t += "[color=#%s][b]%s burns.[/b] Its mounds are torn open and fired; no more warbands will come out of it.[/color]\n" % [_hex(GOLD), r["nest_burned"]]
 		if r.has("stash"):
@@ -196,7 +199,9 @@ func _refresh() -> void:
 			t += "Lizards got into the wagon. You took back what they grabbed, but they'd eaten %d rations before you cut them down.\n" % int(r["rations_spoiled"])
 		if int(r.get("wagon_looted", 0)) > 0:
 			t += "[color=#%s]Lizards plundered the wagon: %d%% of its stores are gone.[/color]\n" % [_hex(RED), int(r["wagon_looted"])]
-		if pay >= 0:
+		if humans and bool(r.get("won", false)):
+			t += "No bounty on men: what they carried is on the loot pile.\n"
+		elif pay >= 0:
 			t += "Bounty: [color=#%s]+%d crowns[/color]\n" % [_hex(GOLD), pay]
 			if int(r.get("loot", 0)) > 0:
 				t += "[color=#%s]There's loot on the field: LOOT THE FIELD to pick through it.[/color]\n" % _hex(GOLD)

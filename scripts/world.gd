@@ -817,7 +817,9 @@ const KINDS := {
 # ---------------------------------------------------------------- what you can tell about a party
 
 const COMP_NAMES := {"liz_warrior": ["warrior", "warriors"], "liz_skirm": ["javelin thrower", "javelin throwers"],
-	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"]}
+	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"],
+	"pike": ["spearman", "spearmen"], "bow": ["archer", "archers"], "xbow": ["crossbowman", "crossbowmen"], "cav": ["horseman", "horsemen"]}
+const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "pike", "xbow", "bow", "cav"]
 
 
 ## What a lizard party is made of (field.gd kinds -> numbers), worked out
@@ -837,6 +839,20 @@ static func party_comp(p: Dictionary) -> Dictionary:
 		var jav := int(round(n * 0.25))
 		var war := maxi(0, n - brutes - raptors - jav)
 		out = {"liz_warrior": war, "liz_skirm": jav, "liz_brute": brutes, "liz_raptor": raptors}
+	elif p["kind"] == "patrol":
+		# A nation's soldiers (nobody here has gunpowder): spearmen, with
+		# crossbows and archers, and a few horse once it's a proper column.
+		var horse := n / 6 if n >= 12 else 0
+		var xb := int(round(n * 0.25))
+		var bows := int(round(n * 0.15))
+		out = {"pike": n - horse - xb - bows, "xbow": xb, "bow": bows, "cav": horse}
+	elif p["kind"] == "deserters":
+		var bw := int(round(n * 0.35))
+		out = {"pike": n - bw, "bow": bw}
+	elif p["kind"] == "caravan":
+		var g := maxi(2, n / 2) # (the guards; the rest are drovers)
+		var xg := g / 3
+		out = {"pike": g - xg, "xbow": xg}
 	else:
 		return {}
 	for k in out.keys():
@@ -847,7 +863,7 @@ static func party_comp(p: Dictionary) -> Dictionary:
 
 static func comp_text(comp: Dictionary, sep := ", ") -> String:
 	var parts: PackedStringArray = []
-	for k in ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]:
+	for k in COMP_ORDER:
 		var c := int(comp.get(k, 0))
 		if c > 0:
 			parts.append("%d %s" % [c, COMP_NAMES[k][0 if c == 1 else 1]])
@@ -999,7 +1015,7 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 ## Who this party would hunt, if it can see them.
 func _prey_for(p: Dictionary, me: Vector2) -> Dictionary:
 	var sight := 8.0
-	if p["faction"] == "lizards" and Company.active:
+	if Company.active and hostile_to_us(p):
 		var to_us := me.distance_to(pos)
 		var hidden := 0.6 if gen.t(cell().x, cell().y) in [T.FOREST, T.SWAMP] else 1.0
 		if to_us < sight * hidden:
@@ -1141,12 +1157,20 @@ func _fights() -> void:
 				{"x": win["x"], "y": win["y"]})
 
 
+## Is this party out to get you? Lizards always; a nation's patrols once
+## you've made enemies of that nation (Company.standing).
+func hostile_to_us(p: Dictionary) -> bool:
+	if p["faction"] == "lizards":
+		return true
+	return p["kind"] == "patrol" and Company.is_enemy(String(p["faction"]))
+
+
 ## A hostile party close enough to catch you stops the clock.
 func _check_contact() -> bool:
 	if not Company.active:
 		return false
 	for p in parties:
-		if p["faction"] == "lizards" and pos.distance_to(Vector2(p["x"], p["y"])) < CONTACT:
+		if hostile_to_us(p) and pos.distance_to(Vector2(p["x"], p["y"])) < CONTACT:
 			path.clear()
 			goal = {}
 			waiting = false

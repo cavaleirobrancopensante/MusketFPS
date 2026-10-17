@@ -29,6 +29,7 @@ func _ready() -> void:
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	#   -- --autotest --camp [--spotted]  attacked in the night camp
 	#   -- --autotest --assault [--walls=W]  storming a nest
+	#   -- --autotest --patrol [--vell]   against a nation's patrol
 	var args := OS.get_cmdline_user_args()
 	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
 		if a in args:
@@ -133,6 +134,16 @@ func _ready() -> void:
 			var fit := Company.fit_men()
 			Company.next_battle = {"enemy": 18, "terrain": 3, "party": -1, "ambush": false, "camp": true,
 				"spotted": "--spotted" in args, "night": true, "watch": [int(fit[0]["id"]), int(fit[1]["id"])]}
+		elif "--patrol" in args:
+			# A nation's patrol: -- --autotest --patrol [--vell]
+			Company.new_campaign()
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			for m in Company.roster:
+				m["wounded_days"] = 0
+			var fac := "vell" if "--vell" in args else "aurest"
+			var pp := {"kind": "patrol", "faction": fac, "size": 20, "id": 0}
+			Company.next_battle = {"enemy": 20, "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "humans",
+				"faction": fac, "comp": World.party_comp(pp), "map": "flat", "party_name": "Test patrol"}
 		elif "--assault" in args:
 			# Storming a nest: -- --autotest --assault [--walls=0.5]
 			Company.new_campaign()

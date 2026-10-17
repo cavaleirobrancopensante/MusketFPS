@@ -75,6 +75,10 @@ var spotted := false # ...and the watch saw them coming
 var assault := false # storming a lizard nest (nest_assault.gd)
 var camp_fire := Vector3.ZERO
 var fog := 0.0022 # the air's haze down among the men (the command view clears it)
+## The other side's coats (a nation's colour in the campaign), and which
+## nation it is ("" in the Tests' battle: the old red-coated musketeers).
+var foe_coat := Color(0.62, 0.12, 0.1)
+var nation := ""
 ## How fast the battle goes (the setup's PACE): marching, loading and blows
 ## all scale with it, so there's time to fight and to command.
 var pace := 0.75
@@ -111,6 +115,25 @@ func setup(b, c: Dictionary) -> void:
 		if terrain.kind == "town":
 			deploy_z = maxf(deploy_z, 70.0)
 		enemy_z = deploy_z * (0.55 if bool(c.get("ambush", false)) else 1.0)
+		var nb: Dictionary = Company.next_battle
+		var f := String(c.get("faction", ""))
+		if Lore.FACTIONS.has(f) and Lore.FACTIONS[f].has("coat"):
+			nation = f
+			foe_coat = Lore.FACTIONS[f]["coat"]
+		# Which far stand-ins to render (make_sprites).
+		var foe := {}
+		for k in nb.get("comp", {}):
+			foe[k] = 1
+		if foe.is_empty():
+			foe = {"liz_warrior": 1, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1}
+		cfg["foe"] = foe
+		var you := {"musket": 1}
+		for m in Company.fit_men():
+			var role := Company.role_of(m)
+			you["xbow" if role == "crossbow" else role] = 1
+		if Company.guns > 0:
+			you["gun"] = 1
+		cfg["you"] = you
 		camp = bool(c.get("camp", false))
 		spotted = camp and bool(c.get("spotted", false))
 		assault = bool(c.get("assault", false))
@@ -202,10 +225,10 @@ func _sprite_name(kind: String, side: int) -> String:
 
 
 func _sprite_spec(kind: String, side: int) -> Dictionary:
-	var red := Color(0.62, 0.12, 0.1)
+	var red := foe_coat
 	match kind:
 		"cav":
-			return {"mount": "horse", "gear": {"head": "tricorne" if side == 1 else "shako", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
+			return {"mount": "horse", "gear": {"head": ("kettle_hat" if nation != "" else "tricorne") if side == 1 else "shako", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
 				"coat": red if side == 1 else null, "saddle": red if side == 1 else Color(0.16, 0.24, 0.55), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
 		"liz_raptor":
 			return {"mount": "raptor", "saddle": Color(0.5, 0.36, 0.2), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
@@ -213,7 +236,7 @@ func _sprite_spec(kind: String, side: int) -> Dictionary:
 			return {"rig": "lizard", "cell_m": 2.5, "anims": Impostor.LIZARD_ANIMS}
 		"liz_brute":
 			return {"rig": "lizard", "scale": 1.45, "cell_m": 3.6, "anims": Impostor.LIZARD_ANIMS}
-	var gear: Dictionary = (FieldSoldier.ENEMY_GEAR if side == 1 else FieldSoldier.GEAR)[kind]
+	var gear: Dictionary = FieldSoldier.gear_for(self, kind, side)
 	return {"rig": "soldier", "gear": gear, "coat": red if side == 1 else null, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS}
 
 
@@ -304,8 +327,8 @@ func spawn_campaign() -> void:
 	elif comp.is_empty():
 		comp = World.party_comp({"kind": "warband", "size": int(nb.get("enemy", Company.next_enemy_count())), "id": 0})
 	var theirs: Array = []
-	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10}
-	for k in ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]:
+	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "xbow": 14, "bow": 14, "cav": 10}
+	for k in World.COMP_ORDER:
 		var n := int(comp.get(k, 0))
 		while n > 0:
 			var take := mini(n, int(cap[k]))

@@ -287,7 +287,9 @@ func _field_config(nb: Dictionary) -> Dictionary:
 	if "--oldbattle" in OS.get_cmdline_user_args():
 		return {}
 	var c := {"map": String(nb.get("map", _map_for_terrain(int(nb.get("terrain", 2))))), "campaign": true,
-		"ambush": bool(nb.get("ambush", false)) and not camp, "pace": 0.75}
+		"ambush": bool(nb.get("ambush", false)) and not camp, "pace": 0.75,
+		"foe_army": "humans" if String(nb.get("enemy_kind", "lizards")) == "humans" else "lizards",
+		"faction": String(nb.get("faction", "lizards"))}
 	if camp:
 		c["camp"] = true
 		c["spotted"] = spotted
@@ -1033,7 +1035,7 @@ func _end_battle(won: bool) -> void:
 				"status": "fit" if s.alive else s.down_status, "conduct": s.conduct}
 		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "officer_ammo": player.ammo_used, "men": men,
 			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
-			"enemy": "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0)),
+			"enemy": String(Company.next_battle.get("enemy_kind", "lizards")) if Company.active and not prologue else "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0)),
 			"assault": int(Company.next_battle.get("assault", -1)), "stash": bool(Company.next_battle.get("stash", false)),
 			"nest_name": String(Company.next_battle.get("nest_name", ""))})
 	hud.show_restart()
