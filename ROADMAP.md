@@ -135,8 +135,8 @@ The plan was:
   a nation's patrol in its fight (its regiments beside yours, yours to
   command when you choose); lords with seats, armies that march to war,
   burn the border and come back when beaten, each with his own account of
-  you. Next: contracts and pay for fighting under a lord, formations, and
-  sieges of towns by the nations' armies.
+  you; contracts (three weeks' pay and a duty) under a lord. Next:
+  formations, and sieges of towns by the nations' armies.
 - **Teaching gunpowder:** a deal with real consequences. A faction you teach
   fields musketeers of its own, and may later turn them on you.
 

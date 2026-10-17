@@ -149,6 +149,16 @@ with every seed.
   **LORDS** on the map lists them all: where you stand with each nation and
   lord, and what you know of their armies. Their armies show gold on the
   map; anyone out to get you shows red.
+- **Contracts.** Meet a lord's army when he and his nation think well
+  enough of you (not cold, not wary) and you can **OFFER YOUR SERVICE**: he
+  hires the company for three weeks at a weekly wage (more for more men and
+  for the guns), with one duty: hunt down the lizard warbands raiding his
+  lands (two bands, or burn a nest), or beat the other nation's men in the
+  field (a patrol or an army, or join a fight against them). Do it and he
+  pays a bonus and his nation warms to you; let it run out undone and he
+  thinks less of you. The other nation hears you've signed on, and turning
+  on your employer's men tears the contract up. LORDS shows the contract
+  and how the duty stands.
 - **Joining a fight.** When a nation's patrol or a lord's army is about to fight close by
   (a warband, or the other nation's men) and it isn't your enemy, the clock
   stops: **JOIN** them and their regiments deploy in your line, following

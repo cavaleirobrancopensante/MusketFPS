@@ -211,6 +211,12 @@ const HOSTILE_AT := -25
 const AT_WAR := {"aurest": "vell", "vell": "aurest"}
 
 
+## Service under a lord (see the contracts section): {} or {"lord", "faction",
+## "lord_name", "from", "until" (days), "pay" (a week), "duty", "need",
+## "done", "paid_day"}.
+var contract := {}
+
+
 func is_enemy(faction: String) -> bool:
 	return int(standing.get(faction, 0)) <= HOSTILE_AT
 
@@ -295,6 +301,7 @@ func new_campaign() -> void:
 	stash = {}
 	guns = 0
 	standing = {"aurest": 0, "vell": 0}
+	contract = {}
 	next_battle = {}
 	march_note = ""
 	save()
@@ -1283,6 +1290,7 @@ func pass_day(water: String) -> PackedStringArray:
 			notes.append("No pay! The men are angry.")
 			for m in roster:
 				Men.add_morale(m, -20)
+	notes.append_array(_contract_day())
 	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult())
 	for g in gone:
 		roster.erase(g)
@@ -1396,7 +1404,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "standing": standing,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "standing": standing, "contract": contract,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
@@ -1430,6 +1438,7 @@ func load_campaign() -> bool:
 	stash = data.get("stash", {})
 	guns = int(data.get("guns", 0))
 	standing = data.get("standing", {"aurest": 0, "vell": 0})
+	contract = data.get("contract", {})
 	next_battle = data.get("next_battle", {})
 	tags = data.get("tags", DEFAULT_TAGS.duplicate())
 	wagon_plan = data.get("wagon_plan", [0.0, -12.0])
@@ -1465,3 +1474,82 @@ func load_campaign() -> bool:
 		stores[k] = int(stores.get(k, 0))
 	active = true
 	return true
+
+
+# ---------------------------------------------------------------- contracts
+# A lord hires the company for a few weeks: pay every week, and one duty
+# (hunt down lizard warbands in his lands, or beat the other nation's men in
+# the field). Done, it earns a bonus and his favour; left undone at the end,
+# he thinks less of you. Turn on his nation's men and the contract is torn up.
+
+const CONTRACT_DAYS := 21
+const DUTIES := {
+	"warbands": ["Hunt down the lizard warbands that raid his lands", 2, "lizard bands destroyed"],
+	"enemy": ["Beat the enemy's men in the field (a patrol or an army)", 1, "enemy forces beaten"],
+}
+
+
+## What a lord would offer you (the terms; nothing is signed yet).
+func contract_terms(lord_id: int, faction: String, lord_name: String) -> Dictionary:
+	var pay := 20 + 3 * fit_men().size() + 10 * guns
+	var duty: String = ["warbands", "enemy"].pick_random()
+	return {"lord": lord_id, "faction": faction, "lord_name": lord_name, "from": day, "until": day + CONTRACT_DAYS,
+		"pay": pay, "duty": duty, "need": int(DUTIES[duty][1]), "done": 0, "paid_day": day}
+
+
+func sign_contract(c: Dictionary) -> void:
+	contract = c.duplicate()
+	change_standing(String(AT_WAR.get(String(c["faction"]), "")), -10) # (the other side hears of it)
+
+
+## A battle won: does it count toward the duty? `kind`: the party's kind,
+## `faction` its faction. Returns a line for the map, or "".
+func contract_progress(kind: String, faction: String) -> String:
+	if contract.is_empty():
+		return ""
+	var counts := false
+	match String(contract["duty"]):
+		"warbands":
+			counts = faction == "lizards" and kind in ["warband", "hunters", "nest"]
+		"enemy":
+			counts = faction == String(AT_WAR.get(String(contract["faction"]), "")) and kind in ["patrol", "army"]
+	if not counts or int(contract["done"]) >= int(contract["need"]):
+		return ""
+	contract["done"] = int(contract["done"]) + 1
+	if int(contract["done"]) >= int(contract["need"]):
+		var bonus := 60 + 2 * int(contract["pay"])
+		money += bonus
+		change_standing(String(contract["faction"]), 10)
+		return "Duty done for %s: a bonus of %d crowns." % [contract["lord_name"], bonus]
+	return "%s: %d of %d %s." % [contract["lord_name"], int(contract["done"]), int(contract["need"]), DUTIES[contract["duty"]][2]]
+
+
+## You turned on your employer's men: the contract is torn up.
+func break_contract() -> String:
+	if contract.is_empty():
+		return ""
+	var n := String(contract["lord_name"])
+	contract = {}
+	return "Your contract with %s is torn up." % n
+
+
+## Each midnight: the week's pay, and the end of the contract.
+func _contract_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	if contract.is_empty():
+		return notes
+	if day - int(contract["paid_day"]) >= 7:
+		contract["paid_day"] = int(contract["paid_day"]) + 7
+		money += int(contract["pay"])
+		notes.append("%s pays your hire: %d crowns." % [contract["lord_name"], int(contract["pay"])])
+	if day >= int(contract["until"]):
+		var done := int(contract["done"]) >= int(contract["need"])
+		notes.append("Your contract with %s has run its course%s." % [contract["lord_name"], "" if done else ", the duty undone: he is not pleased"])
+		contract["ended"] = "done" if done else "undone"
+		last_contract = contract
+		contract = {}
+	return notes
+
+
+## The contract that just ended (the map settles the lord's opinion).
+var last_contract := {}
