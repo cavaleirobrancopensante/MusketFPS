@@ -940,7 +940,21 @@ func wagon_space() -> float:
 
 ## A settlement's price for something, after your Trade.
 func price(base: int) -> int:
-	return maxi(1, int(round(base * Officer.buy_mult())))
+	return maxi(1, int(round(base * Officer.buy_mult() * standing_price(market_faction))))
+
+
+## Whose market you're in (town.gd and the map set it): its nation's view
+## of you moves the prices.
+var market_faction := ""
+
+
+func standing_price(faction: String) -> float:
+	match standing_word(faction) if standing.has(faction) else "neutral":
+		"wary":
+			return 1.25
+		"friendly":
+			return 0.9
+	return 1.0
 
 
 func sell_goods(kind: String) -> int:

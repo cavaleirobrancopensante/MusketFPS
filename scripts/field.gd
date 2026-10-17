@@ -433,8 +433,8 @@ func _make_camp(nb: Dictionary) -> void:
 	var sleepers: Array = []
 	var watch: Array = []
 	for r in regs:
-		if r.side != 0 or r.kind == "gun":
-			continue
+		if r.side != 0 or r.kind == "gun" or r.is_cav():
+			continue # (the horse are picketed: they stand to by their mounts)
 		for m in r.members:
 			var rec = m.get("record")
 			if rec != null and int(rec["id"]) in watch_ids:

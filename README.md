@@ -159,6 +159,18 @@ with every seed.
   **ATTACK THE BESIEGERS** (the garrison sallies to fight beside you), or,
   if you're on good terms with the besiegers, **HELP THE SIEGE** (your guns
   bring the walls down in a day). Either side remembers.
+- **Whose banner a town flies** matters: where its nation thinks you
+  hostile, the gates are shut and villagers bar their doors; wary, its
+  markets charge a quarter more; friendly, a tenth less. Its people are
+  readier to join you the better their lords think of you. A town taken in
+  the war still speaks its old tongue.
+- **Truces.** Every few weeks heralds ride between the camps and Aurest and
+  Vell agree a truce for a week or two: their men don't fight each other,
+  sieges are lifted and the armies go home. Then the war starts again.
+- **An army at your side.** A lord who's a friend (or who has hired you)
+  will **MARCH WITH US** for four days: his army keeps close, camps beside
+  you, and fights in your line in any battle you fight, even when they're
+  in among the bedrolls at night. Turn on his nation's men and he leaves.
 - **Contracts.** Meet a lord's army when he and his nation think well
   enough of you (not cold, not wary) and you can **OFFER YOUR SERVICE**: he
   hires the company for three weeks at a weekly wage (more for more men and

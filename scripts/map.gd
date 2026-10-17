@@ -1045,9 +1045,16 @@ func _visit(st: Dictionary) -> void:
 	var text := ""
 	var buttons: Array = []
 	var id := int(st["id"])
+	Company.market_faction = String(st["faction"])
 	if kind == "nest":
 		_visit_nest(st)
 		return
+	elif kind in ["village", "town", "city"] and Company.is_enemy(String(st["faction"])):
+		# You're the enemy here.
+		text = ("The gates are shut against you, and there are crossbows on the walls. %s has no welcome for you." if kind != "village" \
+			else "The villagers see your red coats coming and bar their doors; someone runs for the soldiers of %s.") % fac["name"]
+		buttons.append(["LEAVE", _popup_close])
+		_scene("patrol", {"faction": st["faction"]})
 	elif not World.siege_of(id).is_empty() and kind in ["town", "city"]:
 		_visit_besieged(st)
 		return
@@ -1162,6 +1169,9 @@ func _set_assault(st: Dictionary) -> void:
 	Company.next_battle = {"enemy": int(n["garrison"]), "terrain": World.gen.t(int(st["x"]), int(st["y"])), "party": -1,
 		"ambush": false, "enemy_kind": "lizards", "assault": id, "walls": float(n["walls"]),
 		"stash": id == World.gen.stash_nest and not Company.stash.is_empty(), "nest_name": String(st["name"])}
+	var esc := _escort_allies("lizards")
+	if not esc.is_empty():
+		Company.next_battle["allies"] = esc
 	Company.results_unseen = false
 
 
@@ -1261,6 +1271,11 @@ func _meet(p: Dictionary) -> void:
 				"their patrols will hunt you" if Company.standing.get(f, 0) - _ATTACK_COST[kind] <= Company.HOSTILE_AT else "they'll trust you less"]
 		if kind == "army" and _may_hire(p):
 			buttons.append(["OFFER YOUR SERVICE", _offer_service.bind(p)])
+		if kind == "army" and _may_march_with(p):
+			buttons.append(["MARCH WITH US", func():
+				_popup_close()
+				World.escort(p, 4.0)
+				_push_toast("%s's army will march with you for four days." % World.lord_short(World.lord_of(p)))])
 		buttons.append(["ATTACK", _attack_party.bind(p)])
 	buttons.append(["LEAVE", _popup_close])
 	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "traders": "traders",
@@ -1271,6 +1286,28 @@ func _meet(p: Dictionary) -> void:
 ## What attacking a nation's men costs you with it (and what its enemy
 ## thinks of that).
 const _ATTACK_COST := {"patrol": 40, "caravan": 30, "deserters": 0, "army": 50}
+
+
+## Will this lord march with you? A friend, or your employer, with nobody
+## else already marching with you.
+func _may_march_with(p: Dictionary) -> bool:
+	var l := World.lord_of(p)
+	if l.is_empty() or not World.escorting().is_empty() or float(p.get("escort_until", 0.0)) > World.hours:
+		return false
+	var hired: bool = not Company.contract.is_empty() and int(Company.contract["lord"]) == int(l["id"])
+	return hired or int(l["relation"]) >= 30
+
+
+## The army marching with you, as the allies for a battle here ({} if none,
+## or if it's too far off, or it's the enemy's own nation).
+func _escort_allies(enemy_faction: String) -> Dictionary:
+	var e := World.escorting()
+	if e.is_empty() or String(e["faction"]) == enemy_faction:
+		return {}
+	if Vector2(e["x"], e["y"]).distance_to(World.pos) > 4.0:
+		return {}
+	return {"faction": String(e["faction"]), "comp": World.party_comp(e), "party": int(e["id"]),
+		"size": int(e["size"]), "lord": int(e.get("lord", -1))}
 
 
 ## Will this lord take you on? Not if you already serve someone, if he or
@@ -1306,6 +1343,9 @@ func _attack_party(p: Dictionary) -> void:
 	if not Company.contract.is_empty() and String(Company.contract["faction"]) == f:
 		World.change_relation(World.lord(int(Company.contract["lord"])), -40)
 		note = Company.break_contract()
+	var e := World.escorting()
+	if not e.is_empty() and String(e["faction"]) == f:
+		e["escort_until"] = World.hours # (he won't march with you now)
 	if int(_ATTACK_COST.get(kind, 0)) > 0:
 		var was := Company.is_enemy(f)
 		Company.change_standing(f, -int(_ATTACK_COST[kind]))
@@ -1557,6 +1597,11 @@ func _show_lords() -> void:
 				state = "his army in the field"
 			t += "   %s: %s; %s.\n" % [World.lord_full(l), World.relation_word(int(l["relation"])), state]
 		t += "\n"
+	if World.truce():
+		t += "[color=#9aa3b8]A truce holds between them until day %d.[/color]\n\n" % (1 + int(float(World.war["truce_until"]) / 24.0))
+	var e := World.escorting()
+	if not e.is_empty():
+		t += "[color=#c9a14a]%s marches with you until day %d.[/color]\n" % [World.party_name(e).split(" (")[0], 1 + int(float(e["escort_until"]) / 24.0)]
 	var c: Dictionary = Company.contract
 	if not c.is_empty():
 		t += "[color=#c9a14a]In the service of %s until day %d: %s (%d of %d). %d crowns a week.[/color]\n\n" % [
@@ -1681,6 +1726,9 @@ func _camp_attacked(p: Dictionary) -> void:
 	Company.next_battle = {"enemy": int(p["size"]), "terrain": t, "party": int(p["id"]), "ambush": false,
 		"enemy_kind": "lizards" if p["faction"] == "lizards" else "humans", "faction": String(p["faction"]),
 		"comp": World.party_comp(p), "camp": true, "spotted": spotted, "night": true, "watch": ids}
+	var esc := _escort_allies(String(p["faction"]))
+	if not esc.is_empty():
+		Company.next_battle["allies"] = esc
 	Company.results_unseen = false
 	var text := ""
 	var buttons: Array = []
@@ -1719,10 +1767,13 @@ func _plan_fight(p: Dictionary) -> void:
 func _set_battle(p: Dictionary, ambush: bool) -> void:
 	var c := World.cell()
 	var humans: bool = p["faction"] != "lizards"
+	var esc := _escort_allies(String(p["faction"]))
 	Company.next_battle = {"enemy": int(p["size"]), "terrain": World.gen.t(c.x, c.y), "party": int(p["id"]),
 		"ambush": ambush, "enemy_kind": "humans" if humans else "lizards", "faction": String(p["faction"]),
 		"map": World.battle_map_here(), "comp": World.party_comp(p), "lord": int(p.get("lord", -1)),
 		"party_name": World.party_name(p).split(" (")[0]}
+	if not esc.is_empty():
+		Company.next_battle["allies"] = esc
 	Company.results_unseen = false
 
 

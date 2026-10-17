@@ -103,7 +103,9 @@ func _ready() -> void:
 	st = World.gen.settlements[sid]
 	kind = String(st["kind"])
 	fac = String(st["faction"])
-	lang = Tongue.lang_of(fac)
+	Company.market_faction = fac
+	# (a town taken in the war still speaks its own tongue)
+	lang = Tongue.lang_of(String(World.places[sid].get("native", fac)))
 	underground = kind == "hold"
 	R = {"village": 28.0, "town": 42.0, "city": 56.0, "hold": 34.0}.get(kind, 30.0)
 	_rng.seed = hash("town:%d:%d" % [World.seed, sid])
