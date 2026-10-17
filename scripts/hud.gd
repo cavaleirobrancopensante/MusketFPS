@@ -192,13 +192,17 @@ func _buttons() -> Array:
 	if player.gun == null:
 		list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
 		"label": Lang.t("GRENADE %d") % player.grenades})
-	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": Lang.t("VOLLEY!")})
+	var hunting: bool = battle.field != null and battle.field.hunt != ""
+	if not hunting:
+		list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": Lang.t("VOLLEY!")})
 	var bw := 150.0
 	var bh := 56.0
 	var y := 18.0
 	var mode_label := Lang.t("AT WILL") if battle.is_at_will() else Lang.t("ON COMMAND")
 	var fui = _field_ui()
-	if fui != null:
+	if hunting:
+		pass # (nobody to give orders to)
+	elif fui != null:
 		_army_buttons(list, fui, mode_label)
 	else:
 		list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 4 * (bw + 10), y, bw, bh), "label": Lang.t("FOLLOW")})
@@ -234,6 +238,8 @@ func _buttons() -> Array:
 		pl.append(["pg_gun", gun_label])
 		for i in pl.size():
 			list.append({"id": pl[i][0], "circle": false, "rect": Rect2(20, 160 + i * 54, 170, 46), "label": pl[i][1]})
+	if battle.field != null and battle.field.hunt != "":
+		list.append({"id": "end_hunt", "circle": false, "rect": Rect2(s.x - 280, 18, 260, 56), "label": Lang.t("END THE HUNT")})
 	if restart_visible:
 		list.append({"id": "restart", "circle": false, "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 + 30, 260, 72),
 			"label": Lang.t("CONTINUE") if Company.active else Lang.t("RESTART")})
@@ -420,6 +426,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			player.toggle_gun()
 		"shot":
 			player.toggle_shot()
+		"end_hunt":
+			battle.end_hunt()
 		"couch":
 			player.toggle_couch()
 		"command":

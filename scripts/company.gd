@@ -149,8 +149,8 @@ const ITEMS := {
 const CONSUMABLES := {"water": [3.0, 0.12], "rations": [1.0, 0.04], "ammo": [0.05, 0.003], "rum": [0.15, 0.01],
 	"arrows": [0.06, 0.005], "bolts": [0.08, 0.005], "powder": [1.0, 0.02], "lead": [1.0, 0.008],
 	# What the land gives (world.gd RESOURCES), for making things (RECIPES):
-	"saltpetre": [1.0, 0.015], "sulphur": [1.0, 0.012], "charcoal": [0.5, 0.03], "ore": [1.0, 0.01], "meat": [1.0, 0.04]}
-const MATERIALS := ["saltpetre", "sulphur", "charcoal", "ore", "meat"]
+	"saltpetre": [1.0, 0.015], "sulphur": [1.0, 0.012], "charcoal": [0.5, 0.03], "ore": [1.0, 0.01], "meat": [1.0, 0.04], "wood": [0.6, 0.03]}
+const MATERIALS := ["saltpetre", "sulphur", "charcoal", "ore", "meat", "wood"]
 ## Making things in camp (CRAFT on the map): what it takes, what it makes,
 ## and the hours the men spend at it (less with your Logistics).
 const RECIPES := {
@@ -160,6 +160,8 @@ const RECIPES := {
 		"text": "Galena roasted in a charcoal fire: the lead runs out of it."},
 	"cartridges": {"name": "Roll cartridges", "needs": {"powder": 1, "lead": 3}, "makes": {"ammo": 40}, "hours": 3,
 		"text": "Balls cast in the mould, powder measured into paper tubes."},
+	"wood_shot": {"name": "Carve wooden balls", "needs": {"powder": 1, "wood": 4}, "makes": {"ammo": 40, "wood_shot": 40}, "hours": 5,
+		"text": "No lead? Hard wood whittled round and rolled in cartridges. They fly short and hit soft (about half a lead ball), but they fly."},
 	"rations": {"name": "Smoke meat", "needs": {"meat": 6, "charcoal": 1}, "makes": {"rations": 6}, "hours": 4,
 		"text": "Fresh meat and fish spoil in days; smoked over the fire they keep."},
 }
@@ -585,6 +587,7 @@ func apply_battle(result: Dictionary) -> void:
 	var won: bool = result["won"]
 	var men: Dictionary = result["men"]
 	in_battle = false
+	var ammo_before := _ammo_total()
 	var was_prologue := bool(result.get("prologue", false))
 	var summary := {"enemy": String(result.get("enemy", "lizards")), "allies_left": int(result.get("allies_left", 0)), "won": won, "slain": int(result["slain"]), "fallen": [], "wounded": [],
 		"promoted": [], "levelled": [], "pay": 0, "day": day, "prologue": was_prologue, "lost_gear": 0}
@@ -721,6 +724,9 @@ func apply_battle(result: Dictionary) -> void:
 			items[id] = int(items[id]) - lost
 	if int(summary["pay"]) > 0:
 		summary["pay"] = int(round(int(summary["pay"]) * Officer.diff("money")))
+	# The wooden balls went the way of the rest, in their share.
+	if int(stores.get("wood_shot", 0)) > 0 and ammo_before > 0:
+		stores["wood_shot"] = int(round(int(stores["wood_shot"]) * float(_ammo_total()) / float(ammo_before)))
 	money = maxi(0, money + int(summary["pay"]))
 	last_result = summary
 	results_unseen = true
@@ -1067,6 +1073,8 @@ static func item_label(id: String) -> String:
 		"charcoal": return Lang.t("Charcoal (lb)")
 		"ore": return Lang.t("Lead ore (lb)")
 		"meat": return Lang.t("Fresh meat and fish (lb)")
+		"wood": return Lang.t("Hardwood (lb)")
+		"wood_shot": return Lang.t("of them wooden balls")
 	return item_name(id)
 
 
@@ -1219,6 +1227,26 @@ func make_cartridges(batches := 1) -> int:
 	stores["ammo"] = int(stores["ammo"]) + b * CARTRIDGE_BATCH
 	save()
 	return b * CARTRIDGE_BATCH
+
+
+## Of all the cartridges you carry (wagon and packs), the share that are
+## wooden balls (projectiles.gd: a wooden ball hits soft and flies short).
+func wood_share() -> float:
+	var w := int(stores.get("wood_shot", 0))
+	if w <= 0:
+		return 0.0
+	var total := int(stores.get("ammo", 0))
+	for m in roster:
+		total += int(m["pack"].get("ammo", 0))
+	total += int(officer.get("pack", {}).get("ammo", 0))
+	return clampf(float(w) / maxf(1.0, float(total)), 0.0, 1.0)
+
+
+func _ammo_total() -> int:
+	var total := int(stores.get("ammo", 0))
+	for m in roster:
+		total += int(m["pack"].get("ammo", 0))
+	return total + int(officer.get("pack", {}).get("ammo", 0))
 
 
 ## Making things (RECIPES): how many batches the stores allow.

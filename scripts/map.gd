@@ -1146,6 +1146,15 @@ func _visit_resource(id: int) -> void:
 				_push_toast(Lang.t("The men set to work: %d %s by the end of it.") % [int(got["n"]), Company.item_label(String(got["store"])).to_lower()])
 			World.waiting = true
 			_rest_until = World.hours + float(got["hours"])])
+	if wait <= 0.0 and String(r["kind"]) in ["game", "fish"]:
+		# Or go after it yourself, musket in hand.
+		buttons.append([Lang.t("HUNT YOURSELF") if r["kind"] == "game" else Lang.t("FISH YOURSELF"), func():
+			_popup_close()
+			Company.next_battle = {"hunt": "game" if r["kind"] == "game" else "fish", "res": id}
+			Company.results_unseen = false
+			Company.save()
+			World.save()
+			_go(BATTLE)])
 	buttons.append([Lang.t("CRAFT"), func(): _popup_close(); _open_craft()])
 	buttons.append([Lang.t("LEAVE"), _popup_close])
 	_popup_open(Lang.t(String(spec["name"])), text, buttons)
@@ -1199,6 +1208,8 @@ func _fill_craft() -> void:
 	var have: Array = []
 	for k in Company.MATERIALS + ["powder", "lead"]:
 		have.append("%s %d" % [Company.item_label(k), int(st.get(k, 0))])
+	if int(st.get("wood_shot", 0)) > 0:
+		have.append(Lang.t("cartridges %d (%d%% wooden)") % [int(st.get("ammo", 0)), int(Company.wood_share() * 100.0)])
 	_craft_head.text = Lang.t("In the wagon: ") + "  ·  ".join(have) + "\n" + Lang.t("Gather materials at the caves, springs, woods and hunting grounds on the map (their names show when you're close).")
 	for c in _craft_list.get_children():
 		c.queue_free()
@@ -1218,6 +1229,8 @@ func _fill_craft() -> void:
 			needs.append("%d %s" % [int(r["needs"][k]), Company.item_label(k)])
 		var makes: Array = []
 		for k in r["makes"]:
+			if k == "wood_shot":
+				continue
 			makes.append("%d %s" % [int(r["makes"][k]), Company.item_label(k)])
 		var l := _label(Lang.t("%s  →  %s   ·   %.0f hours") % [" + ".join(needs), ", ".join(makes), Company.craft_hours(id)], 16, Color.WHITE)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1242,6 +1255,8 @@ func _do_craft(id: String, n: int) -> void:
 	var hrs := Company.craft_hours(id) * made
 	var what: Array = []
 	for k in Company.RECIPES[id]["makes"]:
+		if k == "wood_shot":
+			continue
 		what.append("%d %s" % [made * int(Company.RECIPES[id]["makes"][k]), Company.item_label(k).to_lower()])
 	_push_toast(Lang.t("The men work at it for %d hours: %s.") % [int(hrs), ", ".join(what)])
 	_craft_panel.visible = false

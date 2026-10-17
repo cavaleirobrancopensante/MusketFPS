@@ -8,7 +8,8 @@ mass musket battles of the *Destroyermen* books.
 
 It's growing into a Warband-style sandbox: see [ROADMAP.md](ROADMAP.md).
 
-Built and tested with **Godot 4.7.1**. No art or audio files: every model,
+Built and tested with **Godot 4.7.1**. The version (`config/version` in
+project.godot) shows at the bottom of the main menu. No art or audio files: every model,
 sprite, animation and sound is generated in code.
 
 **Play it in the browser:** <https://cavaleirobrancopensante.github.io/MusketFPS/>.
@@ -550,7 +551,20 @@ the hours passing while the men work (Logistics shortens them):
 | Roll cartridges | 1 lb powder, 3 lb lead | 40 cartridges |
 | Smoke meat | 6 meat, 1 charcoal | 6 rations |
 
-Fresh meat and fish lose a third a day until smoked. With these a company
+Fresh meat and fish lose a third a day until smoked.
+
+**No lead?** Woodland also gives hardwood: *Carve wooden balls* (1 lb
+powder, 4 hardwood → 40 cartridges). They're mixed in with the rest; each
+of your side's shots has the wooden share's chance of being one, which
+flies slower and hits for half.
+
+**Hunt or fish yourself** (optional; SET TO WORK still sends the men): at
+a hunting ground or fishing water, HUNT/FISH YOURSELF takes you into the
+woods or to a river with your musket. Deer graze in small herds and bolt
+when you come close (closer still on a horse) or a shot rings out;
+fish show as fins and ripples and scatter when a ball misses near them. A
+deer is 30-45 lb of meat, a fish 3-6. END THE HUNT puts it in the wagon
+(four hours pass). With these a company
 can keep itself in powder, shot, food and water without a market.
 
 ### Markets

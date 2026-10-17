@@ -544,8 +544,8 @@ const RESOURCES := {
 		"text": "White crust on the walls of a cave where bats roost: scraped, leached and boiled down, it's saltpetre. Three parts in four of gunpowder."},
 	"sulphur": {"name": "Sulphur spring", "store": "sulphur", "amount": [4, 8], "hours": 6.0, "regrow": 8.0,
 		"text": "Yellow crystals round a hot spring that stinks of rotten eggs. A tenth of gunpowder is sulphur."},
-	"charcoal": {"name": "Woodland", "store": "charcoal", "amount": [8, 14], "hours": 10.0, "regrow": 3.0,
-		"text": "Good hardwood. Cut, stacked and burned slowly under turf, it makes charcoal: for powder, for smelting, for smoking meat."},
+	"charcoal": {"name": "Woodland", "store": "charcoal", "amount": [8, 14], "hours": 10.0, "regrow": 3.0, "also": {"wood": [8, 14]},
+		"text": "Good hardwood. Cut, stacked and burned slowly under turf, it makes charcoal: for powder, for smelting, for smoking meat. Some is kept back as timber for carving."},
 	"lead": {"name": "Lead outcrop", "store": "ore", "amount": [8, 14], "hours": 10.0, "regrow": 12.0,
 		"text": "Grey, heavy galena in the rock. Smelted with charcoal, it gives lead for musket balls."},
 	"game": {"name": "Hunting grounds", "store": "meat", "amount": [10, 22], "hours": 8.0, "regrow": 4.0,
@@ -585,6 +585,9 @@ func gather(id: int) -> Dictionary:
 		var a: Array = spec["amount"]
 		n = maxi(1, int(round(randi_range(int(a[0]), int(a[1])) * hands)))
 		Company.stores[store] = int(Company.stores.get(store, 0)) + n
+		var also: Dictionary = spec.get("also", {})
+		for k in also:
+			Company.stores[k] = int(Company.stores.get(k, 0)) + maxi(1, int(round(randi_range(int(also[k][0]), int(also[k][1])) * hands)))
 		Company.save()
 	harvest[str(id)] = hours + float(spec["hours"]) + float(spec["regrow"]) * 24.0
 	save()

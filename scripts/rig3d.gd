@@ -1530,9 +1530,12 @@ const SADDLE_RAPTOR := Vector3(0, 0.74, 0.1)
 
 func _build_horse() -> void:
 	saddle_col = gear.get("saddle_col", saddle_col)
+	var deer: bool = gear.get("deer", false)
 	var coat := BAY.lerp(Color(0.22, 0.16, 0.12), randf() * 0.6)
 	if randf() < 0.15:
 		coat = Color(0.62, 0.6, 0.56) # a grey
+	if deer:
+		coat = Color(0.58, 0.4, 0.22).lerp(Color(0.45, 0.32, 0.2), randf() * 0.5)
 	var dark := coat.darkened(0.45)
 	_part(body, _box_mesh(Vector3(0.56, 0.62, 1.55)), coat, Vector3(0, 1.3, 0.0)) # barrel
 	_part(body, _box_mesh(Vector3(0.5, 0.6, 0.5)), coat, Vector3(0, 1.36, -0.72)) # chest
@@ -1542,11 +1545,16 @@ func _build_horse() -> void:
 		_part(body, _box_mesh(Vector3(0.66, 0.62, 1.7)), saddle_col, Vector3(0, 1.22, 0.02))
 		_part(body, _box_mesh(Vector3(0.56, 0.5, 0.5)), saddle_col, Vector3(0, 1.28, -0.74))
 		_part(body, _box_mesh(Vector3(0.68, 0.06, 1.72)), GOLD, Vector3(0, 0.92, 0.02), Vector3.ZERO, true)
-	# Saddle, cloth, girth.
-	_part(body, _box_mesh(Vector3(0.66, 0.06, 0.78)), saddle_col, Vector3(0, 1.63, 0.06))
-	_part(body, _box_mesh(Vector3(0.68, 0.035, 0.8)), GOLD, Vector3(0, 1.6, 0.06), Vector3.ZERO, true)
-	_part(body, _box_mesh(Vector3(0.4, 0.12, 0.56)), LEATHER, Vector3(0, 1.7, 0.04))
-	_part(body, _box_mesh(Vector3(0.6, 0.08, 0.1)), LEATHER, Vector3(0, 1.3, -0.1), Vector3.ZERO, true)
+	if deer:
+		# A deer: no saddle; a pale rump and belly.
+		_part(body, _box_mesh(Vector3(0.5, 0.4, 0.2)), Color(0.92, 0.88, 0.8), Vector3(0, 1.38, 0.9))
+		_part(body, _box_mesh(Vector3(0.4, 0.12, 1.2)), Color(0.85, 0.78, 0.66), Vector3(0, 1.0, 0.0))
+	else:
+		# Saddle, cloth, girth.
+		_part(body, _box_mesh(Vector3(0.66, 0.06, 0.78)), saddle_col, Vector3(0, 1.63, 0.06))
+		_part(body, _box_mesh(Vector3(0.68, 0.035, 0.8)), GOLD, Vector3(0, 1.6, 0.06), Vector3.ZERO, true)
+		_part(body, _box_mesh(Vector3(0.4, 0.12, 0.56)), LEATHER, Vector3(0, 1.7, 0.04))
+		_part(body, _box_mesh(Vector3(0.6, 0.08, 0.1)), LEATHER, Vector3(0, 1.3, -0.1), Vector3.ZERO, true)
 	# Neck and head on their own node (it nods as he goes).
 	_neck = Node3D.new()
 	_neck.position = Vector3(0, 1.5, -0.86)
@@ -1560,6 +1568,12 @@ func _build_horse() -> void:
 	_part(_neck, _box_mesh(Vector3(0.26, 0.03, 0.03)), BLACK, Vector3(0, 0.6, -0.78), Vector3.ZERO, true) # bridle
 	_part(_neck, _box_mesh(Vector3(0.04, 0.04, 0.04)), BLACK, Vector3(0.12, 0.72, -0.56), Vector3.ZERO, true) # eye
 	_part(_neck, _box_mesh(Vector3(0.04, 0.04, 0.04)), BLACK, Vector3(-0.12, 0.72, -0.56), Vector3.ZERO, true)
+	if deer:
+		# Antlers: two beams back and up, a few tines.
+		for sx in [-1.0, 1.0]:
+			_part(_neck, _box_mesh(Vector3(0.035, 0.035, 0.5)), Color(0.82, 0.76, 0.62), Vector3(sx * 0.12, 1.0, -0.36), Vector3(-55, sx * 20, 0))
+			_part(_neck, _box_mesh(Vector3(0.03, 0.03, 0.22)), Color(0.82, 0.76, 0.62), Vector3(sx * 0.15, 1.05, -0.5), Vector3(-80, 0, 0))
+			_part(_neck, _box_mesh(Vector3(0.03, 0.03, 0.22)), Color(0.82, 0.76, 0.62), Vector3(sx * 0.18, 1.2, -0.3), Vector3(-80, 0, 0))
 	for i in 3:
 		_mtail.append(_part(body, _box_mesh(Vector3(0.12 - i * 0.02, 0.12, 1.0)), dark, Vector3.ZERO))
 	# Legs: forearm/cannon in front, gaskin/cannon behind; trot pairs.

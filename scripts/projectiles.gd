@@ -121,6 +121,11 @@ func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D, only:
 		p["spark"] = 0.0
 	if kind == "ball":
 		stats["balls"] += 1
+		# Your side's balls: some may be wooden (no lead to be had).
+		if Company.active and shooter != null and is_instance_valid(shooter) and shooter.is_in_group("friendlies") \
+				and randf() < Company.wood_share():
+			p["dmg_mult"] = 0.5
+			p["vel"] = velocity * 0.85
 	_list.append(p)
 	return p
 

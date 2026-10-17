@@ -251,6 +251,11 @@ func _ready() -> void:
 					walls = float(a.substr(8))
 			Company.next_battle = {"enemy": 40, "terrain": 3, "party": -1, "ambush": false, "enemy_kind": "lizards",
 				"assault": 0, "walls": walls, "stash": false, "nest_name": Lang.t("Test nest")}
+		elif "--hunt=game" in args or "--hunt=fish" in args:
+			# Hunting yourself: -- --autotest --hunt=game|fish
+			Company.new_campaign(_test_start())
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			Company.next_battle = {"hunt": "game" if "--hunt=game" in args else "fish", "res": -1}
 		elif "--campaign" in args:
 			Company.new_campaign(_test_start())
 		else:
@@ -366,6 +371,22 @@ func _ready() -> void:
 		Settings.save_prefs()
 		label.call())
 	foot.add_child(gfx)
+	# The version, small, at the very bottom (project.godot's config/version).
+	var ver := Label.new()
+	ver.text = Lang.t("Version %s") % String(ProjectSettings.get_setting("application/config/version", "?"))
+	ver.add_theme_font_size_override("font_size", 15)
+	ver.add_theme_color_override("font_color", Color(UI.SLATE, 0.8))
+	ver.anchor_left = 0.5
+	ver.anchor_right = 0.5
+	ver.anchor_top = 1.0
+	ver.anchor_bottom = 1.0
+	ver.offset_left = -120
+	ver.offset_right = 120
+	ver.offset_top = -30
+	ver.offset_bottom = -8
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(ver)
 	_build_tests()
 	# The music button in the bottom-right corner, away from the menu.
 	MusicBar.attach(self, get_viewport_rect().size - Vector2(84, 84))

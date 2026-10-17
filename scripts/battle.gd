@@ -230,7 +230,9 @@ func _ready() -> void:
 	_deploy_guns()
 	if field != null:
 		await field.make_sprites()
-		if field.prologue:
+		if field.hunt != "":
+			field.spawn_hunt()
+		elif field.prologue:
 			field.spawn_prologue()
 		elif field.campaign:
 			field.spawn_campaign()
@@ -240,7 +242,8 @@ func _ready() -> void:
 	_bring_horse()
 	_bring_light_gun()
 
-	Company.battle_begun()
+	if field == null or field.hunt == "":
+		Company.battle_begun()
 	await Loading.step(f[4], Lang.t("Fall in!"))
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -279,9 +282,64 @@ func _ready() -> void:
 	elif Company.active and Company.march_note != "":
 		hud.show_message(Company.march_note, 6.0)
 		state_timer = maxf(state_timer, 6.0)
+	elif field != null and field.hunt == "game":
+		hud.show_message(Lang.t("Deer in the woods: creep close."), 5.0)
+	elif field != null and field.hunt == "fish":
+		hud.show_message(Lang.t("Fish in the river: watch for the fins."), 5.0)
 	else:
 		hud.show_message(Lang.t("Form the line! They're coming..."), 4.5)
 	Loading.done(self)
+
+
+# ---------------------------------------------------------------- the hunt
+
+var hunt_meat := 0 # lb brought down so far
+var hunt_kills := 0
+
+
+## battle.enemies' deer and fish when they fall.
+func on_game_down(a) -> void:
+	hunt_meat += int(a.meat)
+	hunt_kills += 1
+	if hud != null:
+		hud.show_message(Lang.t("+%d lb of meat") % int(a.meat), 1.6)
+
+
+## A shot: every deer within earshot bolts; fish near where it struck the
+## water dart away (a moment later, so a ball on target still finds them).
+func _hunt_shot(_hit: bool) -> void:
+	if field == null or field.hunt == "":
+		return
+	var from: Vector3 = player.global_position
+	var fwd: Vector3 = -player.camera.global_transform.basis.z
+	for e in enemies.duplicate():
+		if e.get("rig_kind") != "animal":
+			continue
+		if e.kind == "deer" and e.global_position.distance_to(from) < 75.0:
+			e.scare(from)
+		elif e.kind == "fish":
+			var to: Vector3 = e.global_position - from
+			var along: float = to.dot(fwd)
+			if along > 0.0 and (to - fwd * along).length() < 5.0:
+				get_tree().create_timer(0.35).timeout.connect(func():
+					if is_instance_valid(e) and e.alive:
+						e.scare(from))
+
+
+## END THE HUNT: the meat goes in the wagon, the hours pass, back to the map.
+func end_hunt() -> void:
+	var nb: Dictionary = Company.next_battle
+	Company.stores["meat"] = int(Company.stores.get("meat", 0)) + hunt_meat
+	var rid := int(nb.get("res", -1))
+	if rid >= 0 and World.is_ready:
+		var spec: Dictionary = World.RESOURCES[World.resource(rid)["kind"]]
+		World.harvest[str(rid)] = World.hours + float(spec["regrow"]) * 24.0
+	World.hours += 4.0
+	World.save()
+	Company.next_battle = {}
+	Company.march_note = ""
+	Company.save()
+	Loading.change("res://scenes/map.tscn")
 
 
 # ---------------------------------------------------------------- your horse and your gun
@@ -344,6 +402,9 @@ func _field_config(nb: Dictionary) -> Dictionary:
 		return Settings.field
 	if prologue:
 		return {"map": "beach", "prologue": true, "pace": 0.75}
+	if String(nb.get("hunt", "")) != "":
+		# Hunting or fishing yourself (map.gd, at a hunting ground or water).
+		return {"map": "river" if nb["hunt"] == "fish" else "forest", "hunt": String(nb["hunt"]), "pace": 0.75}
 	if "--oldbattle" in OS.get_cmdline_user_args():
 		return {}
 	var c := {"map": String(nb.get("map", _map_for_terrain(int(nb.get("terrain", 2))))), "campaign": true,

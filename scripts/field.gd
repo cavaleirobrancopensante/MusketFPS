@@ -83,6 +83,7 @@ var deploy_z := 62.0
 var enemy_z := 62.0
 var campaign := false # a fight from the campaign map (your own men; results go back)
 var prologue := false # the beach: the tutorial battle (see the prologue section)
+var hunt := "" # "game" or "fish": you alone with a musket, after meat (battle.gd)
 var camp := false # attacked in the night camp (or a sortie from a besieged nest)
 var spotted := false # ...and the watch saw them coming
 var assault := false # storming a lizard nest (nest_assault.gd)
@@ -117,6 +118,12 @@ func setup(b, c: Dictionary) -> void:
 	deploy_z = 92.0 if terrain.kind == "town" else 80.0
 	campaign = bool(c.get("campaign", false))
 	prologue = bool(c.get("prologue", false))
+	hunt = String(c.get("hunt", ""))
+	if hunt != "":
+		cfg["you"] = {}
+		cfg["foe"] = {}
+		ai_sides = []
+		return
 	if prologue:
 		# The beach: your line just behind the works, the forest 80 m off.
 		deploy_z = 8.0
@@ -317,6 +324,41 @@ func spawn_armies() -> void:
 	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
 	player_reg.order = "follow"
+
+
+## The hunt: you, your musket, and game. Deer graze in small herds in the
+## woods; fish swim in the river. (Animals: animal.gd.)
+const Animal := preload("res://scripts/animal.gd")
+
+
+func spawn_hunt() -> void:
+	var p := Vector3(0, 0, 60.0)
+	if hunt == "fish":
+		p = Vector3(10.0, 0, Terrain.river_z(10.0) + 13.0)
+	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
+	battle.player.rotation.y = 0.0
+	battle._commanding = false
+	battle.player.fired.connect(battle._hunt_shot)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	if hunt == "game":
+		for herd in 4:
+			var c := Vector3(rng.randf_range(-90, 90), 0, rng.randf_range(-110, 10))
+			for k in rng.randi_range(2, 4):
+				var at: Vector3 = terrain.free_spot(c + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6)))
+				at.y = terrain.height(at.x, at.z)
+				var a = Animal.make(battle, "deer", at)
+				battle.enemies.append(a)
+				battle.add_child(a)
+	else:
+		for k in 16:
+			var x := rng.randf_range(-100, 100)
+			if absf(x - Terrain.BRIDGE_X) < 8.0:
+				x += 16.0
+			var at2 := Vector3(x, terrain.water_y - 0.2, Terrain.river_z(x) + rng.randf_range(-4.0, 4.0))
+			var f = Animal.make(battle, "fish", at2)
+			battle.enemies.append(f)
+			battle.add_child(f)
 
 
 ## The prologue (field_prologue.gd): the beach, the Major's battle, then yours.
@@ -1172,7 +1214,7 @@ func _check_end() -> void:
 		if clock > (600.0 if prologue else 300.0):
 			print("FIELD END timeout")
 			get_tree().quit()
-	if over != "" or prologue:
+	if over != "" or prologue or hunt != "":
 		return
 	var mine := regs.filter(func(r): return r.side == 0 and not r.broken())
 	var theirs := regs.filter(func(r): return r.side == 1 and not r.broken())
@@ -1228,6 +1270,8 @@ func allies_left() -> int:
 
 
 func status_line() -> String:
+	if hunt != "":
+		return Lang.t("%s   ·   %d lb of meat   ·   %d brought down") % [Lang.t("Hunting") if hunt == "game" else Lang.t("Fishing"), battle.hunt_meat, battle.hunt_kills]
 	var a := 0
 	var b := 0
 	var ra := 0
