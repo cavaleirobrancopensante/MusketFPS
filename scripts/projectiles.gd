@@ -188,23 +188,25 @@ func _step(p: Dictionary, delta: float) -> bool:
 			return true
 		_spent(p, false)
 		return false
-	if pos.y <= 0.02 and k.has("bounce") and vel.length() > 30.0:
+	var gy: float = battle.ground_y(pos)
+	var wall: bool = battle.field != null and gy > battle.field.terrain.height(pos.x, pos.z) + 0.4
+	if pos.y <= gy + 0.02 and k.has("bounce") and vel.length() > 30.0 and not wall:
 		# A ball that grazes the ground skips on, lower and slower.
-		battle.spawn_puff(Vector3(pos.x, 0.05, pos.z), Color(0.6, 0.52, 0.38), 0.8)
-		p["pos"] = Vector3(pos.x, 0.03, pos.z)
+		battle.spawn_puff(Vector3(pos.x, gy + 0.05, pos.z), Color(0.6, 0.52, 0.38), 0.8)
+		p["pos"] = Vector3(pos.x, gy + 0.03, pos.z)
 		p["vel"] = Vector3(vel.x * 0.75, absf(vel.y) * float(k["bounce"]), vel.z * 0.75)
 		return float(p["age"]) < float(k["life"])
-	if pos.y <= 0.02:
+	if pos.y <= gy + 0.02:
 		stats["ground"] += 1
-		if k.has("shaft"):
+		if k.has("shaft") and not wall:
 			# It sticks where it fell, at the angle it came down.
 			var l := float(k["shaft"])
-			_stuck.append([Vector3(pos.x, 0.0, pos.z) - vel.normalized() * l * 0.35, vel.normalized(), l, 0.0])
+			_stuck.append([Vector3(pos.x, gy, pos.z) - vel.normalized() * l * 0.35, vel.normalized(), l, 0.0])
 			if _stuck.size() > STUCK_MAX:
 				_stuck.pop_front()
 			return false
-		battle.spawn_puff(Vector3(pos.x, 0.05, pos.z), Color(0.45, 0.38, 0.28), 0.35)
-		_spent(p, true)
+		battle.spawn_puff(Vector3(pos.x, (prev.y if wall else gy) + 0.05, pos.z), Color(0.45, 0.38, 0.28) if not wall else Color(0.7, 0.66, 0.58), 0.35)
+		_spent(p, not wall)
 		return false
 	if float(p["age"]) >= float(k["life"]):
 		_spent(p, false)
@@ -218,7 +220,7 @@ func _spent(p: Dictionary, grounded: bool) -> void:
 		return
 	var nd: Node3D = p["node"]
 	if grounded:
-		nd.position = Vector3(nd.position.x, 0.5, nd.position.z)
+		nd.position = Vector3(nd.position.x, battle.ground_y(nd.position) + 0.5, nd.position.z)
 		var tw := nd.create_tween()
 		tw.tween_interval(12.0)
 		tw.tween_callback(nd.queue_free)
@@ -235,8 +237,9 @@ func _sweep_only(a: Vector3, b: Vector3, u: Node3D) -> Dictionary:
 
 func _step_grenade(p: Dictionary, k: Dictionary, prev: Vector3, pos: Vector3, vel: Vector3, delta: float) -> bool:
 	# Bounce and roll on the ground.
-	if pos.y <= 0.06:
-		pos.y = 0.06
+	var gy: float = battle.ground_y(pos)
+	if pos.y <= gy + 0.06:
+		pos.y = gy + 0.06
 		if vel.y < -1.0:
 			vel.y = -vel.y * float(k["bounce"])
 			vel.x *= 0.6
@@ -337,6 +340,8 @@ func line_blocked(from: Vector3, to: Vector3, shooter: Node3D) -> bool:
 	if hit.is_empty():
 		return false
 	var u: Node3D = hit["unit"]
+	if shooter != null and shooter.is_in_group("enemies"):
+		return u.is_in_group("enemies")
 	return u == battle.player or u.is_in_group("friendlies")
 
 

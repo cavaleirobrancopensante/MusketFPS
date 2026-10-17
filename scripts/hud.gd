@@ -170,6 +170,8 @@ func _buttons() -> Array:
 	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": "MENU"})
 	list.append({"id": "view", "circle": false, "rect": Rect2(140, 92, 150, 46),
 			"label": "3RD PERSON" if player.third_person else "1ST PERSON"})
+	if battle.field != null and battle.field.ui != null:
+		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": "COMMAND"})
 	if Settings.playground:
 		# The range's own controls, down the left side.
 		var pl := [["pg_still1", "+1 TARGET"], ["pg_still5", "+5 TARGETS"], ["pg_charge5", "+5 CHARGING"],
@@ -298,6 +300,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			battle.to_menu()
 		"view":
 			player.toggle_view()
+		"command":
+			battle.field.ui.open(false)
 
 
 func _process(delta: float) -> void:

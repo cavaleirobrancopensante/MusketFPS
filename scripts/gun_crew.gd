@@ -36,6 +36,7 @@ var barrel: Node3D
 var reload := 12.0
 var t := 1.0 # 0..1 through the drill; 1 = loaded and laid
 var silent := false
+var coat_col = null # another army's coat (field battles)
 var want_yaw := 0.0 # where the gunner is laying the gun (world yaw)
 var _crew := {} # role -> {"holder", "rig"}
 var _cartridge := -1
@@ -75,6 +76,7 @@ func _ready() -> void:
 		r.gear = {"head": "shako", "torso": "coat", "secondary": "",
 			"primary": {"rammer": "rammer", "firer": "linstock"}.get(role, "none")}
 		r.pack = {"rations": 0, "water": 0, "ammo": 0}
+		r.coat_override = coat_col
 		holder.add_child(r)
 		_crew[role] = {"holder": holder, "rig": r}
 	holder_at("rammer", _post("rammer"))

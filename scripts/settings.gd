@@ -25,6 +25,11 @@ var playground := false
 ## guns against a fortified nest.
 var siege_test := false
 
+## A field battle (Tests > Field battle): {map, size, you: {kind: n},
+## foe_army, foe: {kind: n}} from the setup screen; empty otherwise.
+var field := {}
+var field_last := {} # the setup screen remembers your last armies
+
 ## The save slot in use (1..SLOTS); remembered for CONTINUE.
 var slot := 1
 
