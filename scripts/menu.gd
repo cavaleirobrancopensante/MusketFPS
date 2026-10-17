@@ -64,6 +64,26 @@ func _ready() -> void:
 			# Through the loading screen, as from the setup screen.
 			Loading.change.call_deferred(BATTLE)
 			return
+	if "--contracttest" in args:
+		# Headless check of a contract: signing, pay, progress, the end.
+		Company.new_campaign()
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		var terms := Company.contract_terms(0, "aurest", "Count Test")
+		terms["duty"] = "warbands"
+		terms["need"] = 2
+		Company.sign_contract(terms)
+		var m0 := Company.money
+		print("CONTRACT signed ", terms, " vell standing ", Company.standing["vell"])
+		print("CONTRACT ", Company.contract_progress("warband", "lizards"))
+		print("CONTRACT ", Company.contract_progress("patrol", "vell"), "(vell patrol: not this duty)")
+		print("CONTRACT ", Company.contract_progress("hunters", "lizards"))
+		for d in 22:
+			for n in Company.pass_day("clean"):
+				if n.find("hire") >= 0 or n.find("contract") >= 0:
+					print("CONTRACT day ", Company.day, ": ", n)
+		print("CONTRACT money ", m0, " -> ", Company.money, " contract now ", Company.contract, " last ", Company.last_contract.get("ended", ""))
+		get_tree().quit()
+		return
 	if "--maptest" in args:
 		# Headless check of the map: a new campaign straight after the beach.
 		Company.new_campaign()

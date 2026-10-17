@@ -965,6 +965,11 @@ func _on_wait() -> void:
 func _on_day(notes: PackedStringArray) -> void:
 	for n in notes:
 		_push_toast(n)
+	# A contract run its course: the lord settles his opinion of you.
+	var lc: Dictionary = Company.last_contract
+	if not lc.is_empty():
+		World.change_relation(World.lord(int(lc["lord"])), 15 if lc.get("ended", "") == "done" else -15)
+		Company.last_contract = {}
 
 
 func _on_arrived(g: Dictionary) -> void:
@@ -1226,6 +1231,10 @@ func _meet(p: Dictionary) -> void:
 				text += "\n\n[color=#9aa3b8]%s is %s to you.[/color]" % [World.lord_short(l), World.relation_word(int(l["relation"]))]
 				if int(l["relation"]) >= 15:
 					text += " He greets you by name, and asks what you've seen of the lizards."
+				var c: Dictionary = Company.contract
+				if not c.is_empty() and int(c["lord"]) == int(l["id"]):
+					text += "\n\n[color=#c9a14a]You serve him until day %d: %s (%d of %d). %d crowns a week.[/color]" % [
+						int(c["until"]), Company.DUTIES[c["duty"]][0], int(c["done"]), int(c["need"]), int(c["pay"])]
 			else:
 				text = "An army of %s on the march." % Lore.FACTIONS[p["faction"]]["name"]
 	var buttons: Array = []
@@ -1243,6 +1252,8 @@ func _meet(p: Dictionary) -> void:
 			text += "\n\n[color=#9aa3b8]%s thinks of you: %s.[/color]" % [Lore.FACTIONS[f]["name"], Company.standing_word(f)]
 			text += "\n[color=#f08060]Attack them and %s will remember it: %s.[/color]" % [Lore.FACTIONS[f]["short"],
 				"their patrols will hunt you" if Company.standing.get(f, 0) - _ATTACK_COST[kind] <= Company.HOSTILE_AT else "they'll trust you less"]
+		if kind == "army" and _may_hire(p):
+			buttons.append(["OFFER YOUR SERVICE", _offer_service.bind(p)])
 		buttons.append(["ATTACK", _attack_party.bind(p)])
 	buttons.append(["LEAVE", _popup_close])
 	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "traders": "traders",
@@ -1255,10 +1266,39 @@ func _meet(p: Dictionary) -> void:
 const _ATTACK_COST := {"patrol": 40, "caravan": 30, "deserters": 0, "army": 50}
 
 
+## Will this lord take you on? Not if you already serve someone, if he or
+## his nation think ill of you.
+func _may_hire(p: Dictionary) -> bool:
+	var l := World.lord_of(p)
+	return not l.is_empty() and Company.contract.is_empty() and int(l["relation"]) >= 0 \
+		and int(Company.standing.get(String(p["faction"]), 0)) >= 0
+
+
+func _offer_service(p: Dictionary) -> void:
+	_popup_close()
+	var l := World.lord_of(p)
+	var terms := Company.contract_terms(int(l["id"]), String(p["faction"]), World.lord_short(l))
+	var text := "%s looks over your men, and the muskets longer still.\n\n\"Three weeks. %d crowns a week while you serve, paid every seventh day. %s, and there's a bonus in it.\"" % [
+		World.lord_full(l), int(terms["pay"]), Company.DUTIES[terms["duty"]][0]]
+	text += "\n\n[color=#9aa3b8]Duty: %s (%d). %s will hear of it and like you less.[/color]" % [
+		Company.DUTIES[terms["duty"]][2], int(terms["need"]), Lore.FACTIONS[Company.AT_WAR[p["faction"]]]["name"]]
+	_scene("patrol", {"faction": p["faction"]})
+	_popup_open("Terms from %s" % World.lord_short(l), text, [["ACCEPT", func():
+			_popup_close()
+			Company.sign_contract(terms)
+			World.change_relation(l, 5)
+			Company.save()
+			_push_toast("You serve %s until day %d." % [World.lord_short(l), int(terms["until"])])],
+		["DECLINE", _popup_close]])
+
+
 func _attack_party(p: Dictionary) -> void:
 	var kind := String(p["kind"])
 	var f := String(p["faction"])
 	var note := ""
+	if not Company.contract.is_empty() and String(Company.contract["faction"]) == f:
+		World.change_relation(World.lord(int(Company.contract["lord"])), -40)
+		note = Company.break_contract()
 	if int(_ATTACK_COST.get(kind, 0)) > 0:
 		var was := Company.is_enemy(f)
 		Company.change_standing(f, -int(_ATTACK_COST[kind]))
@@ -1462,6 +1502,12 @@ func _show_lords() -> void:
 				state = "his army in the field"
 			t += "   %s: %s; %s.\n" % [World.lord_full(l), World.relation_word(int(l["relation"])), state]
 		t += "\n"
+	var c: Dictionary = Company.contract
+	if not c.is_empty():
+		t += "[color=#c9a14a]In the service of %s until day %d: %s (%d of %d). %d crowns a week.[/color]\n\n" % [
+			c["lord_name"], int(c["until"]), Company.DUTIES[c["duty"]][0], int(c["done"]), int(c["need"]), int(c["pay"])]
+	else:
+		t += "[color=#9aa3b8]Meet a lord's army and you can offer him your service.[/color]\n"
 	t += "[color=#9aa3b8]Aurest and Vell are at war. Help a nation's men and it warms to you; attack them and it turns on you, and its patrols and armies hunt you.[/color]"
 	_scene("patrol", {"faction": "aurest"})
 	_popup_open("The lords of the land", t, [["CLOSE", _popup_close]], false)
@@ -1505,6 +1551,9 @@ func _join_fight(friend: Dictionary, foe: Dictionary) -> void:
 	if foe["faction"] != "lizards":
 		Company.change_standing(String(foe["faction"]), -25)
 		World.change_relation(World.lord_of(foe), -30)
+		if not Company.contract.is_empty() and String(Company.contract["faction"]) == String(foe["faction"]):
+			World.change_relation(World.lord(int(Company.contract["lord"])), -40)
+			_push_toast(Company.break_contract())
 	_set_battle(foe, false)
 	Company.next_battle["allies"] = {"faction": ff, "comp": World.party_comp(friend), "party": int(friend["id"]),
 		"size": int(friend["size"]), "lord": int(friend.get("lord", -1))}
@@ -1660,6 +1709,10 @@ func _apply_battle_result() -> void:
 		var assault := int(nb.get("assault", -1)) >= 0
 		if assault:
 			World.nest_fought(nid, int(r.get("slain", 0)), won)
+			if won:
+				var cp := Company.contract_progress("nest", "lizards")
+				if cp != "":
+					_push_toast(cp)
 			_push_toast("%s burns!" % World.settlement(nid)["name"] if won else "The assault is thrown back.")
 		else:
 			# A sortie: the dead are gone; if they won, the rest go back in.
@@ -1675,6 +1728,10 @@ func _apply_battle_result() -> void:
 		World.save()
 		return
 	var p := World.party_by_id(id)
+	if bool(r.get("won", false)) and not p.is_empty():
+		var cp2 := Company.contract_progress(String(p["kind"]), String(p["faction"]))
+		if cp2 != "":
+			_push_toast(cp2)
 	if nb.has("standing_note"):
 		_push_toast(String(nb["standing_note"]))
 	var al: Dictionary = nb.get("allies", {})
