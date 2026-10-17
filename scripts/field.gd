@@ -70,6 +70,11 @@ var deploy_z := 62.0
 var enemy_z := 62.0
 var campaign := false # a fight from the campaign map (your own men; results go back)
 var prologue := false # the beach: the tutorial battle (see the prologue section)
+var camp := false # attacked in the night camp (or a sortie from a besieged nest)
+var spotted := false # ...and the watch saw them coming
+var assault := false # storming a lizard nest (nest_assault.gd)
+var camp_fire := Vector3.ZERO
+var fog := 0.0022 # the air's haze down among the men (the command view clears it)
 ## How fast the battle goes (the setup's PACE): marching, loading and blows
 ## all scale with it, so there's time to fight and to command.
 var pace := 0.75
@@ -106,6 +111,17 @@ func setup(b, c: Dictionary) -> void:
 		if terrain.kind == "town":
 			deploy_z = maxf(deploy_z, 70.0)
 		enemy_z = deploy_z * (0.55 if bool(c.get("ambush", false)) else 1.0)
+		camp = bool(c.get("camp", false))
+		spotted = camp and bool(c.get("spotted", false))
+		assault = bool(c.get("assault", false))
+		if assault:
+			terrain.flatten(Vector2(0, NEST_Z), 21.0) # (the nest's clearing)
+		if camp:
+			# The fire in the middle of the field; the line forms just in
+			# front of it; they come out of the dark from the far side.
+			camp_fire = Vector3(0, 0, 22.0)
+			deploy_z = 16.0
+			enemy_z = 42.0
 	else:
 		enemy_z = deploy_z
 	if test_mode or bool(c.get("auto", false)):
@@ -256,7 +272,7 @@ func spawn_campaign() -> void:
 	var groups := {"musket": [], "pike": [], "bow": [], "xbow": []}
 	var porters: Array = []
 	for m in Company.fit_men():
-		if String(m.get("tag", "")) == "Wagon":
+		if String(m.get("tag", "")) == "Wagon" and not camp: # (in camp the wagon is parked)
 			porters.append(m)
 			continue
 		var role := Company.role_of(m)
@@ -283,7 +299,9 @@ func spawn_campaign() -> void:
 	if Company.guns > 0:
 		mine.append(["gun", false, Company.guns])
 	var comp: Dictionary = nb.get("comp", {})
-	if comp.is_empty():
+	if assault:
+		comp = {"none": 0} # (the garrison is the nest's: _build_nest)
+	elif comp.is_empty():
 		comp = World.party_comp({"kind": "warband", "size": int(nb.get("enemy", Company.next_enemy_count())), "id": 0})
 	var theirs: Array = []
 	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10}
@@ -296,11 +314,18 @@ func spawn_campaign() -> void:
 			theirs.append([k, false, take])
 			n -= take
 	_deploy(0, mine)
-	_deploy(1, theirs)
+	if camp and not spotted:
+		_in_the_camp(theirs)
+	elif not theirs.is_empty():
+		_deploy(1, theirs)
 	var p: Vector3 = player_reg.pos
 	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
 	player_reg.order = "follow"
+	if camp:
+		_make_camp(nb)
+	if assault:
+		_build_nest(nb)
 	# The wagon behind the line, its crew hauling and guarding it.
 	battle.line_anchor = Vector3(p.x, 0, p.z)
 	battle.line_forward = Vector3.FORWARD
@@ -317,7 +342,7 @@ func spawn_campaign() -> void:
 		battle.soldiers.append(s)
 		battle.add_child(s)
 	if battle.wagon != null:
-		battle.wagon.position.y = terrain.height(battle.wagon.position.x, battle.wagon.position.z)
+		battle.wagon.position = terrain.free_spot(battle.wagon.position)
 	# Some lizards would rather rob the wagon than fight.
 	for e in battle.enemies:
 		if e is FieldLizard and e.variant == "warrior":
@@ -331,6 +356,164 @@ func spawn_campaign() -> void:
 	for s in battle.soldiers:
 		if s.porter >= 0:
 			battle._all_men.append(s)
+
+
+# ---------------------------------------------------------------- the night camp
+# Attacked where you sleep (map.gd decides whether the watch saw them). The
+# men lie on their bedrolls in rings round the fire, the wagon parked to one
+# side, the watch out at the edge. Seen in time: the alarm gets everyone up,
+# they form on their regiments' ground in front of the fire, and the
+# lizards come out of the dark. Not seen: the warband is already among the
+# bedrolls, and each man wakes when the noise (or a blade) reaches him.
+
+func _make_camp(nb: Dictionary) -> void:
+	camp_fire.y = terrain.height(camp_fire.x, camp_fire.z)
+	battle._build_campfire(camp_fire)
+	var watch_ids: Array = nb.get("watch", [])
+	var sleepers: Array = []
+	var watch: Array = []
+	for r in regs:
+		if r.side != 0 or r.kind == "gun":
+			continue
+		for m in r.members:
+			var rec = m.get("record")
+			if rec != null and int(rec["id"]) in watch_ids:
+				watch.append(m)
+			else:
+				sleepers.append(m)
+	var n := sleepers.size()
+	for i in n:
+		# Rings of twenty round the fire, leaving the south (yours) open.
+		var ring := i / 20
+		var k := i % 20
+		var in_ring := mini(20, n - ring * 20)
+		var a := lerpf(-PI * 0.78, PI * 0.78, (k + 0.5) / maxf(1.0, in_ring))
+		var dir := Vector3(sin(a), 0, -cos(a))
+		var rad := 3.3 + ring * 3.0 + (0.9 if k % 2 == 1 else 0.0) + randf_range(-0.2, 0.2)
+		var s = sleepers[i]
+		s.position = terrain.free_spot(camp_fire + dir * rad)
+		s.facing = -dir # feet to the fire
+		s.asleep = true
+		# The alarm gets men up fast; unwarned, some sleep on through the first screams.
+		s.wake_in = randf_range(0.3, 2.0) if spotted else randf_range(2.0, 8.0) * (1.25 - 0.5 * float(s.steadiness))
+		battle._bedroll(s.position, dir, i)
+	# The watch: out at the edge of the firelight, looking out.
+	for k in watch.size():
+		watch[k].position = terrain.free_spot(camp_fire + Vector3(-3.0 + 6.0 * k, 0, -9.5))
+		watch[k].facing = Vector3.FORWARD
+	# You: on your bedroll on the near side of the fire.
+	var me: Vector3 = terrain.free_spot(camp_fire + Vector3(0, 0, 3.4))
+	battle.player.position = me + Vector3.UP * 0.1
+	battle._bedroll(me, Vector3.BACK, 99)
+	battle.player.asleep_left = 0.4 if spotted else 1.6
+
+
+## Unseen, the warband is already in among the bedrolls: its mobs all round
+## the fire, every one making for the nearest men.
+func _in_the_camp(theirs: Array) -> void:
+	var c := camp_fire
+	for i in theirs.size():
+		var e: Array = theirs[i]
+		var a := TAU * (float(i) + randf_range(0.0, 0.6)) / maxf(1.0, theirs.size()) + 0.4
+		var d := randf_range(11.0, 17.0) if e[0] != "liz_raptor" else 30.0
+		var at := c + Vector3(sin(a) * d, 0, -cos(a) * d)
+		var fwd := (c - at).normalized()
+		_make_reg(1, e[0], int(e[2]), at, fwd, false)
+
+
+# ---------------------------------------------------------------- storming a nest
+# The nest (nest_assault.gd) stands in the far half of the field, its gate
+# toward you; your army deploys to storm it. Its garrison: throwers on the
+# platforms behind the stakes, and mobs holding inside (behind the stakes
+# nobody can shoot them), loosed when the gate falls or you're at a gap. The
+# rest sally out of the gate in waves. The guns batter the gate when there's
+# nothing else to shoot; men at the gate hack at it.
+
+const NestScript := preload("res://scripts/nest_assault.gd")
+const NEST_Z := -26.0
+
+
+func _build_nest(nb: Dictionary) -> void:
+	var nest = NestScript.new()
+	nest.field = self
+	battle.add_child(nest)
+	battle.nest = nest
+	var from := Vector3(0, 0, deploy_z)
+	nest.setup(battle, from, Vector3.FORWARD, deploy_z - NEST_Z, maxi(8, int(nb.get("enemy", 40))),
+		float(nb.get("walls", 1.0)), bool(nb.get("stash", false)))
+	nest.position.y = terrain.height(0.0, NEST_Z)
+	wall_nest()
+	if test_mode:
+		var tr: Array = []
+		for r in nest.defender_regs:
+			tr.append("%s %d at %s" % [r.kind, r.members.size(), r.pos.round()])
+		print("NEST centre ", nest.centre.round(), " gate ", nest.gate_point().round(), " openings ", nest.openings().size(), " garrison ", tr, " sallies ", nest._sallies)
+
+
+## The palisade in the paths: its ring blocked but for the breaches (and the
+## gate once it's down). Again whenever the gate falls.
+func wall_nest() -> void:
+	var nest = battle.nest
+	terrain.ring_wall(nest.centre, nest.R, nest.openings())
+
+
+## The garrison holding inside (nest_assault.gd asks): `mob` lizards and
+## `throwers` on the platforms.
+func garrison(nest, mob: int, throwers: int) -> void:
+	var c: Vector3 = nest.centre
+	var toward: Vector3 = nest.gate_point() - c
+	toward.y = 0.0
+	toward = toward.normalized()
+	var right := toward.cross(Vector3.UP)
+	if throwers > 0:
+		var t = _make_reg(1, "liz_skirm", throwers, c + toward * (nest.R - 3.0), toward, false)
+		t.title = "Throwers on the stakes"
+		t.hold_fast = true
+		nest.defender_regs.append(t)
+	var brutes := mob / 14 if mob >= 28 else 0
+	if brutes > 0:
+		var b = _make_reg(1, "liz_brute", brutes, c - toward * 5.0, toward, false)
+		b.hold_fast = true
+		b.covered = true
+		nest.defender_regs.append(b)
+		mob -= brutes
+	var chunks := ceili(mob / 20.0)
+	for i in chunks:
+		var n := mob / chunks + (1 if i < mob % chunks else 0)
+		var x := (float(i) - (chunks - 1) * 0.5) * 8.0
+		var r = _make_reg(1, "liz_warrior", n, c + right * x + toward * 1.5, toward, false)
+		r.title = "The nest's %s" % ["warriors", "second mob", "third mob"][mini(i, 2)]
+		r.hold_fast = true
+		r.covered = true
+		nest.defender_regs.append(r)
+
+
+## A sally out of the gate: `n` lizards in mobs of up to 24. Returns the men.
+func sally(nest, n: int) -> Array:
+	var out: Array = []
+	var gp: Vector3 = nest.gate_point()
+	var outward: Vector3 = gp - nest.centre
+	outward.y = 0.0
+	outward = outward.normalized()
+	var right := outward.cross(Vector3.UP)
+	var chunks := ceili(n / 24.0)
+	for i in chunks:
+		var k := n / chunks + (1 if i < n % chunks else 0)
+		var at := gp + outward * (6.0 + i * 6.0) + right * (float(i % 2) * 2.0 - 1.0) * 3.0 * float(mini(i, 1))
+		var r = _make_reg(1, "liz_warrior", k, at, outward, false)
+		r.title = "Sally from the gate"
+		if ui != null:
+			ui.add_banner(r)
+		out.append_array(r.members)
+	return out
+
+
+## The gate is down or the way is open: the garrison comes out to fight.
+func release(regs_in: Array) -> void:
+	for r in regs_in:
+		if r.hold_fast or r.covered:
+			r.hold_fast = false
+			r.covered = false
 
 
 static func _chunks(list: Array, size: int) -> Array:
@@ -647,8 +830,8 @@ func _flank_check(r) -> void:
 			continue
 		var dot: float = to.normalized().dot(r.forward)
 		if dot < -0.35:
-			r.shock("rear%d" % o.id, 25.0)
-			alert(r, "%s %s attacked from behind!" % [r.title, r.verb("is", "are")], r.side == 0)
+			if r.shock("rear%d" % o.id, 25.0):
+				alert(r, "%s %s attacked from behind!" % [r.title, r.verb("is", "are")], r.side == 0)
 		elif dot < 0.35 and not r.is_cav():
 			r.shock("flank%d" % o.id, 14.0)
 
@@ -681,8 +864,19 @@ func cav_regroup(r) -> void:
 ## Batteries: each gun lays on a man of its target regiment and fires when
 ## loaded, laid and with a clear line.
 func _fire_guns() -> void:
+	var nest = battle.nest
 	for r in regs:
-		if r.kind != "gun" or r.broken() or not r.may_fire():
+		if r.kind != "gun" or r.broken():
+			continue
+		if nest != null and r.side == 0 and not nest.gate_open and (r.fire_target == null or r.fire_target.broken() or nest.inside(r.fire_target.centroid)):
+			# Nothing to shoot that isn't behind the stakes: batter the gate.
+			var gp: Vector3 = nest.gate_point() + Vector3.UP * 1.2
+			if r.fire_at_will and gp.distance_to(r.centroid) < r.range_m():
+				for g in r.members:
+					if g.alive and not g.crew.silent:
+						g.try_fire(gp)
+			continue
+		if not r.may_fire():
 			continue
 		for g in r.members:
 			if not g.alive or g.crew.silent:
@@ -705,6 +899,8 @@ func _ai(side: int) -> void:
 			continue
 		if r.player_led and side == 0 and not (test_mode):
 			continue
+		if r.hold_fast:
+			continue # (a nest's garrison, behind its stakes)
 		if r.order == "charge" and r.target != null and not r.target.broken():
 			continue
 		if r.order == "move" and not r.path.is_empty() and clock - r.order_t < 35.0:
@@ -744,6 +940,9 @@ func _pick_target(r):
 				s -= 30.0 # into the back of a melee
 		elif r.kind == "pike" and o.is_cav() and d < 70.0:
 			s -= 50.0
+		var nest = battle.nest
+		if nest != null and r.side == 0 and not nest.defender_regs.is_empty() and nest.inside(o.centroid):
+			s += -30.0 if o.covered else 300.0 # (a garrison holding: in by the gate or a gap)
 		if s < bs:
 			bs = s
 			best = o
@@ -834,7 +1033,7 @@ func _check_end() -> void:
 		return
 	var mine := regs.filter(func(r): return r.side == 0 and not r.broken())
 	var theirs := regs.filter(func(r): return r.side == 1 and not r.broken())
-	if theirs.is_empty():
+	if theirs.is_empty() and (battle.nest == null or battle.nest.done()):
 		over = "won"
 		battle.hud.show_message("VICTORY! The field is ours." if campaign else "VICTORY! Their army is running.", 9999.0)
 		_finish(true)

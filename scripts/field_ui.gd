@@ -69,6 +69,7 @@ var _hint_t := 0.0
 ## A lesson shown in the middle while the view is open (the prologue's first
 ## command): a title, then lines. Cleared when you leave the view.
 var lesson: Array = []
+var _ambient := -1.0 # the night's ambient light while the view brightens it
 
 
 func setup(f) -> void:
@@ -144,6 +145,9 @@ func _setup_view() -> void:
 	if field.prologue:
 		deploying = false
 		return
+	if field.camp:
+		deploying = false # (they're on you in the dark)
+		return
 	dist = clampf(field.deploy_z * 1.8, 70.0, 150.0)
 	focus = Vector3(p0.x, 0, p0.z - field.deploy_z * 0.5)
 	open(true)
@@ -159,6 +163,9 @@ func open(paused: bool) -> void:
 	battle.hud.visible = false
 	battle.hud.process_mode = Node.PROCESS_MODE_DISABLED
 	if field.env != null:
+		if battle.night and _ambient < 0.0:
+			_ambient = field.env.ambient_light_energy
+			field.env.ambient_light_energy = _ambient * 2.6 # (at night, a general's eye: or nothing shows)
 		field.env.fog_density = 0.0007 # (from up here the haze would grey it all out)
 		field.env.fog_height_density = 0.0
 	battle.player.set_process_input(false)
@@ -185,7 +192,10 @@ func close() -> void:
 	battle.hud.process_mode = Node.PROCESS_MODE_INHERIT
 	battle.hud.message_time = minf(battle.hud.message_time, 1.5) # (nothing stale waiting below)
 	if field.env != null:
-		field.env.fog_density = 0.0022
+		field.env.fog_density = field.fog
+		if _ambient >= 0.0:
+			field.env.ambient_light_energy = _ambient
+			_ambient = -1.0
 		field.env.fog_height_density = 0.0015
 	battle.player.set_process_input(true)
 	for r in _banners:

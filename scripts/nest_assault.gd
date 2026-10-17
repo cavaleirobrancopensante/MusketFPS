@@ -44,6 +44,9 @@ var defenders: Array = [] # lizards holding inside
 var throwers: Array = []
 var _hack_t := 0.0
 var stash := false
+## In a field battle (field.gd): the garrison is regiments, not loose lizards.
+var field = null
+var defender_regs: Array = []
 
 
 ## Build it `dist` metres in front of `from` along `forward`, with `garrison`
@@ -54,7 +57,7 @@ func setup(b, from: Vector3, forward: Vector3, dist: float, garrison: int, walls
 	centre = from + forward * dist
 	centre.y = 0.0
 	# The nest faces you: its gate toward where you stand.
-	rotation.y = atan2(-forward.x, -forward.z) + PI
+	rotation.y = atan2(-forward.x, -forward.z) # (local +Z, the gate, back toward `from`)
 	position = centre
 	gate_max = GATE_HP * lerpf(0.45, 1.0, clampf(walls, 0.0, 1.0))
 	gate_hp = gate_max
@@ -188,6 +191,10 @@ func _place_garrison(garrison: int, rng: RandomNumberGenerator) -> void:
 	if out > 0:
 		var first := int(ceil(out * 0.45))
 		_sallies = [first, out - first]
+	if field != null:
+		var t := mini(8, inside / 4)
+		field.garrison(self, inside - t, t)
+		return
 	var n_throw := mini(5, inside / 4)
 	for i in inside:
 		var l = LizardScript.new()
@@ -222,8 +229,8 @@ func _process(delta: float) -> void:
 		_hack_t = 0.5
 		var g := gate_point()
 		var n := 0
-		for s in battle.soldiers:
-			if s.alive and s.global_position.distance_to(g) < 3.4:
+		for s in battle.soldiers + (battle.allies if field != null else []):
+			if is_instance_valid(s) and s.alive and s.global_position.distance_to(g) < 3.4:
 				n += 1
 		if battle.player.alive and battle.player.global_position.distance_to(g) < 3.0:
 			n += 2
@@ -242,6 +249,11 @@ func _process(delta: float) -> void:
 		_opening_t -= delta
 	_animate_gate(delta)
 	# Once the gate is down, or yours are at the stakes, the defenders come.
+	if field != null and not defender_regs.is_empty() and (gate_open or _friend_near()):
+		field.release(defender_regs)
+		if field.test_mode:
+			print("NEST garrison loosed at ", int(field.clock), " gate open ", gate_open)
+		defender_regs = []
 	if gate_open or _friend_near():
 		for d in defenders:
 			if is_instance_valid(d):
@@ -259,6 +271,12 @@ func _sally(n: int) -> void:
 	if n <= 0:
 		return
 	_opening_t = 4.0
+	if field != null:
+		_last_sally = field.sally(self, n)
+		if battle.hud != null:
+			battle.hud.show_message("The gate swings open: they're coming out!", 2.0)
+		battle.play_sound("roar", gate_point() + Vector3.UP * 2.0, 4.0)
+		return
 	var out := gate_point() + (gate_point() - centre).normalized() * 2.5
 	var right := (gate_point() - centre).normalized().cross(Vector3.UP)
 	_last_sally = []
@@ -284,15 +302,21 @@ func damage_gate(amount: float) -> void:
 	gate_hp -= amount
 	if not _told_giving and gate_hp < gate_max * 0.5:
 		_told_giving = true
-		battle.hud.show_message("The gate is giving!", 1.6)
+		if battle.hud != null:
+			battle.hud.show_message("The gate is giving!", 1.6)
 	if gate_hp <= 0.0:
 		gate_open = true
 		_gate_body.queue_free()
+		if field != null:
+			field.wall_nest() # (the way in is open)
+			if field.test_mode:
+				print("NEST gate down at ", int(field.clock))
 		battle.play_sound("crack", gate_point() + Vector3.UP, 6.0)
 		battle.play_sound("boom", gate_point(), -2.0)
 		for i in 4:
 			battle.spawn_smoke(gate_point() + Vector3(randf_range(-1.5, 1.5), randf_range(0.2, 2.0), randf_range(-1, 1)), 2.0)
-		battle.hud.show_message("The gate is down! Into the nest!", 2.5)
+		if battle.hud != null:
+			battle.hud.show_message("The gate is down! Into the nest!", 2.5)
 		battle.objective = {"label": "STORM THE NEST", "pos": centre, "height": 3.0}
 
 
@@ -313,6 +337,10 @@ func _animate_gate(delta: float) -> void:
 
 func is_open() -> bool:
 	return gate_open or not _breaches.is_empty()
+
+
+func openings() -> Array:
+	return _openings()
 
 
 func _friend_near() -> bool:

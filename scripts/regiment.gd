@@ -63,6 +63,8 @@ var ai_t := 0.0
 var _charge_t := 0.0
 var _hurt_acc := 0.0
 var selected := false
+var hold_fast := false # a nest's garrison: stays at its post (field.gd's general leaves it)
+var covered := false # ...behind the stakes, where nobody can shoot it
 var _arrive_t := 0.0
 
 
@@ -405,10 +407,30 @@ func _attack(dt: float) -> void:
 		order_hold()
 		return
 	var tc: Vector3 = target.centroid
+	var nest = field.battle.nest
+	if nest != null and not is_gun() and (target.covered or not is_ranged() or is_cav()):
+		# Round by the gate or a gap in the stakes; at a shut gate, stand
+		# there (the men hack at it).
+		var goal: Vector3 = nest.route(pos, tc)
+		if goal.distance_to(tc) > 0.5:
+			var tg := goal - pos
+			tg.y = 0.0
+			if tg.length() < 2.5:
+				path = []
+				moving = false
+				if not nest.gate_open and nest.inside(tc):
+					return
+				pos = goal + tg.normalized() * 3.5 # (through the opening)
+				return
+			if path.is_empty() or randf() < dt * 0.5:
+				path = field.terrain.path(pos, goal)
+				dest_forward = tg.normalized()
+			_march(dt)
+			return
 	var to := tc - pos
 	to.y = 0.0
 	var d := to.length()
-	if is_ranged() and not is_cav():
+	if is_ranged() and not is_cav() and not target.covered:
 		var want := range_m() * (0.8 if not is_gun() else 0.95)
 		# In range but nobody's been able to fire (houses or a hill in the
 		# way): close in until they can.
@@ -471,16 +493,16 @@ func _pick_fire_target() -> void:
 	if not is_ranged():
 		fire_target = null
 		return
-	if target != null and not target.broken() and order == "attack" and target.centroid.distance_to(centroid) < range_m() * 1.05:
+	if target != null and not target.broken() and not target.covered and order == "attack" and target.centroid.distance_to(centroid) < range_m() * 1.05:
 		fire_target = target
 		return
-	if fire_target != null and (fire_target.broken() or fire_target.centroid.distance_to(centroid) > range_m() * 1.1):
+	if fire_target != null and (fire_target.broken() or fire_target.covered or fire_target.centroid.distance_to(centroid) > range_m() * 1.1):
 		fire_target = null
 	if fire_target == null:
 		var best = null
 		var bd := range_m()
 		for r in field.regs:
-			if r.side == side or r.broken():
+			if r.side == side or r.broken() or r.covered:
 				continue
 			var to: Vector3 = r.centroid - centroid
 			to.y = 0.0
@@ -500,12 +522,13 @@ func hurt(_amount: float) -> void:
 
 ## A one-off blow to its nerve from something (a charge into its flank,
 ## a neighbour breaking): counted once per cause.
-func shock(by, amount: float) -> void:
+func shock(by, amount: float) -> bool:
 	var key = by.get_instance_id() if by is Object else by
 	if _shaken.has(key):
-		return
+		return false
 	_shaken[key] = true
 	morale -= amount
+	return true
 
 
 ## Morale over the last half second (field.gd calls it).

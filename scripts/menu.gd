@@ -27,6 +27,8 @@ func _ready() -> void:
 	# Headless test runs skip the menu:
 	#   -- --autotest [--stress] [--tp]   a stand-alone battle
 	#   -- --autotest --campaign          a new campaign, battle after battle
+	#   -- --autotest --camp [--spotted]  attacked in the night camp
+	#   -- --autotest --assault [--walls=W]  storming a nest
 	var args := OS.get_cmdline_user_args()
 	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
 		if a in args:
@@ -131,6 +133,19 @@ func _ready() -> void:
 			var fit := Company.fit_men()
 			Company.next_battle = {"enemy": 18, "terrain": 3, "party": -1, "ambush": false, "camp": true,
 				"spotted": "--spotted" in args, "night": true, "watch": [int(fit[0]["id"]), int(fit[1]["id"])]}
+		elif "--assault" in args:
+			# Storming a nest: -- --autotest --assault [--walls=0.5]
+			Company.new_campaign()
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			for m in Company.roster:
+				m["wounded_days"] = 0
+			Company.guns = 2
+			var walls := 0.9
+			for a in args:
+				if a.begins_with("--walls="):
+					walls = float(a.substr(8))
+			Company.next_battle = {"enemy": 40, "terrain": 3, "party": -1, "ambush": false, "enemy_kind": "lizards",
+				"assault": 0, "walls": walls, "stash": false, "nest_name": "Test nest"}
 		elif "--campaign" in args:
 			Company.new_campaign()
 		else:
