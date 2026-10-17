@@ -38,6 +38,10 @@ const RED := Color(0.58, 0.1, 0.1)
 const PACK := Color(0.3, 0.2, 0.12)
 const TUNIC := Color(0.47, 0.4, 0.29)
 const JACK := Color(0.64, 0.58, 0.44)
+## The kingdoms' armour (they're a few centuries behind you): mail, and the
+## knights' plate.
+const MAIL := Color(0.46, 0.46, 0.48)
+const PLATE := Color(0.7, 0.72, 0.76)
 const HAIR := Color(0.28, 0.18, 0.1)
 const ROLL := Color(0.55, 0.55, 0.5)
 const HIDE := Color(0.3, 0.5, 0.22)
@@ -113,6 +117,7 @@ var bow_on_back := false
 var arrow_on := false
 var _sling := false # musket or crossbow slung across the back (an archer's knife fight)
 var _xbow: Node3D # an officer's spare crossbow (the weapon range)
+var _heater: Node3D # a footman's shield, on the left arm
 var t_bow_up := Vector3.ZERO # when set (your own body), how the bow is held
 var _muzzle_z := MUZZLE
 var bayonet_in_hand := false
@@ -329,6 +334,12 @@ func _build_soldier() -> void:
 		coat = JACK
 		cuff = JACK.darkened(0.12)
 		belt = LEATHER
+	var tabard = null # (mail and plate: a surcoat in his lord's colours over it)
+	if torso in ["mail", "plate"]:
+		tabard = coat_override if coat_override != null else Color(0.5, 0.15, 0.12)
+		coat = MAIL if torso == "mail" else PLATE
+		cuff = coat.darkened(0.15)
+		belt = LEATHER
 	spine.position = Vector3(0, _hip_y, 0)
 	# Torso, coat tails (not on a bare shirt), crossbelts, pack.
 	_part(spine, _box_mesh(Vector3(0.42, 0.56, 0.24)), coat, Vector3(0, 0.28, 0))
@@ -351,6 +362,15 @@ func _build_soldier() -> void:
 		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0)))
 	elif civ:
 		pass
+	elif tabard != null:
+		# The surcoat, front and back, belted; a plate gorget for a knight.
+		_part(spine, _box_mesh(Vector3(0.36, 0.62, 0.02)), tabard, Vector3(0, 0.22, -0.125))
+		_part(spine, _box_mesh(Vector3(0.36, 0.62, 0.02)), tabard, Vector3(0, 0.22, 0.125))
+		_part(spine, _box_mesh(Vector3(0.44, 0.05, 0.27)), LEATHER, Vector3(0, 0.04, 0))
+		if torso == "plate":
+			_fp_hide.append(_part(spine, _cyl_mesh(0.12, 0.14, 0.08), PLATE, Vector3(0, 0.6, 0)))
+			_part(spine, _box_mesh(Vector3(0.16, 0.08, 0.2)), PLATE, Vector3(0.24, 0.52, 0)) # pauldrons
+			_part(spine, _box_mesh(Vector3(0.16, 0.08, 0.2)), PLATE, Vector3(-0.24, 0.52, 0))
 	elif torso in ["tunic", "jack"]:
 		# Native kit: no crossbelts; a padded jack shows its quilting.
 		if torso == "jack":
@@ -400,11 +420,25 @@ func _build_soldier() -> void:
 	_segment("l_cuff", 0.112, cuff, _arm)
 	# Legs.
 	for side in ["l", "r"]:
-		var native := torso in ["tunic", "jack"]
-		_segment(side + "_thigh", 0.13, trousers if civ or native else WHITE, _leg)
-		_segment(side + "_shin", 0.115, trousers.darkened(0.25) if civ or native else BLACK, _leg) # (natives: leg wraps)
+		var native := torso in ["tunic", "jack", "mail"]
+		if torso == "plate":
+			_segment(side + "_thigh", 0.14, PLATE, _leg)
+			_segment(side + "_shin", 0.125, PLATE.darkened(0.1), _leg)
+		else:
+			_segment(side + "_thigh", 0.13, trousers if civ or native else WHITE, _leg)
+			_segment(side + "_shin", 0.115, trousers.darkened(0.25) if civ or native else BLACK, _leg) # (natives: leg wraps)
 		_leg[side + "_foot"] = _part(body, _box_mesh(Vector3(0.11, 0.07, 0.24)), BLACK, Vector3.ZERO)
 	_build_musket("none" if civ else String(g["primary"]), String(g["secondary"]))
+	if String(g["secondary"]) == "heater_shield":
+		# A heater shield, painted in his lord's colours with a pale stripe.
+		_heater = Node3D.new()
+		body.add_child(_heater)
+		var paint: Color = coat_override if coat_override != null else Color(0.5, 0.15, 0.12)
+		_part(_heater, _box_mesh(Vector3(0.48, 0.5, 0.04)), paint, Vector3(0, 0.08, 0))
+		_part(_heater, _box_mesh(Vector3(0.34, 0.2, 0.04)), paint, Vector3(0, -0.24, 0), Vector3(0, 0, 0))
+		_part(_heater, _box_mesh(Vector3(0.16, 0.16, 0.04)), paint, Vector3(0, -0.36, 0), Vector3(0, 0, 45))
+		_part(_heater, _box_mesh(Vector3(0.1, 0.72, 0.045)), Color(0.88, 0.84, 0.72), Vector3(0, -0.04, -0.002), Vector3.ZERO, true)
+		_part(_heater, _box_mesh(Vector3(0.5, 0.03, 0.05)), STEEL.darkened(0.2), Vector3(0, 0.33, 0), Vector3.ZERO, true)
 	if officer:
 		if String(g.get("bow", "")) != "":
 			_build_bow(_bow_owner(), String(g["bow"]))
@@ -441,6 +475,17 @@ func _build_hat(hat: String) -> void:
 		"hood":
 			_part(head, _box_mesh(Vector3(0.25, 0.24, 0.26)), TUNIC.darkened(0.2), Vector3(0, 0.13, 0.03))
 			_part(spine, _box_mesh(Vector3(0.48, 0.1, 0.3)), TUNIC.darkened(0.2), Vector3(0, 0.56, 0.01)) # short cape
+		"great_helm":
+			# A knight's great helm: a flat-topped steel pot, a slit to see by.
+			_part(head, _cyl_mesh(0.135, 0.135, 0.3), PLATE, Vector3(0, 0.12, 0))
+			_part(head, _box_mesh(Vector3(0.2, 0.022, 0.02)), BLACK, Vector3(0, 0.15, -0.134), Vector3.ZERO, true)
+			_part(head, _box_mesh(Vector3(0.02, 0.18, 0.02)), PLATE.darkened(0.2), Vector3(0, 0.07, -0.136), Vector3.ZERO, true)
+			_part(head, _cyl_mesh(0.137, 0.137, 0.02), GOLD, Vector3(0, 0.27, 0), Vector3.ZERO, true)
+		"nasal_helm":
+			# A footman's conical helm with a nasal, a mail coif under it.
+			_part(head, _cyl_mesh(0.06, 0.12, 0.14), STEEL.darkened(0.1), Vector3(0, 0.26, 0))
+			_part(head, _box_mesh(Vector3(0.025, 0.12, 0.02)), STEEL.darkened(0.1), Vector3(0, 0.15, -0.12))
+			_part(head, _box_mesh(Vector3(0.25, 0.16, 0.24)), MAIL, Vector3(0, 0.06, 0.02))
 		"kettle_hat":
 			_part(head, _cyl_mesh(0.1, 0.115, 0.11), STEEL.darkened(0.15), Vector3(0, 0.24, 0))
 			_part(head, _cyl_mesh(0.2, 0.2, 0.014), STEEL.darkened(0.1), Vector3(0, 0.19, 0)) # the broad brim
@@ -521,6 +566,19 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 		_p_vis[ramrod] = false
 		return
+	if primary == "arming_sword":
+		# A straight sword: grip and cross at the hand, the blade forward.
+		_part(musket, _box_mesh(Vector3(0.03, 0.03, 0.16)), LEATHER, Vector3(0, 0, 0.04))
+		_part(musket, _box_mesh(Vector3(0.2, 0.025, 0.03)), STEEL.darkened(0.2), Vector3(0, 0, -0.05))
+		_part(musket, _box_mesh(Vector3(0.045, 0.012, 0.78)), STEEL, Vector3(0, 0, -0.44))
+		bayonet = Node3D.new()
+		musket.add_child(bayonet)
+		hand_bayonet = Node3D.new()
+		body.add_child(hand_bayonet)
+		hand_bayonet.visible = false
+		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
+		_p_vis[ramrod] = false
+		return
 	if primary in ["pike", "spear", "war_spear", "lance"]:
 		# A pole arm: an ash shaft, butt behind the right hand, head far forward.
 		var long: float = {"pike": 3.0, "spear": 2.2, "war_spear": 2.5, "lance": 3.3}[primary]
@@ -566,7 +624,7 @@ static func _weapon_of(primary: String) -> String:
 		return "bow"
 	if primary in ["crossbow", "dwarf_crossbow"]:
 		return "crossbow"
-	if primary in ["pike", "spear", "war_spear", "lance", "rammer", "linstock", "spade"]:
+	if primary in ["pike", "spear", "war_spear", "lance", "rammer", "linstock", "spade", "arming_sword"]:
 		return "pole"
 	if primary == "none":
 		return "none"
@@ -950,6 +1008,8 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 	var l_target: Vector3 = grip + wdir * FORESTOCK if t_hand_l == null else _pitched(t_hand_l, pitch, pivot)
 	if (hand_item != "" or _sling) and t_hand_l == null:
 		l_target = Vector3(-0.27, 0.9, -0.04) # hanging at your side
+	if _heater != null and t_hand_l == null:
+		l_target = Vector3(-0.26, 1.08, -0.3) # the shield up in front of him
 	_hand_r = _hand_r.lerp(r_target, kh)
 	_hand_l = _hand_l.lerp(l_target, kh)
 	# First person: anchor the shoulders lower and a touch forward, so the
@@ -970,6 +1030,8 @@ func _update_soldier(_delta: float, k: float, kh: float) -> void:
 		else:
 			_saber.transform = st * Transform3D(_look_basis(SABER_SHEATH_DIR), SABER_SHEATH_AT)
 
+	if _heater != null:
+		_heater.transform = Transform3D(_look_basis(Vector3(0.25, 0, -1).normalized()), _hand_l + Vector3(-0.04, -0.05, -0.06))
 	if _bow != null:
 		_update_bow(k)
 	if _xbow != null:
@@ -1458,6 +1520,11 @@ func _build_horse() -> void:
 	_part(body, _box_mesh(Vector3(0.56, 0.62, 1.55)), coat, Vector3(0, 1.3, 0.0)) # barrel
 	_part(body, _box_mesh(Vector3(0.5, 0.6, 0.5)), coat, Vector3(0, 1.36, -0.72)) # chest
 	_part(body, _box_mesh(Vector3(0.54, 0.56, 0.5)), coat, Vector3(0, 1.36, 0.66)) # quarters
+	if gear.get("barding", false):
+		# A knight's horse: a caparison in his colours down to the knees.
+		_part(body, _box_mesh(Vector3(0.66, 0.62, 1.7)), saddle_col, Vector3(0, 1.22, 0.02))
+		_part(body, _box_mesh(Vector3(0.56, 0.5, 0.5)), saddle_col, Vector3(0, 1.28, -0.74))
+		_part(body, _box_mesh(Vector3(0.68, 0.06, 1.72)), GOLD, Vector3(0, 0.92, 0.02), Vector3.ZERO, true)
 	# Saddle, cloth, girth.
 	_part(body, _box_mesh(Vector3(0.66, 0.06, 0.78)), saddle_col, Vector3(0, 1.63, 0.06))
 	_part(body, _box_mesh(Vector3(0.68, 0.035, 0.8)), GOLD, Vector3(0, 1.6, 0.06), Vector3.ZERO, true)
@@ -1610,6 +1677,11 @@ func _rider_pose() -> void:
 		"block":
 			t_grip = Vector3(0.3, 1.6, -0.35)
 			t_dir = Vector3(-1, 0.3, -0.2)
+		"aim":
+			# A dragoon's carbine at his shoulder.
+			t_grip = Vector3(0.1, 1.46, -0.38)
+			t_dir = Vector3(0, 0.04, -1)
+			t_hand_l = Vector3(-0.02, 1.47, -0.75)
 		_:
 			t_grip = Vector3(0.26, 1.12, -0.12)
 			t_dir = Vector3(0.05, 1, 0.35)

@@ -76,7 +76,7 @@ var _arrive_t := 0.0
 ## "is" or "are": a regiment's name is plural ("1st Pikemen"), but not your
 ## company or a battery.
 func verb(one: String, many: String) -> String:
-	return one if player_led or kind == "gun" else many
+	return one if player_led or is_gun() else many
 
 
 func alive_count() -> int:
@@ -91,8 +91,9 @@ func is_cav() -> bool:
 	return bool(info.get("cav", false))
 
 
+## A gun or an engine (a catapult): crewed pieces, not men in ranks.
 func is_gun() -> bool:
-	return kind == "gun"
+	return info.has("guns")
 
 
 func is_ranged() -> bool:
@@ -498,7 +499,10 @@ func _attack(dt: float) -> void:
 	var to := tc - pos
 	to.y = 0.0
 	var d := to.length()
-	if is_ranged() and not is_cav() and not target.covered:
+	# Dragoons skirmish with their carbines until the mark wavers or is
+	# caught up in a melee, then go in with the sabre.
+	var skirmish: bool = kind == "dragoon" and not target.engaged() and target.state != "wavering" and field.clock - order_t < 60.0
+	if is_ranged() and (not is_cav() or skirmish) and not target.covered:
 		var want := range_m() * (0.8 if not is_gun() else 0.95)
 		# In range but nobody's been able to fire (houses or a hill in the
 		# way): close in until they can.

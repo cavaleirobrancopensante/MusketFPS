@@ -56,8 +56,8 @@ func _ready() -> void:
 				if b.begins_with("--fieldsize="):
 					fsize = int(b.substr(12))
 			Settings.field = {"map": map, "size": fsize, "foe_army": foe_army,
-				"you": {"musket": 2, "pike": 1, "bow": 1, "xbow": 0, "cav": 1, "gun": 1},
-				"foe": {"liz_warrior": 3, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1} if foe_army == "lizards" else {"musket": 3, "pike": 1, "bow": 1, "cav": 1, "gun": 1}}
+				"you": {"musket": 2, "pike": 1, "bow": 1, "xbow": 0, "dragoon": 1, "lancer": 1, "gun": 1},
+				"foe": {"liz_warrior": 3, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1} if foe_army == "lizards" else {"sword": 2, "pike": 1, "longbow": 1, "xbow": 1, "knight": 1, "catapult": 1}}
 			Settings.stress = false
 			Settings.mixed = false
 			Settings.playground = false

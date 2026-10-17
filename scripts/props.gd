@@ -151,6 +151,36 @@ static func cannon() -> Node3D:
 	return g
 
 
+## A kingdom's catapult (a mangonel): a heavy frame on four wheels, a
+## throwing arm on an axle between two uprights ("arm", turning about X:
+## back and down when wound, flung up and forward to throw), a sling cup at
+## its end ("cup"), and a windlass at the back.
+static func catapult() -> Node3D:
+	var g := Node3D.new()
+	for side in [-1.0, 1.0]:
+		_box(g, Vector3(0.18, 0.22, 3.2), WOOD_DARK, Vector3(side * 0.7, 0.45, 0.2)) # the sills
+		_box(g, Vector3(0.16, 1.5, 0.18), WOOD, Vector3(side * 0.6, 1.25, -0.4)) # the uprights
+		_box(g, Vector3(0.1, 1.5, 0.12), WOOD, Vector3(side * 0.6, 1.1, 0.1), Vector3(-35, 0, 0)) # braces
+		for z in [-0.9, 1.3]:
+			_cyl(g, 0.34, 0.34, 0.1, WOOD_DARK, Vector3(side * 0.82, 0.34, z), Vector3(0, 0, 90))
+	_box(g, Vector3(1.5, 0.16, 0.18), WOOD, Vector3(0, 0.45, -1.3))
+	_box(g, Vector3(1.5, 0.16, 0.18), WOOD, Vector3(0, 0.45, 1.7))
+	_box(g, Vector3(1.4, 0.14, 0.16), WOOD, Vector3(0, 1.9, -0.4)) # the stop beam the arm strikes
+	_cyl(g, 0.12, 0.12, 1.3, WOOD_DARK, Vector3(0, 0.75, 1.5), Vector3(0, 0, 90)) # the windlass
+	var arm := Node3D.new()
+	arm.name = "arm"
+	arm.position = Vector3(0, 0.95, -0.2)
+	g.add_child(arm)
+	_cyl(arm, 0.08, 0.08, 1.4, IRON, Vector3.ZERO, Vector3(0, 0, 90)) # the axle
+	_box(arm, Vector3(0.16, 0.16, 3.0), WOOD, Vector3(0, 0, 1.3)) # the arm, pointing back
+	var cup := Node3D.new()
+	cup.name = "cup"
+	cup.position = Vector3(0, 0.12, 2.75)
+	arm.add_child(cup)
+	_box(cup, Vector3(0.5, 0.12, 0.5), WOOD_DARK, Vector3.ZERO)
+	return g
+
+
 ## A sand-and-earth rampart `length` metres long along X, with a row of
 ## wicker gabions on top and gaps (embrasures) at `gaps` (x positions).
 static func earthwork(length: float, gaps: Array) -> Node3D:

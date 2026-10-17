@@ -120,6 +120,21 @@ const ITEMS := {
 		"desc": "Layers of quilted linen. Turns a slash, if not a thrust."},
 	"hood": {"name": "Hood", "slot": "head", "kg": 0.3, "space": 0.2, "value": 1,
 		"desc": "A woollen hood and short cape."},
+	# The kingdoms' arms: a few centuries behind yours.
+	"arming_sword": {"name": "Arming sword", "slot": "primary", "melee": 40.0, "reach": 1.5, "kg": 1.2, "space": 0.5, "value": 12,
+		"desc": "A knight's straight sword, fit for one hand. Quick, with a shield on the other arm."},
+	"heater_shield": {"name": "Heater shield", "slot": "secondary", "armour": 0.08, "shield": true, "kg": 3.0, "space": 1.2, "value": 6,
+		"desc": "Painted wood and leather. Catches arrows and bolts and blades; a musket ball goes through it."},
+	"mail": {"name": "Mail shirt", "slot": "torso", "armour": 0.3, "pace": -0.05, "kg": 9.0, "space": 1.0, "value": 30,
+		"desc": "Riveted rings to the thigh. Blades skid off it; a ball does not."},
+	"plate": {"name": "Plate harness", "slot": "torso", "armour": 0.5, "pace": -0.12, "kg": 25.0, "space": 3.0, "value": 90,
+		"desc": "A knight's armour, head to foot. Heavy, hot, and nearly proof against a blade."},
+	"great_helm": {"name": "Great helm", "slot": "head", "steady": 0.06, "armour": 0.08, "kg": 2.5, "space": 0.8, "value": 15,
+		"desc": "A flat-topped steel pot with a slit to look through."},
+	"nasal_helm": {"name": "Nasal helm", "slot": "head", "steady": 0.03, "armour": 0.05, "kg": 1.3, "space": 0.6, "value": 6,
+		"desc": "A conical helm with a nose guard, over a mail coif."},
+	"carbine": {"name": "Carbine", "slot": "primary", "spread": 1.3, "reload": 1.1, "misfire": 0.05, "range": 40.0, "kg": 3.2, "space": 0.9, "value": 18,
+		"desc": "A short musket for a dragoon, to fire from the saddle. Less reach, easier to load on a horse."},
 	"kettle_hat": {"name": "Kettle hat", "slot": "head", "steady": 0.04, "armour": 0.05, "kg": 1.5, "space": 0.6, "value": 7,
 		"desc": "A broad-brimmed iron helmet, the town watch's hat."},
 	# Goods: no use to us, but worth something to someone.
@@ -147,8 +162,8 @@ const WAGON_SPACE := 60.0
 ## What each kind of slain enemy may leave behind: [item id, chance per body].
 const LOOT_TABLE := {"lizards": [["cleaver", 0.22], ["lizard_shield", 0.12], ["hide", 0.2], ["charm", 0.1],
 	["spear", 0.08], ["stolen", 0.06]],
-	"humans": [["pike", 0.18], ["crossbow", 0.08], ["war_bow", 0.06], ["jack", 0.14], ["kettle_hat", 0.12],
-	["purse", 0.3], ["rations", 0.2]]}
+	"humans": [["pike", 0.14], ["crossbow", 0.08], ["war_bow", 0.08], ["jack", 0.1], ["kettle_hat", 0.1],
+	["arming_sword", 0.1], ["heater_shield", 0.1], ["mail", 0.05], ["nasal_helm", 0.1], ["purse", 0.3], ["rations", 0.2]]}
 const PIKE_GEAR := {"head": "cap", "torso": "shirt", "primary": "pike", "secondary": ""}
 const DEFAULT_TAGS := ["Musketeers", "Pikes", "Wagon"]
 const CLUBBED_DAMAGE := 18.0 # no bayonet: he clubs with the butt
@@ -306,7 +321,8 @@ func new_campaign(start: Dictionary = {}) -> void:
 			m["tag"] = "Pikes"
 		roster.append(m)
 	# The men your kind of officer brings: more muskets for the line, a
-	# block of pikes for a pike officer.
+	# block of pikes for a pike officer, a troop of horse (dragoons and
+	# lancers) for a cavalry officer.
 	var br: Dictionary = Officer.BRANCHES.get(String(officer["branch"]), {})
 	for i in int(br.get("extra_men", 0)):
 		var m := make_recruit()
@@ -323,8 +339,19 @@ func new_campaign(start: Dictionary = {}) -> void:
 			m["gear"] = PIKE_GEAR.duplicate()
 			m["pack"]["ammo"] = 0
 			m["tag"] = "Pikes"
+		elif String(br["extra_kind"]) == "horse":
+			m["horse"] = true
+			m["tag"] = "Horse"
+			if i % 2 == 0:
+				m["gear"] = {"head": "shako", "torso": "coat", "primary": "carbine", "secondary": "bayonet"}
+				m["pack"]["ammo"] = 20
+			else:
+				m["gear"] = {"head": "shako", "torso": "coat", "primary": "lance", "secondary": ""}
+				m["pack"]["ammo"] = 0
 		roster.append(m)
 	tags = DEFAULT_TAGS.duplicate()
+	if roster.any(func(mm): return bool(mm.get("horse", false))):
+		tags.append("Horse")
 	wagon_plan = [0.0, -12.0]
 	loot = []
 	tongues = {}
@@ -446,6 +473,8 @@ static func shot_key(m: Dictionary) -> String:
 ## What he is in a fight, by his weapon: "musket", "bow", "crossbow", "pike".
 static func role_of(m: Dictionary) -> String:
 	var id := String(m.get("gear", {}).get("primary", "musket"))
+	if bool(m.get("horse", false)):
+		return "lancer" if id == "lance" else "dragoon" # (a trooper of your horse)
 	var it: Dictionary = ITEMS.get(id, {})
 	if it.has("reach"):
 		return "pike"
@@ -484,6 +513,8 @@ static func gear_stats(m: Dictionary) -> Dictionary:
 		if it.has("melee"):
 			st["melee"] = maxf(float(st["melee"]), float(it["melee"]))
 			st["bayonet"] = true
+		if it.get("shield", false):
+			st["shield"] = true
 		if it.has("reach"):
 			st["gun"] = false # a pole arm instead of a musket
 			st["reach"] = float(it["reach"])
@@ -775,7 +806,7 @@ func recover_stash() -> String:
 		var k := stow(id, n)
 		if k < n:
 			_add_loot(id, n - k, true)
-		got.append("%d %s" % [n, Lang.t({"musket": "muskets", "ammo": "cartridges", "rum": "tots of rum"}[id])])
+		got.append("%d %s" % [n, Lang.t({"musket": "muskets", "ammo": "cartridges", "rum": "tots of rum"}[id])]) # i18n-skip
 	got.append(Lang.t("%d guns") % int(s.get("cannons", 0)))
 	stash = {}
 	return ", ".join(got)
@@ -1071,7 +1102,7 @@ func sell_goods(kind: String) -> int:
 static func mixed_places(men: Array) -> void:
 	var by := {"musket": [], "pike": [], "bow": [], "crossbow": []}
 	for m in men:
-		by[role_of(m)].append(m)
+		by[role_of(m) if role_of(m) in by else "musket"].append(m)
 	var line: Array = []
 	var guns: Array = by["musket"]
 	var xb: Array = by["crossbow"]

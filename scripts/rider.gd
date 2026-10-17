@@ -14,6 +14,11 @@ extends "res://scripts/unit.gd"
 ##
 ## The mount is the unit's rig (kind "horse" / "raptor"); the rider is a
 ## second rig sitting on its body.
+##
+## Variants (the regiment's kind): a trooper with a sabre ("cav"), a lancer
+## (lance couched in the charge: a harder shock), a dragoon (a carbine he
+## fires from the saddle, at a halt, before he charges), and a kingdom's
+## knight (plate and a barded horse: hard to bring down, a terrible charge).
 
 
 const IMPACT := 55.0
@@ -41,14 +46,24 @@ var _rear_t := 0.0
 var walk_speed := 3.2
 var trot_speed := 6.5
 var charge_speed := 11.0
+var variant := "trooper"
+var impact := IMPACT
+var cut := CUT
+# A dragoon's carbine.
+var loaded := true
+var reload_left := 0.0
+var aim_t := -1.0
+const CARBINE_RANGE := 48.0
+const CARBINE_RELOAD := 10.0
 
 
-static func make(b, f, s: int, m: String):
+static func make(b, f, s: int, m: String, kind := "cav"):
 	var me = load("res://scripts/rider.gd").new()
 	me.battle = b
 	me.field = f
 	me.side = s
 	me.mount = m
+	me.variant = {"knight": "knight", "lancer": "lancer", "dragoon": "dragoon"}.get(kind, "trooper")
 	me.frames = b.soldier_frames if m == "horse" else b.lizard_frames
 	# Whose horse: the enemy's (their coat), a nation riding with you (its
 	# coat), or yours.
@@ -62,6 +77,21 @@ static func make(b, f, s: int, m: String):
 
 
 var coat = null # (null: ours)
+## One of your own troopers (a campaign record), as FieldSoldier has.
+var record = null
+var campaign := false
+var down_status := "killed"
+var ammo_used := 0
+var conduct := ""
+var ammo := -1
+
+
+static func from_record(b, f, rec: Dictionary, s: int, kind: String):
+	var me = make(b, f, s, "horse", kind)
+	me.record = rec
+	me.campaign = true
+	me.ammo = int(rec.get("pack", {}).get("ammo", 0))
+	return me
 var nation_look := false
 
 
@@ -82,6 +112,23 @@ func _ready() -> void:
 	if sprite_kind == "":
 		sprite_kind = "soldier" if mount == "horse" else "lizard"
 	rig_gear = {"saddle_col": coat if coat != null and mount == "horse" else (Color(0.16, 0.24, 0.55) if mount == "horse" else Color(0.5, 0.36, 0.2))}
+	match variant:
+		"knight":
+			hp = 430.0
+			impact = 88.0
+			cut = 40.0
+			walk_speed = 2.9
+			charge_speed = 10.0
+			rig_gear["barding"] = true
+			if coat == null:
+				rig_gear["saddle_col"] = Color(0.55, 0.14, 0.12)
+		"lancer":
+			hp = 250.0
+			impact = 80.0
+		"dragoon":
+			hp = 230.0
+			impact = 45.0
+			cut = 30.0
 	_setup_body(4 if side == 0 else 2, 0.75, 2.7, 2.9)
 	rider = Rig3D.new()
 	rider.seated = true
@@ -90,6 +137,19 @@ func _ready() -> void:
 		rider.gear = {"head": "kettle_hat" if nation_look else ("tricorne" if side == 1 else "shako"), "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"}
 		rider.pack = {"rations": 0, "water": 0, "ammo": 0}
 		rider.hand_item = "saber"
+		match variant:
+			"knight":
+				rider.gear = {"head": "great_helm", "torso": "plate", "primary": "lance", "secondary": "", "sword": ""}
+				rider.hand_item = ""
+				if coat == null:
+					rider.coat_override = Color(0.55, 0.14, 0.12)
+			"lancer":
+				rider.gear = {"head": "shako", "torso": "coat", "primary": "lance", "secondary": "", "sword": ""}
+				rider.hand_item = ""
+			"dragoon":
+				rider.gear = {"head": "shako", "torso": "coat", "primary": "carbine", "secondary": "bayonet", "sword": ""}
+				rider.pack = {"rations": 0, "water": 0, "ammo": 20}
+				rider.hand_item = ""
 		if coat != null:
 			rider.coat_override = coat
 		rider.position = Rig3D.SADDLE_HORSE
@@ -158,6 +218,8 @@ func _cav_brain(delta: float) -> void:
 	if foe != null:
 		_melee(delta, foe)
 		return
+	if variant == "dragoon" and _carbine(delta):
+		return
 	# Formation.
 	var slot: Vector3 = reg.slot(slot_index)
 	var to_s := slot - global_position
@@ -172,6 +234,59 @@ func _cav_brain(delta: float) -> void:
 		face_toward(facing.lerp(reg.forward, 0.25))
 		set_base_anim("idle" if windup < 0.0 else "windup")
 		_move(delta)
+
+
+## A dragoon's carbine: reload (at a walk or a halt), and when his
+## regiment has a mark in range, rein in, aim and fire. Returns true while
+## he's aiming (he stands still for it).
+func _carbine(delta: float) -> bool:
+	if ammo == 0:
+		return false # (no cartridges left: the sabre, or the bayonet on the carbine)
+	if not loaded:
+		if speed_now < 4.0:
+			reload_left -= delta
+			if reload_left <= 0.0:
+				loaded = true
+		aim_t = -1.0
+		return false
+	if aim_t < 0.0:
+		if not reg.may_fire():
+			return false
+		var t: Node3D = reg.shot_at(self)
+		if t == null or global_position.distance_to(t.global_position) > CARBINE_RANGE:
+			return false
+		target = t
+		aim_t = randf_range(0.5, 1.6)
+	if not is_valid_target(target):
+		aim_t = -1.0
+		return false
+	aim_t -= delta
+	speed_now = move_toward(speed_now, 0.0, 9.0 * delta)
+	velocity = facing * speed_now
+	face_toward(target.global_position - global_position)
+	set_base_anim("aim")
+	_move(delta)
+	if aim_t < 0.0:
+		_fire_carbine()
+	return true
+
+
+func _fire_carbine() -> void:
+	if ammo == 0:
+		return
+	if ammo > 0:
+		ammo -= 1
+		ammo_used += 1
+	loaded = false
+	reload_left = CARBINE_RELOAD / field.pace
+	var from: Vector3 = global_position + Vector3.UP * 2.35 + facing * 0.6
+	var aim: Vector3 = target.global_position + Vector3.UP * 1.1
+	var dir: Vector3 = battle.projectiles.spread_dir(aim - from, 0.035)
+	battle.projectiles.fire("ball", from, dir * 300.0, self)
+	battle.play_sound("musket", from, -2.0)
+	battle.spawn_smoke(from + dir * 1.0, 0.8, dir)
+	battle.spawn_flash(from + dir * 0.6)
+	reg.fired()
 
 
 ## Speed up toward `want` (horses take a moment to get going) and turn
@@ -228,7 +343,7 @@ func _impact(u: Node3D) -> void:
 		_rear_t = 0.8
 		stagger(-velocity.normalized() * 3.0, 0.6)
 		return
-	var dmg := IMPACT * clampf(speed_now / 9.0, 0.6, 1.3)
+	var dmg := impact * clampf(speed_now / 9.0, 0.6, 1.3)
 	if u == battle.player:
 		dmg *= 0.6
 	u.take_damage(dmg, self)
@@ -268,9 +383,9 @@ func _cut() -> void:
 		return
 	var r := "hit"
 	if target.has_method("receive_blow") and target != battle.player:
-		r = target.receive_blow(CUT, self, false)
+		r = target.receive_blow(cut, self, false)
 	else:
-		target.take_damage(CUT, self)
+		target.take_damage(cut, self)
 	battle.play_sound("stab" if r == "hit" else "clang", target.global_position + Vector3.UP * 1.4, -4.0)
 
 
@@ -312,12 +427,17 @@ func stagger(push: Vector3, seconds: float) -> void:
 
 func take_damage(amount: float, from: Node3D = null) -> void:
 	var was := alive
+	if variant == "knight":
+		amount *= 0.8 if _shot else 0.5 # (plate turns a blade; a ball still gets through)
+	if side == 0:
+		amount *= Company.Officer.diff("hurt")
 	super.take_damage(amount, from)
 	if was and alive and reg != null:
 		reg.hurt(amount)
 
 
 func _on_died() -> void:
+	down_status = "wounded" if randf() < 0.5 else "killed"
 	remove_from_group("enemies")
 	remove_from_group("friendlies")
 	if rider != null:

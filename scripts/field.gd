@@ -39,13 +39,26 @@ const KINDS := {
 	"bow": {"name": "Bowmen", "short": "BOWS", "men": 0.8, "ranks": 2, "spacing": 1.6, "gap": 1.8, "walk": 2.38, "run": 4.08, "range": 78.0, "morale": 50.0},
 	"xbow": {"name": "Crossbowmen", "short": "XBOWS", "men": 0.8, "ranks": 2, "spacing": 1.4, "gap": 1.6, "walk": 2.21, "run": 3.74, "range": 66.0, "morale": 55.0},
 	"cav": {"name": "Cavalry", "short": "HORSE", "men": 0.5, "ranks": 2, "spacing": 2.4, "gap": 4.0, "walk": 2.72, "run": 6.38, "range": 0.0, "morale": 75.0, "cav": true},
+	# Your own horse: dragoons fire carbines from the saddle (then charge),
+	# lancers charge with the lance couched.
+	"dragoon": {"name": "Dragoons", "short": "DRAGOONS", "men": 0.5, "ranks": 2, "spacing": 2.4, "gap": 4.0, "walk": 2.72, "run": 6.2, "range": 45.0, "morale": 70.0, "cav": true},
+	"lancer": {"name": "Lancers", "short": "LANCERS", "men": 0.5, "ranks": 2, "spacing": 2.4, "gap": 4.0, "walk": 2.72, "run": 6.6, "range": 0.0, "morale": 78.0, "cav": true},
+	# The kingdoms' (medieval) arms: footmen with sword and shield, longbows,
+	# armoured knights, and catapults.
+	"sword": {"name": "Men-at-arms", "short": "SWORDS", "men": 1.0, "ranks": 3, "spacing": 1.2, "gap": 1.4, "walk": 2.21, "run": 3.9, "range": 0.0, "morale": 72.0},
+	"longbow": {"name": "Longbowmen", "short": "LONGBOWS", "men": 0.8, "ranks": 2, "spacing": 1.6, "gap": 1.8, "walk": 2.38, "run": 4.08, "range": 95.0, "morale": 55.0},
+	"knight": {"name": "Knights", "short": "KNIGHTS", "men": 0.4, "ranks": 2, "spacing": 2.6, "gap": 4.4, "walk": 2.55, "run": 6.0, "range": 0.0, "morale": 92.0, "cav": true},
+	"catapult": {"name": "Catapults", "short": "CATAPULTS", "men": 0.0, "guns": 2, "ranks": 1, "spacing": 12.0, "gap": 0.0, "walk": 0.9, "run": 1.0, "range": 210.0, "morale": 50.0, "engine": true},
 	"gun": {"name": "Cannon", "short": "GUNS", "men": 0.0, "guns": 2, "ranks": 1, "spacing": 10.0, "gap": 0.0, "walk": 1.19, "run": 1.36, "range": 240.0, "morale": 55.0},
 	"liz_warrior": {"name": "Lizard warriors", "short": "WARRIORS", "men": 1.25, "ranks": 3, "spacing": 1.6, "gap": 1.7, "walk": 2.55, "run": 4.25, "range": 0.0, "morale": 88.0},
 	"liz_skirm": {"name": "Javelin throwers", "short": "JAVELINS", "men": 0.8, "ranks": 2, "spacing": 2.4, "gap": 2.4, "walk": 2.72, "run": 4.42, "range": 28.0, "morale": 55.0},
 	"liz_brute": {"name": "Brutes", "short": "BRUTES", "men": 0.4, "ranks": 2, "spacing": 2.4, "gap": 2.6, "walk": 2.21, "run": 3.23, "range": 0.0, "morale": 100.0},
 	"liz_raptor": {"name": "Raptor riders", "short": "RAPTORS", "men": 0.5, "ranks": 2, "spacing": 2.6, "gap": 4.0, "walk": 2.89, "run": 5.95, "range": 0.0, "morale": 80.0, "cav": true},
 }
-const HUMAN_KINDS := ["musket", "pike", "bow", "xbow", "cav", "gun"]
+## Your side's arms, and the kingdoms' (both are "humans").
+const OUR_KINDS := ["musket", "pike", "bow", "xbow", "dragoon", "lancer", "gun"]
+const NATION_KINDS := ["sword", "pike", "longbow", "xbow", "knight", "catapult"]
+const HUMAN_KINDS := ["musket", "pike", "bow", "xbow", "cav", "gun", "dragoon", "lancer", "sword", "longbow", "knight", "catapult"]
 const LIZARD_KINDS := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]
 const ORDINAL := ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"]
 
@@ -220,7 +233,7 @@ func make_sprites() -> void:
 	for name in want:
 		var k: String = want[name][0]
 		var s: int = want[name][1]
-		if k == "gun":
+		if KINDS[k].has("guns"):
 			continue
 		var spec := _sprite_spec(k, s)
 		var frames: Dictionary = await Impostor.render(battle, spec)
@@ -247,6 +260,14 @@ func _sprite_spec(kind: String, side: int) -> Dictionary:
 		"cav":
 			return {"mount": "horse", "gear": {"head": ("kettle_hat" if nation != "" else "tricorne") if side == 1 else "shako", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
 				"coat": red if side == 1 else null, "saddle": red if side == 1 else Color(0.16, 0.24, 0.55), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
+		"knight":
+			var kc = red if side == 1 else (ally_coat if side == 2 else Color(0.55, 0.14, 0.12))
+			return {"mount": "horse", "gear": {"head": "great_helm", "torso": "plate", "primary": "lance", "secondary": "", "sword": ""},
+				"coat": kc, "saddle": kc, "barding": true, "hand": "", "cell_m": 3.6, "anims": Impostor.RIDER_ANIMS}
+		"lancer", "dragoon":
+			return {"mount": "horse", "gear": {"head": "shako", "torso": "coat", "primary": "lance" if kind == "lancer" else "carbine",
+				"secondary": "" if kind == "lancer" else "bayonet", "sword": ""}, "coat": null, "saddle": Color(0.16, 0.24, 0.55), "hand": "",
+				"cell_m": 3.6, "anims": Impostor.RIDER_ANIMS}
 		"liz_raptor":
 			return {"mount": "raptor", "saddle": Color(0.5, 0.36, 0.2), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
 		"liz_warrior", "liz_skirm":
@@ -254,7 +275,7 @@ func _sprite_spec(kind: String, side: int) -> Dictionary:
 		"liz_brute":
 			return {"rig": "lizard", "scale": 1.45, "cell_m": 3.6, "anims": Impostor.LIZARD_ANIMS}
 	if side == 2:
-		var g2: Dictionary = FieldSoldier.NATION_GEAR[kind]
+		var g2: Dictionary = FieldSoldier.NATION_GEAR.get(kind, FieldSoldier.NATION_GEAR["pike"])
 		if kind == "cav":
 			return {"mount": "horse", "gear": {"head": "kettle_hat", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
 				"coat": ally_coat, "saddle": ally_coat, "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
@@ -280,11 +301,11 @@ func spawn_armies() -> void:
 	var foe: Dictionary = cfg.get("foe", {"liz_warrior": 2})
 	# Your own company first: musketeers, and you with them.
 	var mine: Array = [["musket", true, _count("musket", size)]]
-	for k in HUMAN_KINDS:
+	for k in OUR_KINDS + ["cav"]:
 		for i in int(you.get(k, 0)):
 			mine.append([k, false, _count(k, size)])
 	var theirs: Array = []
-	for k in (LIZARD_KINDS if String(cfg.get("foe_army", "lizards")) == "lizards" else HUMAN_KINDS):
+	for k in (LIZARD_KINDS if String(cfg.get("foe_army", "lizards")) == "lizards" else NATION_KINDS + ["cav", "musket", "bow", "gun"]):
 		for i in int(foe.get(k, 0)):
 			theirs.append([k, false, _count(k, size)])
 	if theirs.is_empty():
@@ -315,7 +336,7 @@ func spawn_prologue() -> void:
 ## its crew behind; and the warband as it was reported.
 func spawn_campaign() -> void:
 	var nb: Dictionary = Company.next_battle
-	var groups := {"musket": [], "pike": [], "bow": [], "xbow": []}
+	var groups := {"musket": [], "pike": [], "bow": [], "xbow": [], "dragoon": [], "lancer": []}
 	var porters: Array = []
 	for m in Company.fit_men():
 		if String(m.get("tag", "")) == "Wagon" and not camp: # (in camp the wagon is parked)
@@ -328,13 +349,23 @@ func spawn_campaign() -> void:
 		for k in groups:
 			if (groups[k] as Array).size() > (groups[lead] as Array).size():
 				lead = k
+	# Your horse ride together (each man as what he is: a dragoon or a
+	# lancer) if either troop is too small to be a regiment of its own.
+	var dg: Array = groups["dragoon"]
+	var lg: Array = groups["lancer"]
+	if not dg.is_empty() and not lg.is_empty() and (dg.size() < 4 or lg.size() < 4):
+		var into := "dragoon" if dg.size() >= lg.size() else "lancer"
+		groups[into] = dg + lg
+		groups["lancer" if into == "dragoon" else "dragoon"] = []
 	# A handful of one kind isn't a regiment: they stand with the company.
 	for k in groups:
+		if k in ["dragoon", "lancer"]:
+			continue # (horse don't stand in a line of foot)
 		if k != lead and (groups[k] as Array).size() < 4:
 			(groups[lead] as Array).append_array(groups[k])
 			groups[k] = []
 	var mine: Array = []
-	for k in ["musket", "pike", "bow", "xbow"]:
+	for k in ["musket", "pike", "bow", "xbow", "dragoon", "lancer"]:
 		var list: Array = groups[k]
 		var first := true
 		for chunk in _chunks(list, 30):
@@ -348,8 +379,8 @@ func spawn_campaign() -> void:
 	# until you give them an order.
 	var al: Dictionary = nb.get("allies", {})
 	if ally_nation != "":
-		var acap := {"pike": 24, "xbow": 14, "bow": 14, "cav": 10}
-		for k in ["pike", "xbow", "bow", "cav"]:
+		var acap := {"sword": 24, "pike": 24, "xbow": 14, "longbow": 14, "bow": 14, "knight": 8, "cav": 10, "catapult": 2}
+		for k in ["sword", "pike", "xbow", "longbow", "bow", "knight", "cav", "catapult"]:
 			var n := int(al.get("comp", {}).get(k, 0))
 			while n > 0:
 				var take := mini(n, int(acap[k]))
@@ -371,7 +402,8 @@ func spawn_campaign() -> void:
 				scaled[k] = maxi(1 if int(comp[k]) > 0 else 0, int(round(int(comp[k]) * more)))
 			comp = scaled
 	var theirs: Array = []
-	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "xbow": 14, "bow": 14, "cav": 10}
+	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "xbow": 14, "bow": 14, "cav": 10,
+		"sword": 24, "longbow": 14, "knight": 8, "catapult": 2}
 	for k in World.COMP_ORDER:
 		var n := int(comp.get(k, 0))
 		while n > 0:
@@ -442,7 +474,7 @@ func _make_camp(nb: Dictionary) -> void:
 	var sleepers: Array = []
 	var watch: Array = []
 	for r in regs:
-		if r.side != 0 or r.kind == "gun" or r.is_cav():
+		if r.side != 0 or r.is_gun() or r.is_cav():
 			continue # (the horse are picketed: they stand to by their mounts)
 		for m in r.members:
 			var rec = m.get("record")
@@ -598,7 +630,7 @@ static func _chunks(list: Array, size: int) -> Array:
 
 func _count(kind: String, size: int) -> int:
 	var info: Dictionary = KINDS[kind]
-	if kind == "gun":
+	if info.has("guns"):
 		return int(info["guns"])
 	return maxi(4, int(round(size * float(info["men"]))))
 
@@ -618,7 +650,7 @@ func _deploy(side: int, list: Array) -> void:
 	var skirm: Array = []
 	for e in list:
 		var k: String = e[0]
-		if k == "gun":
+		if KINDS[k].has("guns"):
 			guns.append(e)
 		elif bool(KINDS[k].get("cav", false)):
 			cav.append(e)
@@ -663,7 +695,7 @@ func _deploy(side: int, list: Array) -> void:
 			x += w + 8.0
 	for i in guns.size():
 		var gx := (float(i) - (guns.size() - 1) * 0.5) * 34.0
-		_make_reg(side, "gun", int(guns[i][2]), Vector3(0, 0, z) + right * gx + fwd * 14.0, fwd, false)
+		_make_reg(side, guns[i][0], int(guns[i][2]), Vector3(0, 0, z) + right * gx + fwd * (14.0 if guns[i][0] == "gun" else -10.0), fwd, false)
 	for i in skirm.size():
 		var sx := (float(i) - (skirm.size() - 1) * 0.5) * 36.0
 		_make_reg(side, "liz_skirm", int(skirm[i][2]), Vector3(0, 0, z) + right * sx + fwd * 18.0, fwd, false)
@@ -709,8 +741,8 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	if yours:
 		player_reg = r
 	for i in n:
-		var u = _make_unit(side, kind) if i >= recs.size() else FieldSoldier.from_record(battle, self, recs[i], side)
-		if kind != "gun":
+		var u = _make_unit(side, kind) if i >= recs.size() else (Rider.from_record(battle, self, recs[i], side, Company.role_of(recs[i])) if bool(KINDS[kind].get("cav", false)) else FieldSoldier.from_record(battle, self, recs[i], side))
+		if not r.info.has("guns"):
 			_dress(u, kind, 2 if allied else side)
 		u.reg = r
 		u.slot_index = i
@@ -728,7 +760,7 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	for u in r.members:
 		var sp: Vector3 = terrain.free_spot(r.slot(u.slot_index))
 		u.position = sp
-		if kind == "gun":
+		if r.info.has("guns"):
 			u.crew.position = sp
 			u.crew.rotation.y = atan2(-fwd.x, -fwd.z)
 			u.crew.want_yaw = u.crew.rotation.y
@@ -754,6 +786,12 @@ func _make_unit(side: int, kind: String):
 			return Rider.make(battle, self, side, "raptor")
 		"gun":
 			return GunPost.make(battle, self, side, Vector3.ZERO, 0.0 if side == 0 else PI)
+		"catapult":
+			return GunPost.make(battle, self, side, Vector3.ZERO, 0.0 if side == 0 else PI, "catapult")
+		"knight", "lancer", "dragoon":
+			return Rider.make(battle, self, side, "horse", kind)
+		"sword", "longbow":
+			return FieldSoldier.make(battle, self, kind, side)
 		"liz_warrior":
 			return FieldLizard.make(battle, self, "warrior")
 		"liz_skirm":
@@ -950,7 +988,7 @@ func cav_regroup(r) -> void:
 func _fire_guns() -> void:
 	var nest = battle.nest
 	for r in regs:
-		if r.kind != "gun" or r.broken():
+		if not r.is_gun() or r.broken():
 			continue
 		if nest != null and r.side == 0 and not nest.gate_open and (r.fire_target == null or r.fire_target.broken() or nest.inside(r.fire_target.centroid)):
 			# Nothing to shoot that isn't behind the stakes: batter the gate.
@@ -1008,7 +1046,7 @@ func _ai(side: int) -> void:
 		if r.is_cav():
 			_ai_cav(r, best)
 			continue
-		if r.kind == "gun":
+		if r.is_gun():
 			r.fire_target = best if best.centroid.distance_to(r.centroid) < r.range_m() else r.fire_target
 			continue
 		# Humans hold their ground a while first; lizards just come.
@@ -1035,7 +1073,7 @@ func _pick_target(r):
 		var d: float = o.centroid.distance_to(r.centroid)
 		var s := d
 		if r.is_cav():
-			if o.is_ranged() or o.kind == "gun":
+			if o.is_ranged() or o.is_gun():
 				s -= 60.0
 			if o.kind == "pike":
 				s += 120.0

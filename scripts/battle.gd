@@ -1867,6 +1867,39 @@ func explode(pos: Vector3, radius: float, kill_radius: float, shooter: Node3D) -
 		player.shake(clampf(1.2 - pd / 25.0, 0.0, 1.0))
 
 
+## A catapult's stone coming down: whoever it lands among is crushed or
+## bowled over, and a cloud of dust and earth goes up. No fire, no smoke.
+func crush(pos: Vector3, radius: float, shooter: Node3D) -> void:
+	play_sound("thud", pos, 8.0)
+	play_sound("boom", pos, -10.0)
+	spawn_puff(pos + Vector3.UP * 0.4, Color(0.55, 0.48, 0.36), 3.2)
+	spawn_puff(pos + Vector3.UP * 1.0, Color(0.6, 0.54, 0.42), 2.2)
+	if nest != null:
+		nest.blast(pos, radius * 0.6)
+	var victims: Array = []
+	victims.append_array(enemies)
+	victims.append_array(soldiers)
+	victims.append_array(allies)
+	if player.alive:
+		victims.append(player)
+	for u in victims:
+		if not is_instance_valid(u) or not u.alive:
+			continue
+		var to: Vector3 = u.global_position - pos
+		to.y = 0.0
+		var d := to.length()
+		if d > radius:
+			continue
+		var dmg := lerpf(150.0, 30.0, d / radius)
+		if u == player:
+			dmg *= 0.5
+		u.take_shot(dmg, shooter)
+		if u.alive and u.has_method("stagger"):
+			u.stagger(to.normalized() * lerpf(6.0, 2.0, d / radius), 0.8)
+	if player.alive:
+		player.shake(clampf(1.0 - player.global_position.distance_to(pos) / 30.0, 0.0, 1.0))
+
+
 func spawn_flash(pos: Vector3, size: float = 1.0) -> void:
 	var f := Sprite3D.new()
 	f.texture = smoke_tex

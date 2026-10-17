@@ -6,6 +6,7 @@ extends "res://scripts/unit.gd"
 ## silent. Its battery (regiment.gd, kind "gun") lays and fires it.
 
 const GunCrew := preload("res://scripts/gun_crew.gd")
+const CatapultCrew := preload("res://scripts/catapult_crew.gd")
 
 var reg = null
 var field
@@ -19,16 +20,22 @@ var in_melee_t := -99.0
 var max_hp := 260.0
 var kills := 0
 var light := false # the artillery officer's galloper
+var engine := "gun" # or "catapult" (a kingdom's: lobs stones)
 var manned := false # you're laying it (player_gun.gd): the battery leaves it to you
 
 
-static func make(b, f, s: int, at: Vector3, yaw: float):
+static func make(b, f, s: int, at: Vector3, yaw: float, eng := "gun"):
 	var me = load("res://scripts/gun_post.gd").new()
+	me.engine = eng
 	me.battle = b
 	me.field = f
 	me.side = s
 	me.position = at
 	me.light = f._making_light
+	if eng == "catapult":
+		me.crew = CatapultCrew.make(b, at, yaw, me.base_reload())
+		me.crew.coat_col = f.foe_coat if s == 1 else (f.ally_coat if f._making_allied else null)
+		return me
 	me.crew = GunCrew.make(b, at, yaw, me.base_reload())
 	me.crew.light = me.light
 	if s == 1:
@@ -40,6 +47,8 @@ static func make(b, f, s: int, at: Vector3, yaw: float):
 ## every gun of yours.
 func base_reload() -> float:
 	var r: float = (6.5 if light else 9.0) / float(field.pace)
+	if engine == "catapult":
+		r = 22.0 / float(field.pace)
 	if side == 0:
 		r *= Company.Officer.gun_reload_mult()
 	return r
@@ -93,6 +102,10 @@ func try_fire(aim: Vector3) -> bool:
 	crew.lay_on(aim)
 	if not crew.ready() or absf(angle_difference(crew.rotation.y, crew.want_yaw)) > 0.06:
 		return false
+	if engine == "catapult":
+		# A lob: over whatever's in between.
+		reg.fired()
+		return crew.fire_at(aim)
 	var muzzle: Vector3 = crew.barrel.global_transform * Vector3(0, 0, crew.MUZZLE_Z)
 	if not field.terrain.clear_line(muzzle + Vector3.UP * 0.3, aim + Vector3.UP * 0.6):
 		return false

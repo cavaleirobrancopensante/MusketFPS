@@ -32,7 +32,7 @@ EXTRA = ["village", "town", "city", "fort", "nest", "Low", "Medium", "High", "Mu
     "Pikemen", "Bowmen", "Crossbowmen", "Cavalry", "Cannon", "Spearmen", "Archers", "Ensign", "Captain", "Major",
     "Count", "Margrave", "Thane", "Fallen", "Wounded", "Promoted", "Water", "Rations", "Cartridges", "Arrows", "Bolts",
     "battle", "battles", "kill", "kills", "cartridge", "cartridges", "arrow", "arrows", "bolt", "bolts", "shot", "shots",
-    "day", "days", "rations", "muskets", "reliable", "bare-headed", "sick", "fit", "Mutinous", "They've", "LINE", "MAN", "WAGON"]
+    "day", "days", "rations", "muskets", "reliable", "bare-headed", "sick", "fit", "Mutinous", "They've", "LINE", "MAN", "WAGON", "Horse"]
 
 
 def is_text(s):
@@ -68,7 +68,7 @@ def scan(path, wrap=False):
                 in_const = False
             out.append(line)
             continue
-        if SKIP_LINE.search(line):
+        if SKIP_LINE.search(line) or "i18n-skip" in line:
             out.append(line)
             continue
         new = []

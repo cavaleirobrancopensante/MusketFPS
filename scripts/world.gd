@@ -843,8 +843,9 @@ const KINDS := {
 
 const COMP_NAMES := {"liz_warrior": ["warrior", "warriors"], "liz_skirm": ["javelin thrower", "javelin throwers"],
 	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"],
-	"pike": ["spearman", "spearmen"], "bow": ["archer", "archers"], "xbow": ["crossbowman", "crossbowmen"], "cav": ["horseman", "horsemen"]}
-const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "pike", "xbow", "bow", "cav"]
+	"pike": ["spearman", "spearmen"], "bow": ["archer", "archers"], "xbow": ["crossbowman", "crossbowmen"], "cav": ["horseman", "horsemen"],
+	"sword": ["man-at-arms", "men-at-arms"], "longbow": ["longbowman", "longbowmen"], "knight": ["knight", "knights"], "catapult": ["catapult", "catapults"]}
+const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "sword", "pike", "xbow", "longbow", "bow", "knight", "cav", "catapult"]
 
 
 ## What a lizard party is made of (field.gd kinds -> numbers), worked out
@@ -865,22 +866,27 @@ static func party_comp(p: Dictionary) -> Dictionary:
 		var war := maxi(0, n - brutes - raptors - jav)
 		out = {"liz_warrior": war, "liz_skirm": jav, "liz_brute": brutes, "liz_raptor": raptors}
 	elif p["kind"] == "patrol":
-		# A nation's soldiers (nobody here has gunpowder): spearmen, with
-		# crossbows and archers, and a few horse once it's a proper column.
-		var horse := n / 6 if n >= 12 else 0
-		var xb := int(round(n * 0.25))
+		# A nation's soldiers (nobody here has gunpowder: they fight as men
+		# did centuries before you): men-at-arms with sword and shield,
+		# spearmen, crossbows and longbows, and a few knights once it's a
+		# proper column.
+		var horse := n / 7 if n >= 14 else 0
+		var xb := int(round(n * 0.2))
 		var bows := int(round(n * 0.15))
-		out = {"pike": n - horse - xb - bows, "xbow": xb, "bow": bows, "cav": horse}
+		var swords := int(round(n * 0.25))
+		out = {"sword": swords, "pike": n - horse - xb - bows - swords, "xbow": xb, "longbow": bows, "knight": horse}
 	elif p["kind"] == "army":
-		# A lord's army: spearmen, crossbows, archers and a fifth of it horse
-		# (his household riding with him).
-		var hz := n / 5
-		var xa := int(round(n * 0.22))
+		# A lord's army: men-at-arms, spearmen, crossbows and longbows, his
+		# knights (a sixth of it), and a catapult for every thirty men.
+		var hz := n / 6
+		var xa := int(round(n * 0.18))
 		var ba := int(round(n * 0.15))
-		out = {"pike": n - hz - xa - ba, "xbow": xa, "bow": ba, "cav": hz}
+		var sa := int(round(n * 0.25))
+		var cat := n / 30
+		out = {"sword": sa, "pike": n - hz - xa - ba - sa, "xbow": xa, "longbow": ba, "knight": hz, "catapult": cat}
 	elif p["kind"] == "deserters":
 		var bw := int(round(n * 0.35))
-		out = {"pike": n - bw, "bow": bw}
+		out = {"sword": n - bw, "longbow": bw}
 	elif p["kind"] == "caravan":
 		var g := maxi(2, n / 2) # (the guards; the rest are drovers)
 		var xg := g / 3

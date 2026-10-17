@@ -24,6 +24,9 @@ const KINDS := {
 	# and canister (a tin of musket balls) for close work.
 	"roundshot": {"gravity": 9.8, "drag": 0.02, "life": 4.0, "damage": 220.0, "player_damage": 120.0,
 		"shield_stops": false, "tracer": false, "pierce": 4, "bounce": 0.45},
+	# A catapult's stone: a high lob that crushes whoever it lands among.
+	"stone": {"gravity": 9.8, "drag": 0.0, "life": 12.0, "damage": 160.0, "player_damage": 80.0,
+		"shield_stops": false, "tracer": false, "crush": 2.6},
 	"canister": {"gravity": 9.8, "drag": 0.5, "life": 1.2, "damage": 90.0, "player_damage": 45.0,
 		"shield_stops": false, "tracer": true},
 	# Native archers and crossbowmen. Arrows are drawn as shafts in flight and
@@ -99,9 +102,11 @@ func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D, only:
 	var p := {"kind": kind, "pos": from, "prev": from, "vel": velocity, "shooter": shooter, "age": 0.0}
 	if only != null:
 		p["only"] = only
-	if kind == "javelin" or kind == "roundshot":
+	if kind == "javelin" or kind == "roundshot" or kind == "stone":
 		var mj := MeshInstance3D.new()
 		mj.mesh = _javelin_mesh if kind == "javelin" else _shot_mesh
+		if kind == "stone":
+			mj.scale = Vector3.ONE * 2.4
 		mj.position = from
 		add_child(mj)
 		p["node"] = mj
@@ -176,6 +181,12 @@ func _step(p: Dictionary, delta: float) -> bool:
 		return false
 	var done: Array = p.get("hit_list", [])
 	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done)
+	if not hit.is_empty() and k.has("crush"):
+		var cat := prev.lerp(pos, float(hit["t"]))
+		_impact_unit(p, k, hit["unit"], cat)
+		battle.crush(Vector3(cat.x, battle.ground_y(cat), cat.z), float(k["crush"]), p["shooter"])
+		_spent(p, false)
+		return false
 	if not hit.is_empty():
 		_impact_unit(p, k, hit["unit"], prev.lerp(pos, float(hit["t"])))
 		# Round shot ploughs on through the ranks behind.
@@ -196,6 +207,10 @@ func _step(p: Dictionary, delta: float) -> bool:
 		p["pos"] = Vector3(pos.x, gy + 0.03, pos.z)
 		p["vel"] = Vector3(vel.x * 0.75, absf(vel.y) * float(k["bounce"]), vel.z * 0.75)
 		return float(p["age"]) < float(k["life"])
+	if pos.y <= gy + 0.02 and k.has("crush"):
+		battle.crush(Vector3(pos.x, gy, pos.z), float(k["crush"]), p["shooter"])
+		_spent(p, true)
+		return false
 	if pos.y <= gy + 0.02:
 		stats["ground"] += 1
 		if k.has("shaft") and not wall:
@@ -332,7 +347,7 @@ func _impact_unit(p: Dictionary, k: Dictionary, u: Node3D, at: Vector3) -> void:
 	# Where it struck: the head and the chest kill, an arm or a leg wounds
 	# (and a wounded leg slows a man, a wounded arm slows his loading and
 	# his blows). Round shot takes whatever it hits.
-	if p["kind"] != "roundshot":
+	if p["kind"] != "roundshot" and p["kind"] != "stone":
 		var zone := hit_zone(u, at)
 		var table: Dictionary = PLAYER_ZONES if u == battle.player else ZONES
 		dmg *= float(table.get(zone, 1.0))

@@ -63,6 +63,7 @@ var musket_reg = null # the company that gives the Major's volleys
 var pike_reg = null
 var light_gun = null # (artillery) your galloper's battery
 var skirm_reg = null # (cavalry) the skirmishers you're sent after
+var troop_reg = null # (cavalry) your troop of dragoons and lancers
 var sortie := "" # (cavalry) "", "out", "back", "done"
 var _sortie_t := 0.0
 const HORSE_POST := Vector3(12.0, 0, LINE_Z + 7.0) # where you wait mounted
@@ -79,6 +80,12 @@ func _init(f) -> void:
 func spawn() -> void:
 	branch = Company.Officer.branch()
 	var men: Array = Company.fit_men()
+	# Your troop of horse rides on its own, beside you behind the works.
+	var horse_men: Array = men.filter(func(m): return Company.role_of(m) in ["dragoon", "lancer"])
+	men = men.filter(func(m): return not m in horse_men)
+	if not horse_men.is_empty():
+		troop_reg = field._make_reg(0, "dragoon", horse_men.size(), HORSE_POST + Vector3(-12.0, 0, 1.0), Vector3.FORWARD, false, horse_men)
+		troop_reg.title = Lang.t("Your troop")
 	var you
 	if branch == "pike":
 		# The muskets in the centre of the line, your pikes on their right.
@@ -144,7 +151,9 @@ func spawn() -> void:
 	battle._commanding = false
 	battle.story_phase = "line"
 	battle._all_men = []
-	for r in [you, musket_reg]:
+	for r in [you, musket_reg, troop_reg]:
+		if r == null:
+			continue
 		for m in r.members:
 			if m.get("record") != null and not m in battle._all_men:
 				battle._all_men.append(m)
@@ -284,6 +293,8 @@ func _sortie_tick(delta: float) -> void:
 			if wave == 1 and skirm_reg != null and not skirm_reg.gone() and skirm_reg.centroid.z > FOREST_Z + 22.0:
 				sortie = "out"
 				_sortie_t = 0.0
+				if troop_reg != null and not troop_reg.broken():
+					troop_reg.order_attack(skirm_reg)
 				battle.say(Lore.COMMANDER, Lang.t("Ensign! Their javelin men, out in front. Ride them down! Lance couched, at the gallop!"), 5.0)
 		"out":
 			if skirm_reg != null and not skirm_reg.gone() and not skirm_reg.broken():
@@ -291,6 +302,8 @@ func _sortie_tick(delta: float) -> void:
 			if skirm_reg == null or skirm_reg.gone() or skirm_reg.broken() or _sortie_t > 50.0:
 				sortie = "back"
 				_sortie_t = 0.0
+				if troop_reg != null and not troop_reg.broken():
+					troop_reg.order_move(HORSE_POST + Vector3(-12.0, 0, 1.0), Vector3.FORWARD, true)
 				battle.say(Lore.COMMANDER, Lang.t("Well ridden! Now back behind the works, before their warriors catch you!"), 4.5)
 		"back":
 			battle.objective = {"label": Lang.t("BEHIND THE WORKS"), "pos": HORSE_POST}

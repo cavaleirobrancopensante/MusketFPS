@@ -210,15 +210,16 @@ func _buttons() -> Array:
 			"label": Lang.t("3RD PERSON") if player.third_person else Lang.t("1ST PERSON")})
 	if _field_ui() != null:
 		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": Lang.t("COMMAND")})
-	# Your horse, and your gun.
+	# Your horse, and your gun (under the minimap, when there is one).
+	var my := 356.0 if _field_ui() != null else 150.0
 	if player.mounted:
-		list.append({"id": "mount", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("DISMOUNT")})
+		list.append({"id": "mount", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("DISMOUNT")})
 	elif player.can_mount():
-		list.append({"id": "mount", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("MOUNT")})
+		list.append({"id": "mount", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("MOUNT")})
 	elif player.gun != null:
-		list.append({"id": "gun", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("LEAVE THE GUN")})
+		list.append({"id": "gun", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("LEAVE THE GUN")})
 	elif player.can_man_gun():
-		list.append({"id": "gun", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("MAN THE GUN")})
+		list.append({"id": "gun", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("MAN THE GUN")})
 	if Settings.playground:
 		# The range's own controls, down the left side.
 		var pl := [["pg_still1", Lang.t("+1 TARGET")], ["pg_still5", Lang.t("+5 TARGETS")], ["pg_charge5", Lang.t("+5 CHARGING")],

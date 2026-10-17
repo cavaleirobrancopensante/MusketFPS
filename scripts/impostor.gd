@@ -136,14 +136,14 @@ static func _make_rig(spec: Dictionary):
 	var r = Rig3D.new()
 	if mount != "":
 		r.kind = mount
-		r.gear = {"saddle_col": spec.get("saddle", Color(0.16, 0.24, 0.55))}
+		r.gear = {"saddle_col": spec.get("saddle", Color(0.16, 0.24, 0.55)), "barding": spec.get("barding", false)}
 		var rider = Rig3D.new()
 		rider.seated = true
 		if mount == "horse":
 			rider.kind = "soldier"
 			rider.gear = spec.get("gear", {})
 			rider.pack = {"rations": 0, "water": 0, "ammo": 0}
-			rider.hand_item = "saber"
+			rider.hand_item = String(spec.get("hand", "saber"))
 			rider.coat_override = spec.get("coat", null)
 			rider.position = Rig3D.SADDLE_HORSE
 		else:

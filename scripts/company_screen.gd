@@ -642,7 +642,7 @@ func _fill_list() -> void:
 		elif int(pack["rations"]) == 0:
 			warn = Lang.t(" · NO FOOD")
 		var pts := "  [+%d]" % int(m["points"]) if int(m["points"]) > 0 else ""
-		var role: String = {"musket": "", "pike": Lang.t(" · pike"), "bow": Lang.t(" · bow"), "crossbow": Lang.t(" · crossbow")}[Company.role_of(m)]
+		var role: String = {"musket": "", "pike": Lang.t(" · pike"), "bow": Lang.t(" · bow"), "crossbow": Lang.t(" · crossbow"), "dragoon": Lang.t(" · dragoon"), "lancer": Lang.t(" · lancer")}[Company.role_of(m)]
 		var shot_txt := ("%d %s · " % [int(pack["ammo"]), Company.shot_word(m)]) if shot != "" else ""
 		b.text = Lang.t("%s%s%s\n%s · morale %d · %s%d food%s") % [Company.title(m), pts, role, status, int(m["morale"]),
 			shot_txt, int(pack["rations"]), warn]

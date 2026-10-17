@@ -332,7 +332,7 @@ func _refresh() -> void:
 		"line": kit = Lang.t("+%d musketeers") % int(br["extra_men"])
 		"pike": kit = Lang.t("+%d pikemen, and a pike of your own") % int(br["extra_men"])
 		"artillery": kit = Lang.t("a light gun and its crew")
-		"cavalry": kit = Lang.t("a horse, a lance, a sabre and a pistol")
+		"cavalry": kit = Lang.t("a horse, a lance, a sabre and a pistol, and a troop of %d dragoons and lancers") % int(br["extra_men"])
 	_branch_text.text = Lang.t("[b][color=#%s]%s[/color][/b]\n%s\n\n[color=#%s]%s[/color] %s\n[color=#%s]%s[/color] %s") % [
 		GOLD.to_html(false), Lang.t(br["name"]), Lang.t(br["text"]),
 		DIM.to_html(false), Lang.t("Skills:"), ", ".join(gives), DIM.to_html(false), Lang.t("You bring:"), kit]

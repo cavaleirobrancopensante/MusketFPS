@@ -24,7 +24,13 @@ const HUMAN_INFO := {
 	"bow": ["Bowmen", "Light archers: quick, long-ranged, lob arrows over the line."],
 	"xbow": ["Crossbowmen", "Slow to span, but a bolt goes through anything."],
 	"cav": ["Cavalry", "Sabres on horseback. Charge home, wheel away, charge again."],
+	"dragoon": ["Dragoons", "Carbines from the saddle at 45 m, then the charge when the enemy wavers."],
+	"lancer": ["Lancers", "Lances couched at the gallop: the hardest charge you have."],
 	"gun": ["Cannon", "A battery of two field guns and their crews. Round shot and canister."],
+	"sword": ["Men-at-arms", "Mail, sword and shield. The shield stops arrows and bolts, not musket balls."],
+	"longbow": ["Longbowmen", "War bows that reach 95 m, further than a musket."],
+	"knight": ["Knights", "Plate and barded horses, lances couched: a terrible charge, hard to bring down."],
+	"catapult": ["Catapults", "Two engines lobbing stones over the line; slow to wind, crushing where they land."],
 }
 const LIZARD_INFO := {
 	"liz_warrior": ["Warriors", "Shield and cleaver, in a howling mob."],
@@ -50,10 +56,21 @@ func _ready() -> void:
 	cfg = Settings.field_last.duplicate(true)
 	if cfg.is_empty() or not cfg.has("you"):
 		cfg = {"map": "hills", "size": 20, "foe_army": "lizards", "auto_pause": false,
-			"you": {"musket": 2, "pike": 1, "bow": 1, "xbow": 0, "cav": 1, "gun": 1},
+			"you": {"musket": 2, "pike": 1, "bow": 1, "xbow": 0, "dragoon": 1, "lancer": 0, "gun": 1},
 			"foe": {"liz_warrior": 3, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1},
-			"foe_h": {"musket": 3, "pike": 1, "bow": 1, "xbow": 0, "cav": 1, "gun": 1},
+			"foe_h": {"sword": 2, "pike": 1, "longbow": 1, "xbow": 1, "knight": 1, "catapult": 1},
 			"foe_l": {"liz_warrior": 3, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1}}
+	# (Older saves had the rival army in redcoats and our horse as plain
+	# cavalry: keep only today's kinds.)
+	for key in [["you", Field.OUR_KINDS], ["foe_h", Field.NATION_KINDS]]:
+		var d: Dictionary = cfg.get(key[0], {})
+		for k in d.keys():
+			if not k in key[1]:
+				d.erase(k)
+		if d.is_empty():
+			cfg[key[0]] = {"musket": 2, "pike": 1, "dragoon": 1, "gun": 1} if key[0] == "you" else {"sword": 2, "pike": 1, "longbow": 1, "knight": 1, "catapult": 1}
+	if cfg.get("foe_army", "") == "humans":
+		cfg["foe"] = cfg["foe_h"].duplicate()
 	var bg := ColorRect.new()
 	bg.color = UI.NIGHT
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -137,7 +154,7 @@ func _ready() -> void:
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", UI.SLATE)
 	mid.add_child(note)
-	for k in Field.HUMAN_KINDS:
+	for k in Field.OUR_KINDS:
 		mid.add_child(_row("you", k, HUMAN_INFO[k]))
 
 	# The enemy.
@@ -309,7 +326,7 @@ func _set_army(a: String) -> void:
 		for k in Field.LIZARD_KINDS:
 			_foe_box.add_child(_row("foe", k, LIZARD_INFO[k]))
 	else:
-		for k in Field.HUMAN_KINDS:
+		for k in Field.NATION_KINDS:
 			_foe_box.add_child(_row("foe", k, HUMAN_INFO[k]))
 	_refresh()
 
@@ -319,7 +336,7 @@ func _men(side: String) -> int:
 	var n := 0
 	for k in _dict(side):
 		var info: Dictionary = Field.KINDS[k]
-		var each := int(info.get("guns", 0)) * 4 if k == "gun" else maxi(4, int(round(size * float(info["men"]))))
+		var each := int(info.get("guns", 0)) * 4 if info.has("guns") else maxi(4, int(round(size * float(info["men"]))))
 		n += each * int(_dict(side)[k])
 	if side == "you":
 		n += size
@@ -346,7 +363,7 @@ func _fight() -> void:
 	for k in cfg["foe"]:
 		total += int(cfg["foe"][k])
 	if total == 0:
-		cfg["foe"][Field.LIZARD_KINDS[0] if cfg["foe_army"] == "lizards" else "musket"] = 1
+		cfg["foe"][Field.LIZARD_KINDS[0] if cfg["foe_army"] == "lizards" else "sword"] = 1
 	if cfg["foe_army"] == "lizards":
 		cfg["foe_l"] = cfg["foe"]
 	else:

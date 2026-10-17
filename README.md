@@ -50,7 +50,9 @@ each language still lacks.
     land, BALL or CANISTER. You can take over any of your guns the same
     way. Gunnery +3 (every crew reloads faster, your shot scatters less),
     Tactics +1.
-  - *Officer of Horse*: you start mounted. Push the stick the way to go:
+  - *Officer of Horse*: you start mounted, with a lance (COUCH it at the
+    gallop: the point takes the horse's speed), a sabre and a pistol, and
+    a troop of six (dragoons and lancers). Push the stick the way to go:
     the further, the faster, with momentum and a turning circle that
     widens at the gallop. Sabre and pistol from the saddle (the horse's
     speed is in the blow, and you reach further); at speed you ride men
@@ -455,6 +457,32 @@ food for a hungry family, pay a debt, fight the lizards who took a brother).
 Now and then something else happens (a child, a dog, a guard, a drink).
 Win enough trust, or help with what they need, and they **join you**: a real
 recruit with the weapon they brought from home (see below).
+
+### The kingdoms' armies (medieval) and your horse
+
+Aurest and Vell are centuries behind you: no gunpowder. Their armies
+(`world.gd` party_comp, `field.gd` NATION_KINDS) are:
+
+- **Men-at-arms**: mail, nasal helms, arming sword and a heater shield in
+  their lord's colours. The shield catches arrows and bolts (and blades)
+  from in front, but a musket ball goes through it.
+- **Spearmen** in mail, **crossbowmen**, and **longbowmen** who out-range a
+  musket (95 m).
+- **Knights**: plate, great helms, barded horses, lances couched in the
+  charge. Very hard to bring down with a blade (plate halves it), a ball
+  less so; their charge hits harder than anything else on the field.
+  Braced pikes and squares still stop them.
+- **Catapults** (a lord's army has one for every thirty men): lob a stone
+  high over the lines; it crushes whoever it lands among (no fire, no
+  smoke, a cloud of dust). Slow to wind, wild, deadly to a packed square.
+
+Their men drop their arms when they fall: swords, shields, mail and helms
+turn up on the loot pile, and your men can wear them.
+
+**Your horse** (the cavalry officer's troop, and the Tests' field battle):
+**dragoons** fire carbines from the saddle at a halt (45 m), skirmishing
+until the mark wavers or is caught in a melee, then charge; **lancers**
+charge with lances couched, a harder shock than sabres.
 
 ### Natives: spears, bows and crossbows
 

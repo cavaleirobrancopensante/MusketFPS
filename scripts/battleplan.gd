@@ -232,7 +232,7 @@ func _refresh() -> void:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 4)
 		var name_b := Button.new()
-		name_b.text = Company.surname_title(m) + {"musket": "", "pike": Lang.t(" (pike)"), "bow": Lang.t(" (bow)"), "crossbow": Lang.t(" (xbow)")}[Company.role_of(m)]
+		name_b.text = Company.surname_title(m) + {"musket": "", "pike": Lang.t(" (pike)"), "bow": Lang.t(" (bow)"), "crossbow": Lang.t(" (xbow)"), "dragoon": Lang.t(" (dragoon)"), "lancer": Lang.t(" (lancer)")}[Company.role_of(m)]
 		name_b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		name_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_b.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
@@ -498,11 +498,11 @@ func _self_test() -> void:
 	_form_line("Musketeers", Vector2(-10, 0), Vector2(10, 0))
 	_preset_pikes()
 	_new_tag.visible = true
-	_new_tag.text = "Ranged 2"
+	_new_tag.text = "Ranged 2" # i18n-skip
 	_on_new_tag()
 	var men := _men()
-	men[0]["tag"] = "Ranged 2"
-	_form_line("Ranged 2", Vector2(-3, -4), Vector2(3, -4))
+	men[0]["tag"] = "Ranged 2" # i18n-skip
+	_form_line("Ranged 2", Vector2(-3, -4), Vector2(3, -4)) # i18n-skip
 	Company.wagon_plan = [6.0, -14.0]
 	_refresh()
 	var out: Array = []

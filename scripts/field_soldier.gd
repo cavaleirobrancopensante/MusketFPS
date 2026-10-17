@@ -19,6 +19,8 @@ const GEAR := {
 	"xbow": {"head": "kettle_hat", "torso": "jack", "primary": "crossbow", "secondary": "hatchet"},
 }
 const ENEMY_GEAR := {
+	"sword": {"head": "nasal_helm", "torso": "mail", "primary": "arming_sword", "secondary": "heater_shield"},
+	"longbow": {"head": "hood", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
 	"musket": {"head": "tricorne", "torso": "coat", "primary": "musket", "secondary": "bayonet"},
 	"pike": {"head": "kettle_hat", "torso": "coat", "primary": "pike", "secondary": ""},
 	"bow": {"head": "tricorne", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
@@ -44,7 +46,7 @@ static func make(b, f, kind: String, s: int):
 	me.frames = b.soldier_frames
 	var rec: Dictionary = Company.make_recruit()
 	rec["gear"] = gear_for(f, kind, s).duplicate()
-	rec["pack"] = {"water": 1, "rations": 1, "ammo": 0 if kind == "pike" else 60}
+	rec["pack"] = {"water": 1, "rations": 1, "ammo": 0 if kind in ["pike", "sword"] else 60}
 	rec["morale"] = 60
 	rec["rank"] = 1 if randf() < 0.2 else 0
 	me.record = rec
@@ -59,8 +61,10 @@ static func make(b, f, kind: String, s: int):
 ## A nation's soldiers (no gunpowder in this land): kettle hats over their
 ## coats, spears, war bows and crossbows.
 const NATION_GEAR := {
+	"sword": {"head": "nasal_helm", "torso": "mail", "primary": "arming_sword", "secondary": "heater_shield"},
+	"longbow": {"head": "hood", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
 	"musket": {"head": "kettle_hat", "torso": "coat", "primary": "pike", "secondary": ""},
-	"pike": {"head": "kettle_hat", "torso": "coat", "primary": "pike", "secondary": ""},
+	"pike": {"head": "kettle_hat", "torso": "mail", "primary": "pike", "secondary": ""},
 	"bow": {"head": "hood", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
 	"xbow": {"head": "kettle_hat", "torso": "coat", "primary": "crossbow", "secondary": "hatchet"},
 }
@@ -68,7 +72,7 @@ const NATION_GEAR := {
 
 static func gear_for(f, kind: String, s: int) -> Dictionary:
 	if s == 0:
-		return GEAR[kind]
+		return GEAR[kind] if GEAR.has(kind) else NATION_GEAR[kind]
 	return (NATION_GEAR if String(f.nation) != "" else ENEMY_GEAR)[kind]
 
 
@@ -111,6 +115,24 @@ func _ready() -> void:
 			fire_range = 78.0
 		"bolt":
 			fire_range = 66.0
+	if reg != null and reg.range_m() > 0.0 and missile != "":
+		fire_range = reg.range_m() # (a longbow carries further)
+	if reg != null and reg.kind == "sword":
+		reach = 1.7 # (sword and shield: close work)
+		engage = reach + 1.6
+	shielded = rig_gear is Dictionary and String(rig_gear.get("secondary", "")) == "heater_shield"
+
+
+var shielded := false
+
+
+## A raised shield catches arrows and bolts from in front (not musket balls).
+func catch_projectile(at: Vector3) -> bool:
+	if not shielded or not alive:
+		return false
+	var to := at - global_position
+	to.y = 0.0
+	return facing.dot(to.normalized()) > 0.2 and randf() < 0.75
 
 
 func _physics_process(delta: float) -> void:
@@ -338,7 +360,7 @@ func receive_blow(damage: float, from: Node3D, heavy: bool) -> String:
 		return "hit"
 	var to_from := from.global_position - global_position
 	to_from.y = 0.0
-	if not heavy and facing.dot(to_from.normalized()) > 0.3 and randf() < 0.18 + 0.25 * steadiness:
+	if not heavy and facing.dot(to_from.normalized()) > 0.3 and randf() < 0.18 + 0.25 * steadiness + (0.3 if shielded else 0.0):
 		battle.play_sound("clang", global_position + Vector3.UP * 1.3, -3.0)
 		return "blocked"
 	take_damage(damage, from)
