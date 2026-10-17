@@ -144,8 +144,10 @@ const WEAPON_LABELS := {"musket": "MUSKET", "melee": "BAYONET", "pistol": "PISTO
 	"bow": "BOW", "crossbow": "CROSSBOW", "spyglass": "SPYGLASS"}
 
 
+## The command view, once the army is yours to command (the prologue gives
+## it to you partway).
 func _field_ui():
-	if battle.field != null and battle.field.ui != null:
+	if battle.field != null and battle.field.ui != null and battle.can_command():
 		return battle.field.ui
 	return null
 
@@ -195,7 +197,7 @@ func _buttons() -> Array:
 	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": "MENU"})
 	list.append({"id": "view", "circle": false, "rect": Rect2(140, 92, 150, 46),
 			"label": "3RD PERSON" if player.third_person else "1ST PERSON"})
-	if battle.field != null and battle.field.ui != null:
+	if _field_ui() != null:
 		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": "COMMAND"})
 	if Settings.playground:
 		# The range's own controls, down the left side.

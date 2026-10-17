@@ -32,6 +32,9 @@ const SLOW := 1
 const BLOCKED := 2
 
 const WATER := -0.75 # the river's surface
+## The beach (the prologue): the earthworks' crest and the gun embrasures in it.
+const EARTHWORKS_Z := 5.0
+const EARTHWORK_GAPS := [-37.0, -15.5, 15.5, 37.0]
 const BRIDGE_X := -40.0
 const BRIDGE_HALF_W := 4.0
 const FORD_X := 56.0
@@ -43,12 +46,13 @@ var tops := PackedFloat32Array() # roof height over a cell (houses), or -INF-ish
 var houses: Array = [] # [Rect2, height, colour]
 var woods: Array = [] # [Vector2 centre, radius]
 var has_water := false
+var water_y := WATER # the river's surface, or the sea's on the beach
 var astar: AStarGrid2D = null
 var _rng := RandomNumberGenerator.new()
 
 
 func _init(map_kind: String) -> void:
-	kind = map_kind if map_kind in MAPS else "flat"
+	kind = map_kind if map_kind in MAPS or map_kind == "beach" else "flat"
 	_rng.seed = hash("field:" + kind)
 	if kind == "town":
 		_lay_out_town()
@@ -56,7 +60,9 @@ func _init(map_kind: String) -> void:
 		woods = [[Vector2(-78, 5), 34.0], [Vector2(82, -12), 30.0], [Vector2(8, -6), 16.0], [Vector2(-20, 85), 14.0], [Vector2(40, -88), 18.0]]
 	elif kind in ["flat", "hills"]:
 		woods = [[Vector2(-118, -40), 22.0], [Vector2(122, 30), 20.0]]
-	has_water = kind == "river"
+	has_water = kind == "river" or kind == "beach"
+	if kind == "beach":
+		water_y = -0.25 # the sea
 	heights.resize(N * N)
 	nav.resize(N * N)
 	tops.resize(N * N)
@@ -72,12 +78,20 @@ func _init(map_kind: String) -> void:
 			var v := FREE
 			if has_water:
 				var bed := _raw(c.x, c.y)
-				if bed < WATER - 0.55 and not _on_bridge(c.x, c.y):
+				if bed < water_y - 0.55 and not _on_bridge(c.x, c.y):
 					v = BLOCKED
-				elif bed < WATER + 0.05 and not _on_bridge(c.x, c.y):
+				elif bed < water_y + 0.05 and not _on_bridge(c.x, c.y):
 					v = SLOW
 			for w in woods:
 				if c.distance_to(w[0]) < float(w[1]):
+					v = maxi(v, SLOW)
+			if kind == "beach" and absf(c.y - EARTHWORKS_Z) < 1.4 and absf(c.x) < 40.0:
+				# Over the earthworks it's a scramble; the embrasures are open.
+				var gap := false
+				for gx in EARTHWORK_GAPS:
+					if absf(c.x - gx) < 1.6:
+						gap = true
+				if not gap:
 					v = maxi(v, SLOW)
 			nav[j * N + i] = v
 	for h in houses:
@@ -128,6 +142,13 @@ func _raw(x: float, z: float) -> float:
 			return roll * 0.5
 		"forest":
 			return roll * 1.1 + _bump(x, z, 0.0, -100.0, 60.0, 2.5)
+		"beach":
+			# Sand sloping down into the sea behind, rising a little inland
+			# to the forest ahead.
+			var hb := roll * 0.25
+			hb -= smoothstep(26.0, 50.0, z) * 2.6
+			hb += smoothstep(-40.0, -95.0, z) * 1.6
+			return hb
 	return roll
 
 
@@ -142,7 +163,7 @@ static func river_z(x: float) -> float:
 
 
 func _on_bridge(x: float, z: float) -> bool:
-	return has_water and absf(x - BRIDGE_X) < BRIDGE_HALF_W and absf(z - river_z(BRIDGE_X)) < 17.0
+	return kind == "river" and absf(x - BRIDGE_X) < BRIDGE_HALF_W and absf(z - river_z(BRIDGE_X)) < 17.0
 
 
 ## The deck: level across the water, ramps down to the banks.
@@ -206,7 +227,7 @@ func speed_factor(p: Vector3, dir: Vector3) -> float:
 	var f := 1.0
 	var c := cell(p)
 	if c == SLOW:
-		f = 0.5 if has_water and height(p.x, p.z) < WATER else 0.68
+		f = 0.5 if has_water and height(p.x, p.z) < water_y else 0.68
 	var ahead := height(p.x + dir.x * 1.5, p.z + dir.z * 1.5) - height(p.x, p.z)
 	var slope := ahead / 1.5
 	if slope > 0.0:
@@ -280,7 +301,7 @@ func minimap_image(n: int) -> Image:
 			var col := Color(0.3, 0.42, 0.19) * light
 			var p := Vector3(x, 0, z)
 			var c := cell(p)
-			if has_water and h < WATER:
+			if has_water and h < water_y:
 				col = Color(0.25, 0.38, 0.5)
 			elif not houses.is_empty() and solid_y(p) > h + 0.5:
 				col = Color(0.62, 0.36, 0.26)
@@ -495,7 +516,9 @@ func build(parent: Node3D, cols: Dictionary) -> void:
 			var dirt := 0.0
 			var mud := 0.0
 			var shade := 1.0
-			if has_water:
+			if kind == "beach":
+				dirt = smoothstep(-30.0, -60.0, z) # (green inland: see build_world's colours)
+			elif has_water:
 				var d := absf(z - river_z(x))
 				mud = 1.0 - smoothstep(9.0, 13.0, d)
 				dirt = (1.0 - smoothstep(11.0, 16.0, d)) * 0.7
@@ -554,16 +577,17 @@ func build(parent: Node3D, cols: Dictionary) -> void:
 		wb.shape = ws
 		body.add_child(wb)
 
-	if has_water:
+	if kind == "river":
 		_build_river(parent, body)
 	if not houses.is_empty():
 		_build_town(parent, body)
-	_build_trees(parent)
+	if kind != "beach":
+		_build_trees(parent) # (the beach has its own strange forest: battle.gd)
 
 
 func _build_river(parent: Node3D, body: StaticBody3D) -> void:
 	var sea := Props.sea(OUTER * 2.0, 0.04, 0.5)
-	sea.position = Vector3(0, WATER, 0)
+	sea.position = Vector3(0, water_y, 0)
 	var mat := sea.mesh.surface_get_material(0) as ShaderMaterial
 	if mat == null:
 		mat = (sea.mesh as PlaneMesh).material as ShaderMaterial

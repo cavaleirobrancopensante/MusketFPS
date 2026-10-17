@@ -512,6 +512,30 @@ const SETTLEMENT_REACH := {"village": 3.5, "town": 4.5, "city": 7.0, "hold": 3.5
 var _inside := -1 # the settlement you're standing in (so it triggers once per visit)
 
 
+## The field battle map for a fight here: a town or village close by, a
+## river through the cell, woods, hills, or open ground.
+func battle_map_here() -> String:
+	var c := cell()
+	var sid := settlement_at(pos)
+	if sid < 0:
+		for d in [Vector2(1.5, 0), Vector2(-1.5, 0), Vector2(0, 1.5), Vector2(0, -1.5)]:
+			sid = settlement_at(pos + d)
+			if sid >= 0:
+				break
+	if sid >= 0 and String(settlement(sid)["kind"]) in ["village", "town", "city"]:
+		return "town"
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if gen.inside(c.x + dx, c.y + dy) and gen.river[Gen.idx(c.x + dx, c.y + dy)] != 0:
+				return "river"
+	match gen.t(c.x, c.y):
+		T.FOREST, T.SWAMP:
+			return "forest"
+		T.HILLS, T.MOUNTAIN:
+			return "hills"
+	return "flat"
+
+
 func settlement_at(p: Vector2) -> int:
 	for st in gen.settlements:
 		var r: float = SETTLEMENT_REACH.get(st["kind"], 3.5)
@@ -662,7 +686,7 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 			report["found"].append("%s (%s%s)" % [st["name"], st["kind"], ", raided" if is_raided(int(st["id"])) else ""])
 	for p in parties:
 		if tgt.distance_to(Vector2(p["x"], p["y"])) < 24.0:
-			report["parties"].append(party_name(p))
+			report["parties"].append(party_label(p, 1)) # (scouts at a distance: a rough count)
 	var counts := {}
 	for dy in range(-12, 13, 3):
 		for dx in range(-12, 13, 3):
@@ -788,6 +812,96 @@ const KINDS := {
 	"refugees": {"speed": 0.6, "name": "Refugees", "hostile": false},
 	"deserters": {"speed": 0.85, "name": "Deserters", "hostile": false},
 }
+
+
+# ---------------------------------------------------------------- what you can tell about a party
+
+const COMP_NAMES := {"liz_warrior": ["warrior", "warriors"], "liz_skirm": ["javelin thrower", "javelin throwers"],
+	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"]}
+
+
+## What a lizard party is made of (field.gd kinds -> numbers), worked out
+## from its size and who it is, so it's the same every time you look.
+## Warbands: mostly warriors, a quarter javelin throwers, brutes once it's
+## big, raptor riders once it's bigger. Hunting parties: throwers and riders.
+static func party_comp(p: Dictionary) -> Dictionary:
+	var n := int(p["size"])
+	var out := {}
+	if p["kind"] == "hunters":
+		var r := 1 if n >= 6 else 0
+		var j := int(round((n - r) * 0.6))
+		out = {"liz_skirm": j, "liz_raptor": r, "liz_warrior": n - r - j}
+	elif p["kind"] == "warband":
+		var brutes := n / 14
+		var raptors := maxi(0, (n - 12) / 6)
+		var jav := int(round(n * 0.25))
+		var war := maxi(0, n - brutes - raptors - jav)
+		out = {"liz_warrior": war, "liz_skirm": jav, "liz_brute": brutes, "liz_raptor": raptors}
+	else:
+		return {}
+	for k in out.keys():
+		if int(out[k]) <= 0:
+			out.erase(k)
+	return out
+
+
+static func comp_text(comp: Dictionary, sep := ", ") -> String:
+	var parts: PackedStringArray = []
+	for k in ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]:
+		var c := int(comp.get(k, 0))
+		if c > 0:
+			parts.append("%d %s" % [c, COMP_NAMES[k][0 if c == 1 else 1]])
+	return sep.join(parts)
+
+
+## How much you can make out about a party `d` cells away (-1: from where
+## you are now). Your Tactics reads a host; your Pathfinding gives you the
+## eyes to see it from further off.
+##   0  too far: something's there, no more ("?")
+##   1  a rough count (the better your Tactics, the closer the guess)
+##   2  the count
+##   3  close, and with Tactics 3 or more: what they are
+func intel_level(p: Dictionary, d := -1.0) -> int:
+	if d < 0.0:
+		d = pos.distance_to(Vector2(p["x"], p["y"]))
+	var t := Company.Officer.skill("tactics")
+	var s := sight_radius()
+	if t >= 3 and d <= 1.0 + 0.35 * t:
+		return 3
+	if d <= s * 0.25 + 0.3 * t:
+		return 2
+	if d <= s * 0.6:
+		return 1
+	return 0
+
+
+## A rough count that holds the real one: wider with less Tactics, and the
+## same guess every time you look.
+func rough_count(p: Dictionary) -> String:
+	var n := int(p["size"])
+	var e := clampf(0.55 - 0.045 * Company.Officer.skill("tactics"), 0.12, 0.55)
+	var u := float(hash(int(p["id"]) * 7919) % 100) / 100.0
+	var lo := maxi(1, int(floor(n * (1.0 - e * u))))
+	var hi := maxi(lo + 1, int(ceil(n * (1.0 + e * (1.0 - u)))))
+	return "%d–%d" % [lo, hi]
+
+
+## The party's name with what you can tell about its numbers.
+func party_label(p: Dictionary, level := -1) -> String:
+	if level < 0:
+		level = intel_level(p)
+	var base := party_name(p).split(" (")[0]
+	match level:
+		0:
+			return "%s (?)" % base
+		1:
+			return "%s (about %s)" % [base, rough_count(p)]
+		2:
+			return "%s (%d)" % [base, int(p["size"])]
+	var comp := party_comp(p)
+	if comp.is_empty():
+		return "%s (%d)" % [base, int(p["size"])]
+	return "%s (%d)\n%s" % [base, int(p["size"]), comp_text(comp, " · ")]
 
 
 func party_name(p: Dictionary) -> String:

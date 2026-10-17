@@ -781,7 +781,7 @@ func _update_parties() -> void:
 		n.visible = seen
 		if seen:
 			n.position = _world_pos(Vector2(p["x"], p["y"]))
-			(n.get_node("label") as Label3D).text = World.party_name(p)
+			(n.get_node("label") as Label3D).text = World.party_label(p)
 	for id in _markers.keys():
 		if not alive.has(id):
 			_markers[id].queue_free()
@@ -1400,7 +1400,13 @@ func _on_encounter(p: Dictionary) -> void:
 	var where := "in the trees" if cover else "in the open"
 	# Seen coming, there's time to form up as planned; out of nowhere, there isn't.
 	var ambush := World.hours - float(p.get("seen_at", -99.0)) > 1.5
-	var text := "They've caught up with you %s. %d of them against %d fit men." % [where, int(p["size"]), Company.fit_men().size()]
+	var lvl := World.intel_level(p, 0.0)
+	var count := "%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p)
+	var text := "They've caught up with you %s. %s of them against %d fit men." % [where, count, Company.fit_men().size()]
+	if lvl >= 3:
+		text += "\n\n[color=#c9a14a]You make them out: %s.[/color]" % World.comp_text(World.party_comp(p))
+	elif Company.Officer.skill("tactics") < 3:
+		text += "\n\n[color=#9aa3b8](With more Tactics you'd read what they are, not just how many.)[/color]"
 	if ambush:
 		text += "\n\n[color=#f08060]AMBUSH! No time to form up: the men will be scattered.[/color]"
 	else:
@@ -1412,7 +1418,7 @@ func _on_encounter(p: Dictionary) -> void:
 	buttons.append(["FIGHT", _fight.bind(p, ambush)])
 	buttons.append(["SLIP AWAY", _slip.bind(p, chance)])
 	_scene("ambush" if ambush else "warband")
-	_popup_open("%s!" % World.party_name(p), text, buttons)
+	_popup_open("%s!" % World.party_label(p, mini(World.intel_level(p, 0.0), 2)), text, buttons)
 
 
 ## Attacked in the night camp. Two men stand watch; whether they see the
@@ -1481,7 +1487,8 @@ func _plan_fight(p: Dictionary) -> void:
 func _set_battle(p: Dictionary, ambush: bool) -> void:
 	var c := World.cell()
 	Company.next_battle = {"enemy": int(p["size"]), "terrain": World.gen.t(c.x, c.y), "party": int(p["id"]),
-		"ambush": ambush, "enemy_kind": "lizards"}
+		"ambush": ambush, "enemy_kind": "lizards", "map": World.battle_map_here(), "comp": World.party_comp(p),
+		"party_name": World.party_name(p).split(" (")[0]}
 	Company.results_unseen = false
 
 

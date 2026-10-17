@@ -53,6 +53,23 @@ static func make(b, f, kind: String, s: int):
 	return me
 
 
+## One of your own men (a campaign record: his kit, his cartridges, his
+## name and his traits all come with him).
+static func from_record(b, f, rec: Dictionary, s: int):
+	var me = load("res://scripts/field_soldier.gd").new()
+	me.battle = b
+	me.field = f
+	me.side = s
+	me.ally = true
+	me.frames = b.soldier_frames
+	me.record = rec
+	me.campaign = true
+	return me
+
+
+var campaign := false # a man of your company: his own cartridges count
+
+
 func _ready() -> void:
 	super._ready()
 	if side == 1:
@@ -62,10 +79,10 @@ func _ready() -> void:
 	hp *= 1.5 # (field battles last: a man takes two balls, not one)
 	reload_time /= field.pace
 	melee_rate *= field.pace
-	if not pike:
-		ammo = -1 # a field battle: nobody runs dry
+	if not pike and not campaign:
+		ammo = -1 # a test battle: nobody runs dry
 		loaded = true
-	if pike:
+	if pike and not campaign:
 		reach = 3.4 # the long pike, not the boarding pike
 		engage = reach + 1.8
 	match missile:

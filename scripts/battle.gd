@@ -139,10 +139,11 @@ func _ready() -> void:
 	await Loading.step(f[1], "Tuning the drums, priming the pans...")
 	sounds = SoundFactory.cached()
 	await Loading.step(f[2], "The ground, the sky, the trees...")
-	if not Settings.field.is_empty() and not Company.active:
+	var fcfg := _field_config(nb)
+	if not fcfg.is_empty():
 		field = FieldScript.new()
 		add_child(field)
-		field.setup(self, Settings.field)
+		field.setup(self, fcfg)
 	_build_world()
 	await Loading.step(f[3], "Mustering the company...")
 
@@ -156,7 +157,9 @@ func _ready() -> void:
 	line_anchor = Vector3(player.position.x, 0, player.position.z) + line_forward * LINE_DISTANCE
 	# Campaign: your actual men (the fit ones) against the warband the scouts
 	# reported. Otherwise a stand-alone battle (stress test, autotest).
-	if Company.active:
+	if field != null:
+		waves = [] # (field.gd musters both armies)
+	elif Company.active:
 		if prologue:
 			waves = PROLOGUE_WAVES
 		elif not Company.next_battle.is_empty():
@@ -214,12 +217,12 @@ func _ready() -> void:
 			# Caught off guard: men all over the place, they'll form up as they can.
 			s.position = player.position + Vector3(randf_range(-9, 9), -0.1, randf_range(-6, 10))
 		add_child(s)
-	if Company.active and not prologue:
+	if Company.active and not prologue and field == null:
 		_build_wagon()
 		for s in soldiers:
 			if s.porter >= 0:
 				s.position = porter_spot(s.porter)
-	if prologue:
+	if prologue and field == null:
 		_setup_prologue()
 	if camp:
 		_setup_camp()
@@ -227,7 +230,12 @@ func _ready() -> void:
 	_deploy_guns()
 	if field != null:
 		await field.make_sprites()
-		field.spawn_armies()
+		if field.prologue:
+			field.spawn_prologue()
+		elif field.campaign:
+			field.spawn_campaign()
+		else:
+			field.spawn_armies()
 		game_state = "field"
 
 	await Loading.step(f[4], "Fall in!")
@@ -267,6 +275,31 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- orders
 
+## Which battles are field battles (field.gd), and how: the Tests' field
+## battle, and the campaign's fights in the open. (The night camp and the
+## nest assaults are still the company battle, for now.)
+func _field_config(nb: Dictionary) -> Dictionary:
+	if not Company.active:
+		return Settings.field
+	if prologue:
+		return {"map": "beach", "prologue": true, "pace": 0.75}
+	if camp or int(nb.get("assault", -1)) >= 0 or int(nb.get("sortie", -1)) >= 0:
+		return {}
+	if "--oldbattle" in OS.get_cmdline_user_args():
+		return {}
+	return {"map": String(nb.get("map", _map_for_terrain(int(nb.get("terrain", 2))))), "campaign": true,
+		"ambush": bool(nb.get("ambush", false)), "pace": 0.75}
+
+
+static func _map_for_terrain(t: int) -> String:
+	match t:
+		3, 6:
+			return "forest"
+		4, 5:
+			return "hills"
+	return "flat"
+
+
 ## In the prologue the captain commands until he falls.
 func can_command() -> bool:
 	return _commanding
@@ -281,7 +314,8 @@ func _not_yours() -> bool:
 
 func order_follow() -> void:
 	if field != null:
-		field.player_order("follow")
+		if not _not_yours():
+			field.player_order("follow")
 		return
 	if _not_yours():
 		return
@@ -294,7 +328,8 @@ func order_follow() -> void:
 ## enemies left they regroup on you as if following.
 func order_charge() -> void:
 	if field != null:
-		field.player_order("charge")
+		if not _not_yours():
+			field.player_order("charge")
 		return
 	if _not_yours():
 		return
@@ -304,7 +339,8 @@ func order_charge() -> void:
 
 func order_hold() -> void:
 	if field != null:
-		field.player_order("hold")
+		if not _not_yours():
+			field.player_order("hold")
 		return
 	if _not_yours():
 		return
@@ -315,7 +351,8 @@ func order_hold() -> void:
 
 func toggle_fire_mode() -> void:
 	if field != null:
-		field.player_order("fire")
+		if not _not_yours():
+			field.player_order("fire")
 		return
 	if _not_yours():
 		return
@@ -329,7 +366,8 @@ func toggle_fire_mode() -> void:
 
 func order_volley() -> void:
 	if field != null:
-		field.player_order("volley")
+		if not _not_yours():
+			field.player_order("volley")
 		return
 	if _not_yours():
 		return
@@ -479,6 +517,8 @@ func _snap_line_to_player() -> void:
 ## Give slots left-to-right by where men currently stand, so nobody crosses
 ## through the line. Also used to "close ranks" when someone falls.
 func _reassign_slots() -> void:
+	if field != null:
+		return # (regiments keep their own ranks)
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var anchor := line_anchor
 	soldiers.sort_custom(func(a, b): return (a.position - anchor).dot(right) < (b.position - anchor).dot(right))
@@ -835,7 +875,7 @@ func _tell_later(text: String) -> void:
 ## crew, on either wing of the line. They fire at what comes at you, and at
 ## a nest's gate when there's nothing else.
 func _deploy_guns() -> void:
-	if prologue or camp:
+	if prologue or camp or field != null:
 		return
 	var n := Company.guns if Company.active else (2 if Settings.siege_test else 0)
 	if n <= 0:
@@ -1041,7 +1081,7 @@ func _process(delta: float) -> void:
 		game_state = "playground"
 		player.hp = player.max_hp # nobody dies on the range
 		_range_gun_process()
-	if prologue:
+	if prologue and field == null:
 		_prologue_process(delta)
 	match game_state:
 		"starting", "between":
@@ -1176,13 +1216,14 @@ func _setup_prologue() -> void:
 ## its rocks, the earthworks, the forest ahead and the cliff path to the
 ## right, where the retreat goes.
 func _build_beach() -> void:
-	var sand := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(500, 80)
-	pm.material = Props._mat(Props.SAND)
-	sand.mesh = pm
-	sand.position = Vector3(0, 0.01, 0)
-	add_child(sand)
+	if field == null:
+		var sand := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(500, 80)
+		pm.material = Props._mat(Props.SAND)
+		sand.mesh = pm
+		sand.position = Vector3(0, 0.01, 0)
+		add_child(sand)
 	var sea := Props.sea(520.0, 0.12, 0.6)
 	sea.position = Vector3(0, -0.25, 300)
 	add_child(sea)
@@ -1196,14 +1237,14 @@ func _build_beach() -> void:
 	add_child(wreck)
 	add_child(Props.rocks(Vector3(-19, -1.5, 116), 7, 3.5, rng))
 	var works := Props.earthwork(80.0, GUN_X)
-	works.position = Vector3(0, 0, WORKS_Z)
+	works.position = _on_ground(Vector3(0, 0, WORKS_Z))
 	add_child(works)
 	# Cliffs along the right end of the beach, with the path between them.
 	for i in 14:
 		var z := -60.0 + i * 7.0
 		if absf(z - RETREAT_POINT.z) < 9.0:
 			continue
-		add_child(Props.rocks(Vector3(RETREAT_POINT.x + rng.randf_range(2, 8), 0, z), 4, 4.0, rng))
+		add_child(Props.rocks(_on_ground(Vector3(RETREAT_POINT.x + rng.randf_range(2, 8), 0, z)), 4, 4.0, rng))
 	# The forest: tall, dark, unfamiliar. Ahead of the line and past the cliffs.
 	var spots: Array = []
 	for i in 160:
@@ -1218,15 +1259,22 @@ func _build_beach() -> void:
 	cm.bottom_radius = 0.05
 	cm.height = 4.5
 	pole.mesh = cm
-	pole.position = RETREAT_POINT + Vector3(0, 2.25, 0)
+	pole.position = _on_ground(RETREAT_POINT) + Vector3(0, 2.25, 0)
 	add_child(pole)
 	var flag := MeshInstance3D.new()
 	var fm := BoxMesh.new()
 	fm.size = Vector3(0.03, 1.3, 2.0)
 	fm.material = Props._mat(Color(0.7, 0.1, 0.08))
 	flag.mesh = fm
-	flag.position = RETREAT_POINT + Vector3(0, 3.85, 1.02)
+	flag.position = _on_ground(RETREAT_POINT) + Vector3(0, 3.85, 1.02)
 	add_child(flag)
+
+
+## A point on the ground (the field battle's ground isn't flat).
+func _on_ground(p: Vector3) -> Vector3:
+	if field == null:
+		return p
+	return Vector3(p.x, field.terrain.height(p.x, p.z), p.z)
 
 
 ## Strange trees: tall bare trunks and wide teal crowns (MultiMesh: 2 draws).
@@ -1251,7 +1299,7 @@ func _forest(spots: Array, rng: RandomNumberGenerator) -> void:
 	mc.mesh = crown
 	mc.instance_count = spots.size()
 	for i in spots.size():
-		var p: Vector3 = spots[i]
+		var p: Vector3 = _on_ground(spots[i]) - Vector3(0, 0.3, 0)
 		var h := rng.randf_range(8.0, 16.0)
 		var w := rng.randf_range(2.5, 4.5)
 		mt.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(1, h, 1)), p + Vector3(0, h * 0.5, 0)))
@@ -1434,6 +1482,9 @@ func _throw_at_captain(thrower: Node3D) -> void:
 
 
 func _captain_down() -> void:
+	if field != null and field.story != null:
+		field.story.captain_down()
+		return
 	story_phase = "captain_down"
 	_phase_t = 0.0
 	hud.show_message("%s is down!" % Lore.COMMANDER_SHORT, 3.0)
@@ -1752,7 +1803,7 @@ func _build_world() -> void:
 		env.fog_density = 0.009
 		env.fog_light_color = Color(0.78, 0.8, 0.78)
 	if field != null:
-		env.fog_density = 0.0022
+		env.fog_density = 0.0022 if not prologue else 0.0045
 		env.fog_height_density = 0.0015
 		field.env = env
 		field.build_world(self)
