@@ -35,6 +35,7 @@ extends Node
 ## dialogue queue) so the HUD and the autotest read it as before.
 
 const Lore := preload("res://scripts/lore.gd")
+const Rig3D := preload("res://scripts/rig3d.gd")
 const RETREAT_POINT := Vector3(95, 0, 14) # the cliff path at the right end of the beach
 const GUN_X := [-37.0, -15.5, 15.5, 37.0] # the embrasures (field_terrain.gd's EARTHWORK_GAPS)
 const LINE_Z := 8.0 # your company's front rank, just behind the crest
@@ -136,6 +137,7 @@ func spawn() -> void:
 	c.frames = battle.soldier_frames
 	c.ally = true
 	c.rig_look = "officer"
+	c.rig_gear = Rig3D.MAJOR_GEAR.duplicate()
 	c.display_name = Lore.COMMANDER
 	c.ammo = 0
 	c.loaded = false

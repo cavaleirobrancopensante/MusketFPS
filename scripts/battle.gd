@@ -1925,6 +1925,7 @@ func _setup_input() -> void:
 	_add_key("switch_weapon", KEY_Q)
 	_add_key("block", KEY_E)
 	_add_key("toggle_view", KEY_V)
+	_add_key("mount", KEY_R)
 	_add_key("grenade", KEY_G)
 	_add_key("aim", KEY_Z)
 	var rmb := InputEventMouseButton.new()

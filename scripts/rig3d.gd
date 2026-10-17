@@ -40,6 +40,10 @@ const TUNIC := Color(0.47, 0.4, 0.29)
 const JACK := Color(0.64, 0.58, 0.44)
 ## The kingdoms' armour (they're a few centuries behind you): mail, and the
 ## knights' plate.
+## The Major (the cutscene and the beach): a field officer's full dress:
+## plumed bicorne, gorget at the throat, heavy gold epaulettes, sash, sabre.
+const MAJOR_GEAR := {"head": "bicorne", "torso": "officer_coat", "primary": "none", "secondary": "",
+	"pistol": "pistol", "sword": "saber", "plume": true, "gorget": true}
 const MAIL := Color(0.46, 0.46, 0.48)
 const PLATE := Color(0.7, 0.72, 0.76)
 const HAIR := Color(0.28, 0.18, 0.1)
@@ -360,6 +364,14 @@ func _build_soldier() -> void:
 		_fp_hide.append(_part(spine, _cyl_mesh(0.085, 0.09, 0.07), RED, Vector3(0, 0.6, 0))) # high collar
 		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(0.22, 0.56, 0)))
 		_fp_hide.append(_part(spine, _box_mesh(Vector3(0.12, 0.03, 0.14)), GOLD, Vector3(-0.22, 0.56, 0)))
+		if g.get("gorget", false):
+			# A field officer: a gilt gorget at the throat, heavy epaulettes
+			# with bullion fringes, gold lace down the lapels.
+			_fp_hide.append(_part(spine, _box_mesh(Vector3(0.14, 0.07, 0.02)), GOLD.lightened(0.15), Vector3(0, 0.5, -0.13), Vector3(0, 0, 0)))
+			for sx in [-1.0, 1.0]:
+				_fp_hide.append(_part(spine, _box_mesh(Vector3(0.15, 0.05, 0.17)), GOLD, Vector3(sx * 0.23, 0.585, 0)))
+				_fp_hide.append(_part(spine, _box_mesh(Vector3(0.025, 0.09, 0.17)), GOLD.darkened(0.1), Vector3(sx * 0.305, 0.53, 0)))
+				_part(spine, _box_mesh(Vector3(0.015, 0.4, 0.02)), GOLD, Vector3(sx * 0.07, 0.3, -0.132), Vector3.ZERO, true)
 	elif civ:
 		pass
 	elif tabard != null:
@@ -407,6 +419,10 @@ func _build_soldier() -> void:
 		_part(head, _box_mesh(Vector3(0.5, 0.012, 0.055)), GOLD, Vector3(0, 0.196, 0), Vector3.ZERO, true) # gold edging
 		_part(head, _cyl_mesh(0.035, 0.035, 0.012), RED, Vector3(-0.07, 0.28, -0.032), Vector3(90, 0, 0)) # cockade
 		_part(head, _cyl_mesh(0.016, 0.016, 0.014), GOLD, Vector3(-0.07, 0.28, -0.036), Vector3(90, 0, 0))
+		if g.get("plume", false):
+			# A white plume standing up from the cockade, a red tip.
+			_part(head, _box_mesh(Vector3(0.04, 0.2, 0.05)), Color(0.95, 0.94, 0.9), Vector3(-0.07, 0.4, -0.02), Vector3(0, 0, 8))
+			_part(head, _box_mesh(Vector3(0.042, 0.06, 0.052)), RED, Vector3(-0.055, 0.51, -0.02), Vector3(0, 0, 8))
 	else:
 		_build_hat(String(g["head"]))
 	# Arms (placed by IK every frame).

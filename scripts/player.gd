@@ -436,13 +436,18 @@ func can_dismount() -> bool:
 	return alive and mounted and mount_t <= 0.0 and horse != null and horse.speed < 2.5
 
 
-## MOUNT / DISMOUNT.
+## MOUNT / DISMOUNT / CALL HORSE. Dismounting at speed reins the horse in
+## first, then you get down; too far from your horse, you whistle for it.
 func toggle_mount() -> void:
-	if can_dismount():
-		_get_down()
+	if mounted:
+		if can_dismount():
+			_get_down()
+		else:
+			want_down = not want_down # (press again to ride on)
 	elif can_mount():
 		mounted = true
 		horse.player = self
+		horse.call_to(null)
 		global_position = Vector3(horse.global_position.x, global_position.y, horse.global_position.z)
 		rotation.y = horse.yaw
 		mount_t = MOUNT_TIME
@@ -451,6 +456,12 @@ func toggle_mount() -> void:
 			weapon = "saber" if has_saber else "musket"
 			switch_target = weapon
 		battle.play_sound_ui("swish", -10.0)
+	elif horse != null and not horse.dead and alive and gun == null:
+		horse.call_to(self)
+		battle.hud.show_message(Lang.t("You whistle for your horse."), 1.5)
+
+
+var want_down := false # reining in to get down
 
 
 func can_couch() -> bool:
@@ -505,6 +516,7 @@ func _couch_tick(delta: float) -> void:
 func _get_down() -> void:
 	mounted = false
 	couched = false
+	want_down = false
 	horse.player = null
 	horse.speed = 0.0
 	var left: Vector3 = horse.forward().cross(Vector3.UP) * -1.3
@@ -803,6 +815,11 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0.0
 			velocity.z = 0.0
 		elif mounted and horse != null:
+			if want_down:
+				input = Vector2.ZERO # (reining in)
+				if can_dismount():
+					want_down = false
+					_get_down()
 			var hv: Vector3 = horse.drive(input, global_transform.basis, delta)
 			velocity.x = hv.x
 			velocity.z = hv.z
@@ -888,6 +905,8 @@ func _keyboard_controls() -> void:
 		toggle_aim()
 	if Input.is_action_just_pressed("toggle_view"):
 		toggle_view()
+	if Input.is_action_just_pressed("mount"):
+		toggle_mount()
 	if Input.is_action_just_pressed("block"):
 		block_held = true
 	if Input.is_action_just_released("block"):

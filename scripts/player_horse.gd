@@ -104,7 +104,18 @@ func _process(delta: float) -> void:
 	rig.neck_dip = -0.55 if player != null and not player.third_person else 0.0
 
 
-func _physics_process(_delta: float) -> void:
+## Whistled for: it trots over to you and stands.
+var _called_by = null
+
+
+func call_to(p) -> void:
+	_called_by = p
+
+
+func _physics_process(delta: float) -> void:
+	if not dead and player == null and _called_by != null:
+		_come(delta)
+		return
 	if dead or player == null or speed < RIDE_DOWN_AT:
 		return
 	# Riding them down: whoever's just in front of the chest.
@@ -130,6 +141,23 @@ func _physics_process(_delta: float) -> void:
 		battle.play_sound("stab", e.global_position + Vector3.UP, -2.0)
 		speed *= 0.72 # the shock costs the horse its pace
 		player.shake(0.3)
+
+
+func _come(delta: float) -> void:
+	var to: Vector3 = _called_by.global_position - global_position
+	to.y = 0.0
+	var d := to.length()
+	if d < 2.4:
+		speed = move_toward(speed, 0.0, BRAKE * delta)
+		if speed <= 0.01:
+			_called_by = null
+	else:
+		var want_yaw := atan2(-to.x, -to.z)
+		var diff := angle_difference(yaw, want_yaw)
+		yaw += clampf(diff, -2.4 * delta, 2.4 * delta)
+		speed = move_toward(speed, minf(6.0, d * 1.2) * (0.4 if absf(diff) > 1.2 else 1.0), ACCEL * delta)
+	global_position += forward() * speed * delta
+	global_position.y = battle.ground_y(global_position)
 
 
 ## A blow or a shot that found the horse. Returns true if that killed it.

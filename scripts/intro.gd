@@ -206,6 +206,8 @@ func _man(parent: Node3D, pos: Vector3, face: Vector3, gear := {}, manual := fal
 	var r = Rig3D.new()
 	r.kind = kind
 	var g := {"head": "shako", "torso": "coat", "primary": "musket", "secondary": "bayonet"}
+	if kind == "officer":
+		g = Rig3D.MAJOR_GEAR.duplicate() # (the Major in his full dress)
 	g.merge(gear, true)
 	r.gear = g
 	r.pack = {"rations": 4, "water": 1, "ammo": 10}

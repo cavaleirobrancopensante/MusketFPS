@@ -212,14 +212,18 @@ func _buttons() -> Array:
 		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": Lang.t("COMMAND")})
 	# Your horse, and your gun (under the minimap, when there is one).
 	var my := 356.0 if _field_ui() != null else 150.0
+	var mb := Rect2(20, my, 200, 58)
 	if player.mounted:
-		list.append({"id": "mount", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("DISMOUNT")})
+		list.append({"id": "mount", "circle": false, "rect": mb, "label": Lang.t("REINING IN...") if player.want_down else Lang.t("DISMOUNT")})
 	elif player.can_mount():
-		list.append({"id": "mount", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("MOUNT")})
+		list.append({"id": "mount", "circle": false, "rect": mb, "label": Lang.t("MOUNT")})
 	elif player.gun != null:
-		list.append({"id": "gun", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("LEAVE THE GUN")})
+		list.append({"id": "gun", "circle": false, "rect": mb, "label": Lang.t("LEAVE THE GUN")})
 	elif player.can_man_gun():
-		list.append({"id": "gun", "circle": false, "rect": Rect2(20, my, 190, 52), "label": Lang.t("MAN THE GUN")})
+		list.append({"id": "gun", "circle": false, "rect": mb, "label": Lang.t("MAN THE GUN")})
+	elif player.horse != null and not player.horse.dead and player.alive:
+		var near: bool = player.global_position.distance_to(player.horse.global_position) < player.MOUNT_REACH
+		list.append({"id": "mount", "circle": false, "rect": mb, "label": Lang.t("MOUNT") if near else Lang.t("CALL HORSE")})
 	if Settings.playground:
 		# The range's own controls, down the left side.
 		var pl := [["pg_still1", Lang.t("+1 TARGET")], ["pg_still5", Lang.t("+5 TARGETS")], ["pg_charge5", Lang.t("+5 CHARGING")],
@@ -477,6 +481,7 @@ func _draw() -> void:
 	_draw_swing_indicator(c)
 	if player.gun != null:
 		_draw_gun_sight()
+	_draw_horse_marker()
 	if block_flash > 0.0:
 		_text_center(Lang.t("BLOCKED"), c + Vector2(0, 60), 30, Color(0.95, 0.78, 0.3, block_flash * 2.0))
 	if shield_flash > 0.0:
@@ -529,6 +534,24 @@ func _draw() -> void:
 		var mc := Vector2(s.x * 0.5, s.y * 0.3)
 		_text_center(message, mc + Vector2(2, 3), 46, Color(0, 0, 0, 0.6 * alpha), display)
 		_text_center(message, mc, 46, Color(UI.PIPECLAY, alpha), display)
+
+
+## Your horse, standing where you left it: a small marker over it.
+func _draw_horse_marker() -> void:
+	var h = player.horse
+	if h == null or h.dead or player.mounted:
+		return
+	var cam := player.camera as Camera3D
+	var at: Vector3 = h.global_position + Vector3.UP * 2.6
+	if cam.is_position_behind(at):
+		return
+	var d: float = player.global_position.distance_to(h.global_position)
+	if d < 4.0:
+		return
+	var p := cam.unproject_position(at)
+	var col := Color(UI.BRASS, 0.9)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(0, 8), p + Vector2(-7, -4), p + Vector2(7, -4)]), col)
+	_text_center(Lang.t("YOUR HORSE  %d m") % int(d), p + Vector2(0, -16), 16, col)
 
 
 ## At the gun: where a round shot laid like this would land (the gun turns
