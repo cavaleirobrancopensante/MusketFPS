@@ -157,7 +157,7 @@ func _move(_delta: float) -> void:
 ## A hack: heavier from a brute, and a brute's blow sends a man reeling.
 func _strike(dist: float) -> void:
 	windup = -1.0
-	attack_timer = ATTACK_COOLDOWN * (1.4 if variant == "brute" else 1.0) / field.pace
+	attack_timer = ATTACK_COOLDOWN * (1.4 if variant == "brute" else 1.0) * cooldown_mult / field.pace
 	set_tint(Color.WHITE)
 	play_oneshot("strike", 0.3)
 	_punch(Vector3(1.12, 0.92, 1.0), 0.3)
