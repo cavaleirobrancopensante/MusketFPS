@@ -749,7 +749,7 @@ the crew down and it falls silent.
 ### Field battle: Total War on a phone (Tests)
 
 A setup screen first: the **battlefield** (open field, hills, river crossing,
-village, woods), **men in a regiment** (12, 20 or 30), **your army** (how
+a town of streets and a square, woods), **men in a regiment** (12, 20 or 30), **your army** (how
 many regiments of musketeers, pikemen, bowmen, crossbowmen, cavalry and
 cannon, on top of your own company of musketeers, which you lead) and **the
 enemy**: a lizard warband (warriors, javelin throwers, brutes, raptor

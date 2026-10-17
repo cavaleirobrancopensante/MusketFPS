@@ -8,8 +8,8 @@ extends RefCounted
 ##           behind the enemy and a valley between
 ##   river   a river across the field between the armies: deep but for a
 ##           stone bridge on your left and a ford on your right
-##   town    a village at the crossroads in the middle: houses (walls stop
-##           men and shot), lanes between them, a church
+##   town    a town in the middle: blocks of houses (walls stop men and
+##           shot) along a grid of streets, a market square, a church
 ##   forest  woods on both flanks and a copse in the middle (slow going)
 ##
 ## Everything is a heightmap at RES metres (bilinear between samples) plus a
@@ -25,7 +25,7 @@ const OUTER := 280.0 # the terrain mesh runs on to here (scenery)
 const RES := 2.0
 const N := 151 # samples a side: HALF * 2 / RES + 1
 const MAPS := ["flat", "hills", "river", "town", "forest"]
-const MAP_NAMES := {"flat": "Open field", "hills": "Hills", "river": "River crossing", "town": "Village", "forest": "Woods"}
+const MAP_NAMES := {"flat": "Open field", "hills": "Hills", "river": "River crossing", "town": "Town", "forest": "Woods"}
 
 const FREE := 0
 const SLOW := 1
@@ -51,7 +51,7 @@ func _init(map_kind: String) -> void:
 	kind = map_kind if map_kind in MAPS else "flat"
 	_rng.seed = hash("field:" + kind)
 	if kind == "town":
-		_lay_out_village()
+		_lay_out_town()
 	if kind == "forest":
 		woods = [[Vector2(-78, 5), 34.0], [Vector2(82, -12), 30.0], [Vector2(8, -6), 16.0], [Vector2(-20, 85), 14.0], [Vector2(40, -88), 18.0]]
 	elif kind in ["flat", "hills"]:
@@ -327,53 +327,67 @@ func path(a: Vector3, b: Vector3) -> Array:
 	return out
 
 
-# ---------------------------------------------------------------- the village
+# ---------------------------------------------------------------- the town
 
-func _lay_out_village() -> void:
-	# Two lanes crossing at the middle (along x and along z), cottages along
-	# them in short rows, a church on the far-left corner of the crossroads.
-	var lane := 4.5
-	houses.append([Rect2(-26, -30, 11, 17), 7.0, Color(0.72, 0.7, 0.64)]) # the church
-	for sx in [-1.0, 1.0]:
-		for sz in [-1.0, 1.0]:
-			# Along the x lane (facing it), then along the z lane.
-			var t := 9.0
-			while t < 58.0:
-				var w := _rng.randf_range(6.0, 8.5)
-				var d := _rng.randf_range(5.5, 7.0)
-				var cx: float = sx * (t + w * 0.5)
-				var cz: float = sz * (lane + 1.5 + d * 0.5)
-				t += w + _rng.randf_range(2.5, 6.0)
-				if _rng.randf() < 0.2:
-					continue
-				_add_house(Vector2(cx, cz), Vector2(w, d))
-			t = 12.0
-			while t < 50.0:
-				var w2 := _rng.randf_range(6.0, 8.0)
-				var d2 := _rng.randf_range(5.5, 7.0)
-				var cz2: float = sz * (t + w2 * 0.5)
-				var cx2: float = sx * (lane + 1.5 + d2 * 0.5)
-				t += w2 + _rng.randf_range(2.5, 6.0)
-				if _rng.randf() < 0.25:
-					continue
-				_add_house(Vector2(cx2, cz2), Vector2(d2, w2))
-	# A few farms further out.
-	for k in 7:
-		var c := Vector2(_rng.randf_range(-60, 60), _rng.randf_range(-45, 45))
-		if absf(c.x) < 22.0 and absf(c.y) < 22.0:
+## Street lines (both ways): the blocks between them are built up round
+## their edges; the middle block is the market square.
+const STREETS := [-58.0, -32.0, -9.0, 9.0, 32.0, 58.0]
+const STREET_HALF := 3.4
+
+
+func _lay_out_town() -> void:
+	var n := STREETS.size() - 1
+	for i in n:
+		for j in n:
+			var x0: float = STREETS[i] + STREET_HALF
+			var x1: float = STREETS[i + 1] - STREET_HALF
+			var z0: float = STREETS[j] + STREET_HALF
+			var z1: float = STREETS[j + 1] - STREET_HALF
+			if i == 2 and j == 2:
+				continue # the square
+			if i == 1 and j == 1:
+				# The church, facing the square, in its yard.
+				houses.append([Rect2(x0 + 4.0, z0 + 2.0, 12.0, 18.0), 8.0, Color(0.74, 0.71, 0.64)])
+				continue
+			_build_up_block(Rect2(x0, z0, x1 - x0, z1 - z0))
+	# Farms out along the roads.
+	for k in 9:
+		var c := Vector2(_rng.randf_range(-70, 70), _rng.randf_range(-62, 62))
+		if absf(c.x) < 62.0 and absf(c.y) < 62.0:
 			continue
-		if absf(c.x) < 8.0 or absf(c.y) < 8.0:
-			continue
-		_add_house(c, Vector2(_rng.randf_range(6, 9), _rng.randf_range(5, 7)))
+		_add_house(c, Vector2(_rng.randf_range(6, 9), _rng.randf_range(5, 7)), 2.0)
 
 
-func _add_house(c: Vector2, size: Vector2) -> void:
+## Houses shoulder to shoulder along each side of a block, facing the street,
+## with gaps for alleys and a yard inside.
+func _build_up_block(b: Rect2) -> void:
+	for side in 4:
+		var along_x := side < 2
+		var length := b.size.x if along_x else b.size.y
+		var t := 0.0
+		while t < length - 4.0:
+			var w := minf(_rng.randf_range(5.0, 8.0), length - t)
+			var d := minf(_rng.randf_range(5.0, 6.5), (b.size.y if along_x else b.size.x) * 0.5)
+			var c: Vector2
+			match side:
+				0: c = Vector2(b.position.x + t + w * 0.5, b.position.y + d * 0.5)
+				1: c = Vector2(b.position.x + t + w * 0.5, b.end.y - d * 0.5)
+				2: c = Vector2(b.position.x + d * 0.5, b.position.y + t + w * 0.5)
+				_: c = Vector2(b.end.x - d * 0.5, b.position.y + t + w * 0.5)
+			t += w + (_rng.randf_range(1.5, 3.0) if _rng.randf() < 0.3 else 0.3)
+			if _rng.randf() < 0.12:
+				continue # an alley, a yard gate
+			_add_house(c, Vector2(w, d) if along_x else Vector2(d, w), 0.2)
+
+
+func _add_house(c: Vector2, size: Vector2, gap := 2.0) -> void:
 	var r := Rect2(c - size * 0.5, size)
 	for h in houses:
-		if (h[0] as Rect2).grow(2.0).intersects(r):
+		if (h[0] as Rect2).grow(gap).intersects(r):
 			return
-	var col := Color(0.78, 0.72, 0.6) if _rng.randf() < 0.55 else Color(0.62, 0.55, 0.45)
-	houses.append([r, _rng.randf_range(3.0, 4.2), col])
+	var cols := [Color(0.8, 0.74, 0.62), Color(0.66, 0.58, 0.47), Color(0.74, 0.7, 0.66), Color(0.6, 0.45, 0.36)]
+	var tall := 1.6 if _rng.randf() < 0.3 else 1.0
+	houses.append([r, _rng.randf_range(3.0, 4.0) * tall, cols[_rng.randi() % cols.size()]])
 
 
 # ---------------------------------------------------------------- building it
@@ -451,8 +465,14 @@ func build(parent: Node3D, cols: Dictionary) -> void:
 				var d := absf(z - river_z(x))
 				mud = 1.0 - smoothstep(9.0, 13.0, d)
 				dirt = (1.0 - smoothstep(11.0, 16.0, d)) * 0.7
-			if kind == "town" and (absf(x) < 4.0 or absf(z) < 4.0) and absf(x) < 70.0 and absf(z) < 70.0:
-				dirt = 0.85
+			if kind == "town" and absf(x) < 64.0 and absf(z) < 64.0:
+				for sl in STREETS:
+					if absf(x - sl) < STREET_HALF + 0.5 or absf(z - sl) < STREET_HALF + 0.5:
+						dirt = 0.85
+				if absf(x) < 9.0 and absf(z) < 9.0:
+					dirt = 0.9 # the square
+			elif kind == "town" and (absf(x) < 4.0 or absf(z) < 4.0):
+				dirt = 0.7 # the roads out
 			for w in woods:
 				if Vector2(x, z).distance_to(w[0]) < float(w[1]):
 					shade = 0.78
@@ -503,7 +523,7 @@ func build(parent: Node3D, cols: Dictionary) -> void:
 	if has_water:
 		_build_river(parent, body)
 	if not houses.is_empty():
-		_build_village(parent, body)
+		_build_town(parent, body)
 	_build_trees(parent)
 
 
@@ -557,68 +577,83 @@ func _build_river(parent: Node3D, body: StaticBody3D) -> void:
 	Look.bushes(parent, reeds, _rng, 0.15)
 
 
-func _build_village(parent: Node3D, body: StaticBody3D) -> void:
-	var roof_cols := [Color(0.45, 0.24, 0.16), Color(0.36, 0.3, 0.22), Color(0.5, 0.42, 0.26)]
+## The town, drawn in a few batches (every wall, door and window one box
+## batch, every roof one prism batch): a couple of hundred houses cost a
+## phone no more than a handful.
+func _build_town(parent: Node3D, body: StaticBody3D) -> void:
+	var roof_cols := [Color(0.45, 0.24, 0.16), Color(0.36, 0.3, 0.22), Color(0.5, 0.42, 0.26), Color(0.4, 0.36, 0.34)]
+	var boxes: Array = [] # [Transform3D, Color]
+	var roofs: Array = []
 	var mats := {}
-	for h in houses:
+	var door := Color(0.2, 0.12, 0.07)
+	var glass := Color(0.13, 0.15, 0.2)
+	for hi in houses.size():
+		var h: Array = houses[hi]
 		var r: Rect2 = h[0]
 		var ht: float = h[1]
 		var col: Color = h[2]
 		var c := r.get_center()
-		var g := height(c.x, c.y)
+		var g := minf(minf(height(r.position.x, r.position.y), height(r.end.x, r.end.y)), height(c.x, c.y))
 		var long_x := r.size.x >= r.size.y
-		_mesh_box(parent, Vector3(r.size.x, ht + 0.6, r.size.y), Vector3(c.x, g + ht * 0.5 - 0.3, c.y), col, mats)
-		# A pitched roof along the long side.
-		var roof := MeshInstance3D.new()
-		var pm := PrismMesh.new()
+		boxes.append([Transform3D(Basis.from_scale(Vector3(r.size.x, ht + 0.8, r.size.y)), Vector3(c.x, g + ht * 0.5 - 0.4, c.y)), col])
 		var span := r.size.y if long_x else r.size.x
 		var length := r.size.x if long_x else r.size.y
-		pm.size = Vector3(span + 0.7, 2.2 if ht < 5.0 else 3.5, length + 0.5)
-		roof.mesh = pm
-		roof.material_override = _mat(roof_cols[houses.find(h) % roof_cols.size()], mats)
-		roof.position = Vector3(c.x, g + ht + pm.size.y * 0.5, c.y)
-		roof.rotation.y = PI * 0.5 if long_x else 0.0
-		parent.add_child(roof)
-		if ht >= 5.0:
-			# The church tower.
-			_mesh_box(parent, Vector3(4.0, 13.0, 4.0), Vector3(c.x, g + 6.5, r.end.y - 2.0), col.darkened(0.05), mats)
+		var rh := clampf(span * 0.38, 1.8, 3.6)
+		var rb := Basis(Vector3.UP, PI * 0.5 if long_x else 0.0).scaled(Vector3(span + 0.7, rh, length + 0.5))
+		roofs.append([Transform3D(rb, Vector3(c.x, g + ht + rh * 0.5, c.y)), roof_cols[hi % roof_cols.size()]])
+		if ht >= 7.5:
+			# The church: a tower at the end, and its spire.
+			boxes.append([Transform3D(Basis.from_scale(Vector3(4.2, 15.0, 4.2)), Vector3(c.x, g + 7.5, r.position.y + 2.1)), col.darkened(0.06)])
 			var spire := MeshInstance3D.new()
 			var cm := CylinderMesh.new()
 			cm.top_radius = 0.0
-			cm.bottom_radius = 2.6
-			cm.height = 5.0
+			cm.bottom_radius = 2.8
+			cm.height = 6.0
 			cm.radial_segments = 4
 			spire.mesh = cm
 			spire.material_override = _mat(roof_cols[0], mats)
-			spire.position = Vector3(c.x, g + 15.5, r.end.y - 2.0)
+			spire.position = Vector3(c.x, g + 18.0, r.position.y + 2.1)
 			spire.rotation.y = PI * 0.25
 			parent.add_child(spire)
-		else:
-			# Door and windows on both long sides.
-			for sgn in [-1.0, 1.0]:
-				var face: Vector3 = Vector3(c.x, g, c.y) + (Vector3(0, 0, r.size.y * 0.5 + 0.03) if long_x else Vector3(r.size.x * 0.5 + 0.03, 0, 0)) * sgn
-				var along := Vector3.RIGHT if long_x else Vector3.BACK
-				var flat := Vector3(1.0, 0, 0.06) if long_x else Vector3(0.06, 0, 1.0)
-				_mesh_box(parent, flat * Vector3(1.1, 0, 1.1) + Vector3(0, 1.9, 0) + (Vector3(0, 0, 0.0)), face + Vector3(0, 0.95, 0), Color(0.18, 0.11, 0.06), mats)
-				_mesh_box(parent, flat * Vector3(0.9, 0, 0.9) + Vector3(0, 0.8, 0), face + along * 2.2 + Vector3(0, 1.9, 0), Color(0.14, 0.15, 0.2), mats)
+		# A door and windows on each long side.
+		var along := Vector3.RIGHT if long_x else Vector3.BACK
+		var out := Vector3.BACK if long_x else Vector3.RIGHT
+		var half := (r.size.y if long_x else r.size.x) * 0.5 + 0.03
+		var thin := Vector3(1.0, 1.0, 0.08) if long_x else Vector3(0.08, 1.0, 1.0)
+		for sgn in [-1.0, 1.0]:
+			var face: Vector3 = Vector3(c.x, g, c.y) + out * half * sgn
+			var off: float = (length * 0.5 - 1.6) * (-1.0 if (hi % 2 == 0) else 1.0)
+			boxes.append([Transform3D(Basis.from_scale(thin * Vector3(1.1, 2.0, 1.1) + Vector3(0, 0, 0)), face + along * off + Vector3(0, 1.0, 0)), door])
+			for wk in int(length / 3.2):
+				var wx := -length * 0.5 + 1.6 + wk * 3.2
+				if absf(wx - off) < 1.2:
+					continue
+				boxes.append([Transform3D(Basis.from_scale(thin * Vector3(0.9, 0.85, 0.9)), face + along * wx + Vector3(0, 1.9, 0)), glass])
+				if ht > 5.0:
+					boxes.append([Transform3D(Basis.from_scale(thin * Vector3(0.9, 0.85, 0.9)), face + along * wx + Vector3(0, 4.4, 0)), glass])
 		var cs := CollisionShape3D.new()
 		var bs := BoxShape3D.new()
 		bs.size = Vector3(r.size.x, ht + 2.0, r.size.y)
 		cs.shape = bs
 		cs.position = Vector3(c.x, g + ht * 0.5, c.y)
 		body.add_child(cs)
-	# Low stone walls round the gardens.
-	for k in 26:
-		var x := _rng.randf_range(-62, 62)
-		var z := _rng.randf_range(-50, 50)
-		if absf(x) < 6.0 or absf(z) < 6.0:
-			continue
-		var p := Vector3(x, 0, z)
-		if blocked(p):
+	# A well in the square, and low walls round some yards outside.
+	boxes.append([Transform3D(Basis.from_scale(Vector3(2.2, 0.9, 2.2)), Vector3(0, height(0, 0) + 0.45, 0)), Color(0.5, 0.48, 0.43)])
+	for k in 30:
+		var x := _rng.randf_range(-75, 75)
+		var z := _rng.randf_range(-70, 70)
+		if absf(x) < 60.0 and absf(z) < 60.0:
 			continue
 		var len := _rng.randf_range(6, 14)
 		var along_x := _rng.randf() < 0.5
-		_mesh_box(parent, Vector3(len if along_x else 0.5, 0.8, 0.5 if along_x else len), Vector3(x, height(x, z) + 0.3, z), Color(0.5, 0.48, 0.43), mats)
+		boxes.append([Transform3D(Basis.from_scale(Vector3(len if along_x else 0.5, 0.8, 0.5 if along_x else len)), Vector3(x, height(x, z) + 0.3, z)), Color(0.5, 0.48, 0.43)])
+	var wall_mat := StandardMaterial3D.new()
+	wall_mat.vertex_color_use_as_albedo = true
+	wall_mat.roughness = 0.92
+	var box := BoxMesh.new()
+	var prism := PrismMesh.new()
+	Look._batch(parent, box, wall_mat, boxes)
+	Look._batch(parent, prism, wall_mat, roofs)
 
 
 func _mat(c: Color, cache: Dictionary) -> StandardMaterial3D:

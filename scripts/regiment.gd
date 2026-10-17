@@ -66,6 +66,12 @@ var selected := false
 var _arrive_t := 0.0
 
 
+## "is" or "are": a regiment's name is plural ("1st Pikemen"), but not your
+## company or a battery.
+func verb(one: String, many: String) -> String:
+	return one if player_led or kind == "gun" else many
+
+
 func alive_count() -> int:
 	return members.size()
 
@@ -514,7 +520,7 @@ func morale_tick(dt: float, losses: int) -> void:
 				_set_state("formed")
 				field._broke_told.erase(self)
 				_shaken.clear()
-				field.alert(self, "%s rallies!" % title, false)
+				field.alert(self, "%s %s!" % [title, verb("rallies", "rally")], false)
 		else:
 			_rally_t = 0.0
 		return
@@ -546,4 +552,4 @@ func _set_state(s: String) -> void:
 		_rally_t = 0.0
 		field.on_regiment_broke(self, was)
 	elif s == "wavering":
-		field.alert(self, "%s is wavering!" % title, side == 0)
+		field.alert(self, "%s %s wavering!" % [title, verb("is", "are")], side == 0)
