@@ -41,6 +41,12 @@ var _dig_t := 0.0
 var _bites := 0 # rations still to eat from the sack in his hands
 var _bite_t := 0.0
 var still := false # a target on the weapon range: stands and takes it
+# A nest's garrison (nest_assault.gd): holding inside until there's a way
+# out, or throwing javelins from a platform behind the stakes.
+var garrison := false
+var thrower := false
+var hold_at := Vector3.ZERO
+var throw_t := 2.0
 
 
 func _ready() -> void:
@@ -75,6 +81,8 @@ func _brain(delta: float) -> void:
 		velocity = Vector3.ZERO
 		face_toward(battle.player.global_position - global_position)
 		set_base_anim("idle")
+		return
+	if battle.nest != null and battle.nest.hold(self, delta):
 		return
 	_watch_player()
 
@@ -137,7 +145,14 @@ func _brain(delta: float) -> void:
 			windup = 0.0
 			battle.play_sound("hiss", global_position + Vector3.UP * 1.6, -8.0)
 	else:
-		velocity = to_t / d * speed + push * 3.0
+		var way := to_t / d
+		if battle.nest != null:
+			# Round by an opening if the stakes are in the way.
+			var r: Vector3 = battle.nest.route(global_position, target.global_position) - global_position
+			r.y = 0.0
+			if r.length() > 0.05:
+				way = r.normalized()
+		velocity = way * speed + push * 3.0
 		set_base_anim("walk")
 	velocity.y = 0.0
 	_move(delta)

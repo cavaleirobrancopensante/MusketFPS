@@ -198,6 +198,9 @@ var prologue := false # the opening battle is still to be fought
 ## The ship's stores the lizards carried off (muskets, cartridges, guns,
 ## rum): recovering them is the first great objective. Empty once recovered.
 var stash := {}
+## Field guns the company has (the ship's, once recovered from the stash):
+## each goes into battle with its crew (gun_crew.gd).
+var guns := 0
 ## A fight the map has started: {"enemy": int, "terrain": int, "party": id}.
 var next_battle := {}
 ## The battle plan: tags (groups) the player has made; each man has m["tag"]
@@ -261,6 +264,7 @@ func new_campaign() -> void:
 	ensure_wagon_crew()
 	prologue = true
 	stash = {}
+	guns = 0
 	next_battle = {}
 	march_note = ""
 	save()
@@ -507,6 +511,14 @@ func apply_battle(result: Dictionary) -> void:
 		# Pay: a bounty on every lizardman slain.
 		summary["pay"] = 15 + 5 * int(result["slain"])
 		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
+		if int(result.get("assault", -1)) >= 0:
+			# A burned nest: what they'd hoarded from a dozen raids.
+			summary["nest_burned"] = String(result.get("nest_name", "the nest"))
+			summary["pay"] = int(summary["pay"]) + 60
+			for i in randi_range(4, 8):
+				_add_loot(["rations", "rum", "crowns", "charm", "hide", "lizard_shield"].pick_random(), randi_range(3, 12))
+			if bool(result.get("stash", false)) and not stash.is_empty():
+				summary["stash"] = recover_stash()
 		# Arrows and bolts can be picked up again: about half are whole.
 		for k in ["arrows", "bolts"]:
 			var spent := int(result.get(k + "_spent", 0))
@@ -611,6 +623,27 @@ func _loot_from(enemy: String, slain: int) -> void:
 					_: _add_loot("crowns", randi_range(2, 10))
 			else:
 				_add_loot(String(row[0]), 1)
+
+
+## The ship's stores, taken back: the guns join the company, the rest goes
+## into the wagon (and what won't fit waits on the loot pile, marked ours).
+## Returns a line for the aftermath.
+func recover_stash() -> String:
+	var s := stash
+	guns += int(s.get("cannons", 0))
+	var got: PackedStringArray = []
+	for pair in [["musket", int(s.get("muskets", 0))], ["ammo", int(s.get("ammo", 0))], ["rum", int(s.get("rum", 0))]]:
+		var id: String = pair[0]
+		var n: int = pair[1]
+		if n <= 0:
+			continue
+		var k := stow(id, n)
+		if k < n:
+			_add_loot(id, n - k, true)
+		got.append("%d %s" % [n, {"musket": "muskets", "ammo": "cartridges", "rum": "tots of rum"}[id]])
+	got.append("%d guns" % int(s.get("cannons", 0)))
+	stash = {}
+	return ", ".join(got)
 
 
 ## `ours`: the kit of our own dead, kept apart from the enemy's leavings and
@@ -1330,7 +1363,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
@@ -1362,6 +1395,7 @@ func load_campaign() -> bool:
 	Officer.migrate(officer)
 	prologue = bool(data.get("prologue", false))
 	stash = data.get("stash", {})
+	guns = int(data.get("guns", 0))
 	next_battle = data.get("next_battle", {})
 	tags = data.get("tags", DEFAULT_TAGS.duplicate())
 	wagon_plan = data.get("wagon_plan", [0.0, -12.0])

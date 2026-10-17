@@ -187,6 +187,10 @@ func _refresh() -> void:
 		t += "\n[color=#%s]%d pieces of kit were dropped in the rout. The little wagon you saved holds the Major's rifle and a few days' food. See to your men on the COMPANY & KIT screen.[/color]\n" % [_hex(GOLD), int(r.get("lost_gear", 0))]
 	elif fresh:
 		t += "Lizardmen slain: [b]%d[/b]\n" % int(r["slain"])
+		if r.has("nest_burned"):
+			t += "[color=#%s][b]%s burns.[/b] Its mounds are torn open and fired; no more warbands will come out of it.[/color]\n" % [_hex(GOLD), r["nest_burned"]]
+		if r.has("stash"):
+			t += "[color=#%s][b]The ship's stores are ours again:[/b] %s. The guns will march with the company now, each with its crew.[/color]\n" % [_hex(GOLD), r["stash"]]
 		var pay := int(r["pay"])
 		if int(r.get("rations_spoiled", 0)) > 0 and int(r.get("wagon_looted", 0)) == 0:
 			t += "Lizards got into the wagon. You took back what they grabbed, but they'd eaten %d rations before you cut them down.\n" % int(r["rations_spoiled"])

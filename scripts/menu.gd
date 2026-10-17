@@ -95,6 +95,9 @@ func _ready() -> void:
 		Settings.stress = "--stress" in args
 		Settings.mixed = "--mixed" in args
 		Settings.playground = "--range" in args
+		Settings.siege_test = "--siege" in args
+		if Settings.siege_test:
+			Settings.mixed = true
 		if "--camp" in args:
 			# A night camp attacked: -- --autotest --camp [--spotted]
 			Company.new_campaign()
@@ -241,6 +244,7 @@ func _on_continue() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	Settings.mixed = false
+	Settings.siege_test = false
 	Settings.playground = false
 	Settings.save_prefs()
 	World.is_ready = false # load this slot's land fresh
@@ -335,6 +339,7 @@ func _on_slot(i: int) -> void:
 		Settings.third_person = _tp_check.button_pressed
 		Settings.stress = false
 		Settings.mixed = false
+		Settings.siege_test = false
 		Settings.playground = false
 		Settings.save_prefs()
 		Settings.delete_slot(i)
@@ -378,6 +383,7 @@ func _build_tests() -> void:
 	for t in [
 		["Weapon range", "You alone with every weapon: musket, bayonet, pistol, sabre, bow, crossbow and grenades. Send targets or charging lizards when you like. You can't die.", _on_playground],
 		["Skirmish", "A mixed company of muskets, spears, bows and crossbows against three waves.", _on_skirmish],
+		["Nest assault", "The mixed company and two guns against a lizard nest: break the gate, beat off the sallies, storm it.", _on_siege_test],
 		["Stress test", "50 musketeers against 200 lizardmen, with a frame counter, to see what your phone can take.", _on_stress],
 	]:
 		var row := HBoxContainer.new()
@@ -408,7 +414,18 @@ func _on_playground() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.stress = false
 	Settings.mixed = false
+	Settings.siege_test = false
 	Settings.playground = true
+	Company.active = false
+	Loading.change(BATTLE)
+
+
+func _on_siege_test() -> void:
+	Settings.third_person = _tp_check.button_pressed
+	Settings.stress = false
+	Settings.playground = false
+	Settings.mixed = true
+	Settings.siege_test = true
 	Company.active = false
 	Loading.change(BATTLE)
 
@@ -418,6 +435,7 @@ func _on_skirmish() -> void:
 	Settings.stress = false
 	Settings.playground = false
 	Settings.mixed = true
+	Settings.siege_test = false
 	Company.active = false
 	Loading.change(BATTLE)
 
@@ -425,6 +443,7 @@ func _on_skirmish() -> void:
 func _on_stress() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.mixed = false
+	Settings.siege_test = false
 	Settings.playground = false
 	Settings.stress = true
 	Company.active = false

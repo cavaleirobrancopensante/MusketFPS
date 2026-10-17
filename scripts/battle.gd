@@ -12,6 +12,7 @@ const LizardScript := preload("res://scripts/lizardman.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const Look := preload("res://scripts/look.gd")
 const GunCrew := preload("res://scripts/gun_crew.gd")
+const NestScript := preload("res://scripts/nest_assault.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
@@ -98,6 +99,8 @@ var allies: Array = [] # the other companies' men (not yours)
 var captain = null
 var story_phase := "" # line -> captain_down -> retreat -> escaped
 var objective := {} # {"label": String, "pos": Vector3} for the HUD marker
+## Storming a lizard nest (nest_assault.gd), or null in an open battle.
+var nest = null
 var _commanding := true # you give the orders (in the prologue, not at first)
 var _phase_t := 0.0
 var _volley_cd := 0.0
@@ -212,6 +215,8 @@ func _ready() -> void:
 		_setup_prologue()
 	if camp:
 		_setup_camp()
+	_setup_assault()
+	_deploy_guns()
 
 	await Loading.step(f[4], "Fall in!")
 	var layer := CanvasLayer.new()
@@ -319,6 +324,9 @@ func status_line() -> String:
 	if prologue:
 		var what := "RETREAT" if story_phase == "retreat" else Lore.BEACH
 		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
+	if nest != null:
+		var gate := "DOWN" if nest.gate_open else "%d%%" % int(100.0 * nest.gate_hp / nest.gate_max)
+		return "Gate %s   Sallies to come %d   Lizardmen %d   %s" % [gate, nest.pending_sallies(), enemies.size(), tail]
 	if rations_spoiled > 0 or looters() > 0:
 		tail += "   Wagon: %d looters, %d rations eaten" % [looters(), rations_spoiled]
 	return "Wave %d/%d   Lizardmen %d   %s" % [wave, wave_count(), enemies.size(), tail]
@@ -753,6 +761,56 @@ func playground_spawn(n: int, still: bool) -> void:
 	hud.show_message("%d %s" % [n, "targets" if still else "lizards coming!"], 1.2)
 
 
+## Storming a nest: the palisade, the gate and the garrison, in front of
+## your line (see nest_assault.gd). The waves are its sallies.
+func _setup_assault() -> void:
+	var nb: Dictionary = Company.next_battle if Company.active and not prologue else {}
+	var g := 0
+	var walls := 1.0
+	var has_stash := false
+	if int(nb.get("assault", -1)) >= 0:
+		g = int(nb["enemy"])
+		walls = float(nb.get("walls", 1.0))
+		has_stash = bool(nb.get("stash", false))
+	elif Settings.siege_test:
+		g = 50
+		walls = 0.85
+		has_stash = true
+	else:
+		return
+	waves = []
+	nest = NestScript.new()
+	add_child(nest)
+	nest.setup(self, line_anchor, line_forward, 46.0, g, walls, has_stash)
+	game_state = "fighting"
+	_tell_later.call_deferred("Break the gate, then storm the nest!")
+
+
+func _tell_later(text: String) -> void:
+	await get_tree().create_timer(1.0).timeout
+	if hud != null:
+		hud.show_message(text, 4.0)
+
+
+## The company's field guns (the ship's, once taken back), each with its
+## crew, on either wing of the line. They fire at what comes at you, and at
+## a nest's gate when there's nothing else.
+func _deploy_guns() -> void:
+	if prologue or camp:
+		return
+	var n := Company.guns if Company.active else (2 if Settings.siege_test else 0)
+	if n <= 0:
+		return
+	var right := line_forward.cross(Vector3.UP).normalized()
+	for i in n:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var at := line_anchor + right * side * (9.0 + 4.0 * (i / 2)) - line_forward * 2.0
+		var gc = GunCrew.make(self, Vector3(at.x, 0, at.z), atan2(-line_forward.x, -line_forward.z), 12.0)
+		gc.t = randf_range(0.7, 1.0)
+		add_child(gc)
+		_guns.append({"node": gc, "silent": false})
+
+
 ## The range's gun, a few paces to your right, worked by its crew. The
 ## gunner lays it wherever you look; FIRE GUN on the left fires it when it's
 ## loaded (or as soon as it's laid).
@@ -886,7 +944,9 @@ func _end_battle(won: bool) -> void:
 				"status": "fit" if s.alive else s.down_status, "conduct": s.conduct}
 		Company.apply_battle({"won": won, "slain": slain, "officer_kills": player.kills, "officer_ammo": player.ammo_used, "men": men,
 			"prologue": prologue, "wagon_looted": wagon_looted, "rations_spoiled": rations_spoiled,
-			"enemy": "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0))})
+			"enemy": "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0)),
+			"assault": int(Company.next_battle.get("assault", -1)), "stash": bool(Company.next_battle.get("stash", false)),
+			"nest_name": String(Company.next_battle.get("nest_name", ""))})
 	hud.show_restart()
 
 
@@ -936,6 +996,8 @@ func _process(delta: float) -> void:
 	_update_lines(delta)
 	if not _spawn_queue.is_empty():
 		_spawn_some()
+	if not prologue and not _guns.is_empty():
+		_update_guns(delta)
 	if Settings.playground:
 		game_state = "playground"
 		player.hp = player.max_hp # nobody dies on the range
@@ -953,7 +1015,7 @@ func _process(delta: float) -> void:
 				if enemies.is_empty() and _spawn_queue.is_empty() and story_phase == "line" and wave < waves.size():
 					game_state = "between"
 					state_timer = 5.0
-			elif enemies.is_empty() and _spawn_queue.is_empty():
+			elif enemies.is_empty() and _spawn_queue.is_empty() and (nest == null or nest.done()):
 				if wave >= waves.size():
 					hud.show_message("Victory! The field is ours.", 9999.0)
 					victory = true
@@ -1189,7 +1251,15 @@ func _update_guns(_delta: float) -> void:
 			hud.show_message("A gun is overrun!", 1.5)
 			continue
 		var tgt := nearest_enemy(at, 110.0)
+		if tgt != null and nest != null and nest.inside(tgt.global_position) and not nest.gate_open:
+			tgt = null # behind the stakes: batter the gate instead
 		if tgt == null:
+			if nest != null and not nest.gate_open:
+				# Batter the gate.
+				var gp: Vector3 = nest.gate_point() + Vector3.UP * 1.4
+				gc.lay_on(gp)
+				if gc.ready() and absf(angle_difference(gc.rotation.y, gc.want_yaw)) < 0.05:
+					gc.fire_at(gp, 0.0)
 			continue
 		var to: Vector3 = tgt.global_position - at
 		if to.dot(line_forward) < to.length() * 0.6:
@@ -1544,6 +1614,8 @@ func spawn_puff(pos: Vector3, color: Color, size: float) -> void:
 ## means worse; lizardmen are thrown back, and the blast shakes your view.
 func explode(pos: Vector3, radius: float, kill_radius: float, shooter: Node3D) -> void:
 	play_sound("boom", pos, 4.0)
+	if nest != null:
+		nest.blast(pos, radius)
 	spawn_flash(pos + Vector3.UP * 0.4, 9.0)
 	for i in 5:
 		var off := Vector3(randf_range(-1, 1), randf_range(0.1, 1.0), randf_range(-1, 1)) * 1.2

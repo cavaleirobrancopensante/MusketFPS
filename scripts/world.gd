@@ -235,6 +235,66 @@ func is_raided(id: int) -> bool:
 	return float(places[id]["raided"]) > hours
 
 
+# ---------------------------------------------------------------- nests
+
+## A lizard nest's state (kept in places[id]): how many are inside, how much
+## of the palisade still stands (1 = whole), whether it's been burned, and
+## how many days you've had it under siege. Filled in the first time asked.
+func nest(id: int) -> Dictionary:
+	var pl: Dictionary = places[id]
+	if not pl.has("garrison"):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash("nest:%d:%d" % [seed, id])
+		var big: bool = id == gen.stash_nest
+		pl["garrison"] = rng.randi_range(46, 66) + (34 if big else 0)
+		pl["max_garrison"] = int(pl["garrison"])
+		pl["walls"] = 1.0
+		pl["destroyed"] = false
+		pl["siege_days"] = 0
+	return pl
+
+
+func nest_destroyed(id: int) -> bool:
+	return bool(places[id].get("destroyed", false))
+
+
+## A day of siege before nest `id`: hunger and your fire thin the garrison,
+## the guns (if you have any) and your men tear at the stakes, and at night
+## they may sally out. Returns {"lost", "walls", "sortie"} (sortie: how
+## many came out, 0 if none; they're taken from the garrison).
+func siege_day(id: int, guns: int) -> Dictionary:
+	var n := nest(id)
+	n["siege_days"] = int(n["siege_days"]) + 1
+	var g := int(n["garrison"])
+	var lost := int(round(g * 0.07)) + 2 + guns * 2
+	var walls_before := float(n["walls"])
+	n["walls"] = maxf(0.0, walls_before - 0.05 - 0.14 * guns)
+	g = maxi(4, g - lost)
+	var sortie := 0
+	# Hungry and penned in, they come out at night more often as the days go by.
+	if randf() < 0.3 + 0.08 * int(n["siege_days"]) and g > 12:
+		sortie = int(round(g * randf_range(0.22, 0.38)))
+		g -= sortie
+	n["garrison"] = g
+	return {"lost": lost, "walls": walls_before - float(n["walls"]), "sortie": sortie}
+
+
+## After an assault (or a sortie) is fought: `killed` of them are dead; a
+## won assault burns the nest.
+func nest_fought(id: int, killed: int, won_assault: bool, returned := 0) -> void:
+	var n := nest(id)
+	n["garrison"] = maxi(0, int(n["garrison"]) - killed + returned)
+	if won_assault:
+		n["destroyed"] = true
+		n["garrison"] = 0
+		_tell("%s burns." % settlement(id)["name"], settlement(id))
+
+
+## Lift the siege (you marched away): they recover from it.
+func lift_siege(id: int) -> void:
+	nest(id)["siege_days"] = 0
+
+
 # ---------------------------------------------------------------- orders
 
 ## March to a cell. Returns false if there is no way there.
@@ -484,6 +544,13 @@ func _note_water() -> void:
 
 func _midnight() -> void:
 	var notes: PackedStringArray = Company.pass_day(_day_water) if Company.active else PackedStringArray()
+	# Nests not under siege fill up again, and mend their stakes.
+	for st in gen.settlements:
+		if st["kind"] == "nest" and not nest_destroyed(int(st["id"])):
+			var n := nest(int(st["id"]))
+			if int(n["siege_days"]) == 0:
+				n["garrison"] = mini(int(n["max_garrison"]), int(n["garrison"]) + 3)
+				n["walls"] = minf(1.0, float(n["walls"]) + 0.05)
 	_day_water = ""
 	_spawn_tick(false)
 	day_passed.emit(notes)
@@ -757,6 +824,8 @@ func _spawn_tick(initial: bool) -> void:
 		var id := int(st["id"])
 		match st["kind"]:
 			"nest":
+				if nest_destroyed(id) or int(nest(id)["siege_days"]) > 0:
+					continue # burned, or penned in by your siege
 				if _count("warband", "", id) < 2 and (initial or randf() < 0.5):
 					_new_party("warband", "lizards", 8 + randi_range(0, 6) + day() / 3, st)
 				# Small hunting parties range far and wide.
