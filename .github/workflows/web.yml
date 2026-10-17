@@ -1,0 +1,59 @@
+# Every push to main builds the game for the browser and publishes it on
+# GitHub Pages (the gh-pages branch): https://cavaleirobrancopensante.github.io/MusketFPS/
+name: Web build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web
+  cancel-in-progress: true
+
+env:
+  GODOT: "4.7.1"
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot and its web templates
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT }}-web
+
+      - name: Download Godot and its web templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot ~/.local/share/godot/export_templates/${GODOT}.stable
+          cd ~/godot
+          curl -sL -o godot.zip https://github.com/godotengine/godot/releases/download/${GODOT}-stable/Godot_v${GODOT}-stable_linux.x86_64.zip
+          unzip -q godot.zip && rm godot.zip
+          curl -sL -o t.tpz https://github.com/godotengine/godot/releases/download/${GODOT}-stable/Godot_v${GODOT}-stable_export_templates.tpz
+          unzip -q -j t.tpz 'templates/web_nothreads_release.zip' 'templates/version.txt' -d ~/.local/share/godot/export_templates/${GODOT}.stable
+          rm t.tpz
+
+      - name: Export for the web
+        run: |
+          mkdir -p build/web
+          ~/godot/Godot_v${GODOT}-stable_linux.x86_64 --headless --path . --import || true
+          ~/godot/Godot_v${GODOT}-stable_linux.x86_64 --headless --path . --export-release "Web" build/web/index.html
+          test -f build/web/index.wasm
+          touch build/web/.nojekyll
+
+      - name: Publish to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/web
+          force_orphan: true
