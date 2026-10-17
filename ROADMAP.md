@@ -164,7 +164,7 @@ exist.
 The **Field battle** test is the start of it: regiments (muskets, pikes,
 bows, crossbows, cavalry, cannon; lizard warriors, javelin throwers, brutes,
 raptor riders) on five maps (open field, hills, a river with a bridge and a
-ford, a village, woods), morale and rout on both sides, deployment, an
+ford, a town of streets and a square, woods), morale and rout on both sides, deployment, an
 enemy general, and the command view (slowed or paused time, unit cards,
 tap and drag orders, auto-pause) beside first person. Next, when it feels
 right on a phone:

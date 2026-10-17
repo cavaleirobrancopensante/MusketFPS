@@ -1,7 +1,7 @@
 extends Control
 ## Tests > Field battle: choose the ground and both armies, then fight.
 ##
-##   Battlefield   open field, hills, river crossing, village, woods
+##   Battlefield   open field, hills, river crossing, town, woods
 ##   Unit size     men in a regiment (cavalry half, brutes fewer; a battery
 ##                 is always two guns)
 ##   Your army     how many regiments of each kind, on top of your own

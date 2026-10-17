@@ -39,10 +39,10 @@ const KINDS := {
 	"xbow": {"name": "Crossbowmen", "short": "XBOWS", "men": 0.8, "ranks": 2, "spacing": 1.4, "gap": 1.6, "walk": 2.6, "run": 4.4, "range": 66.0, "morale": 55.0},
 	"cav": {"name": "Cavalry", "short": "HORSE", "men": 0.5, "ranks": 2, "spacing": 2.4, "gap": 4.0, "walk": 3.2, "run": 7.5, "range": 0.0, "morale": 75.0, "cav": true},
 	"gun": {"name": "Cannon", "short": "GUNS", "men": 0.0, "guns": 2, "ranks": 1, "spacing": 10.0, "gap": 0.0, "walk": 1.4, "run": 1.6, "range": 240.0, "morale": 55.0},
-	"liz_warrior": {"name": "Lizard warriors", "short": "WARRIORS", "men": 1.25, "ranks": 3, "spacing": 1.6, "gap": 1.7, "walk": 3.0, "run": 5.0, "range": 0.0, "morale": 70.0},
-	"liz_skirm": {"name": "Javelin throwers", "short": "JAVELINS", "men": 0.8, "ranks": 2, "spacing": 2.4, "gap": 2.4, "walk": 3.2, "run": 5.2, "range": 28.0, "morale": 45.0},
-	"liz_brute": {"name": "Brutes", "short": "BRUTES", "men": 0.4, "ranks": 2, "spacing": 2.4, "gap": 2.6, "walk": 2.6, "run": 3.8, "range": 0.0, "morale": 90.0},
-	"liz_raptor": {"name": "Raptor riders", "short": "RAPTORS", "men": 0.5, "ranks": 2, "spacing": 2.6, "gap": 4.0, "walk": 3.4, "run": 7.0, "range": 0.0, "morale": 70.0, "cav": true},
+	"liz_warrior": {"name": "Lizard warriors", "short": "WARRIORS", "men": 1.25, "ranks": 3, "spacing": 1.6, "gap": 1.7, "walk": 3.0, "run": 5.0, "range": 0.0, "morale": 88.0},
+	"liz_skirm": {"name": "Javelin throwers", "short": "JAVELINS", "men": 0.8, "ranks": 2, "spacing": 2.4, "gap": 2.4, "walk": 3.2, "run": 5.2, "range": 28.0, "morale": 55.0},
+	"liz_brute": {"name": "Brutes", "short": "BRUTES", "men": 0.4, "ranks": 2, "spacing": 2.4, "gap": 2.6, "walk": 2.6, "run": 3.8, "range": 0.0, "morale": 100.0},
+	"liz_raptor": {"name": "Raptor riders", "short": "RAPTORS", "men": 0.5, "ranks": 2, "spacing": 2.6, "gap": 4.0, "walk": 3.4, "run": 7.0, "range": 0.0, "morale": 80.0, "cav": true},
 }
 const HUMAN_KINDS := ["musket", "pike", "bow", "xbow", "cav", "gun"]
 const LIZARD_KINDS := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]
@@ -493,7 +493,7 @@ func _flank_check(r) -> void:
 		var dot: float = to.normalized().dot(r.forward)
 		if dot < -0.35:
 			r.shock("rear%d" % o.id, 25.0)
-			alert(r, "%s is attacked from behind!" % r.title, r.side == 0)
+			alert(r, "%s %s attacked from behind!" % [r.title, r.verb("is", "are")], r.side == 0)
 		elif dot < 0.35 and not r.is_cav():
 			r.shock("flank%d" % o.id, 14.0)
 
@@ -504,7 +504,7 @@ func on_regiment_broke(r, was: String) -> void:
 	_broke_told[r] = true
 	if was in ["routing", "shattered"]:
 		return
-	alert(r, ("%s breaks and runs!" if r.side == 0 else "%s breaks! They're running!") % r.title, r.side == 0)
+	alert(r, "%s %s and %s!" % [r.title, r.verb("breaks", "break"), r.verb("runs", "run")], r.side == 0)
 	# Friends nearby see it go.
 	for o in regs:
 		if o != r and o.side == r.side and not o.broken() and o.centroid.distance_to(r.centroid) < 45.0:
@@ -512,7 +512,8 @@ func on_regiment_broke(r, was: String) -> void:
 
 
 func alert(r, text: String, important: bool) -> void:
-	if battle.hud != null:
+	# The big message in the middle only for what matters to you.
+	if battle.hud != null and (important or r == null or r.side == 0 or r.broken()):
 		battle.hud.show_message(text, 2.2)
 	if ui != null:
 		ui.alert(r, text, important)
