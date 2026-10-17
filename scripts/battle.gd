@@ -224,7 +224,7 @@ func _ready() -> void:
 				s.position = porter_spot(s.porter)
 	if prologue and field == null:
 		_setup_prologue()
-	if camp:
+	if camp and field == null:
 		_setup_camp()
 	_setup_assault()
 	_deploy_guns()
@@ -275,20 +275,28 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- orders
 
-## Which battles are field battles (field.gd), and how: the Tests' field
-## battle, and the campaign's fights in the open. (The night camp and the
-## nest assaults are still the company battle, for now.)
+## Which battles are field battles (field.gd): all of them. The Tests'
+## field battle, the beach, and every campaign fight: in the open, attacked
+## in camp (or a sortie from a besieged nest), and storming a nest.
+## (`-- --oldbattle` still plays the old company battle.)
 func _field_config(nb: Dictionary) -> Dictionary:
 	if not Company.active:
 		return Settings.field
 	if prologue:
 		return {"map": "beach", "prologue": true, "pace": 0.75}
-	if camp or int(nb.get("assault", -1)) >= 0 or int(nb.get("sortie", -1)) >= 0:
-		return {}
 	if "--oldbattle" in OS.get_cmdline_user_args():
 		return {}
-	return {"map": String(nb.get("map", _map_for_terrain(int(nb.get("terrain", 2))))), "campaign": true,
-		"ambush": bool(nb.get("ambush", false)), "pace": 0.75}
+	var c := {"map": String(nb.get("map", _map_for_terrain(int(nb.get("terrain", 2))))), "campaign": true,
+		"ambush": bool(nb.get("ambush", false)) and not camp, "pace": 0.75}
+	if camp:
+		c["camp"] = true
+		c["spotted"] = spotted
+		if c["map"] == "town":
+			c["map"] = "flat" # (nobody camps in the street)
+	if int(nb.get("assault", -1)) >= 0:
+		c["assault"] = true
+		c["map"] = "flat" # (the nest's clearing)
+	return c
 
 
 static func _map_for_terrain(t: int) -> String:
@@ -553,7 +561,7 @@ func _build_wagon() -> void:
 
 func _wagon_target() -> Vector3:
 	if camp:
-		return CAMP_WAGON
+		return CAMP_WAGON if field == null else field.camp_fire + Vector3(6.5, 0, -2.1)
 	var right := line_forward.cross(Vector3.UP).normalized()
 	var wp: Array = Company.wagon_plan
 	return line_anchor + right * float(wp[0]) + line_forward * float(wp[1])
@@ -843,6 +851,8 @@ func playground_spawn(n: int, still: bool) -> void:
 ## Storming a nest: the palisade, the gate and the garrison, in front of
 ## your line (see nest_assault.gd). The waves are its sallies.
 func _setup_assault() -> void:
+	if field != null:
+		return # (field.gd builds the nest: spawn_campaign)
 	var nb: Dictionary = Company.next_battle if Company.active and not prologue else {}
 	var g := 0
 	var walls := 1.0
@@ -1803,8 +1813,9 @@ func _build_world() -> void:
 		env.fog_density = 0.009
 		env.fog_light_color = Color(0.78, 0.8, 0.78)
 	if field != null:
-		env.fog_density = 0.0022 if not prologue else 0.0045
+		env.fog_density = 0.0045 if prologue else (0.012 if night else 0.0022)
 		env.fog_height_density = 0.0015
+		field.fog = env.fog_density
 		field.env = env
 		field.build_world(self)
 		return
@@ -1956,7 +1967,7 @@ func _bedroll(feet: Vector3, away: Vector3, i: int) -> void:
 	roll.material_override = mat
 	add_child(roll)
 	var c := feet + away * 0.85
-	roll.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(c.x, 0.035, c.z))
+	roll.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(c.x, feet.y + 0.035, c.z))
 	# His pack for a pillow at the head end.
 	var pack := MeshInstance3D.new()
 	var pm := BoxMesh.new()
@@ -1967,7 +1978,7 @@ func _bedroll(feet: Vector3, away: Vector3, i: int) -> void:
 	pack.material_override = pmat
 	add_child(pack)
 	var h := feet + away * 1.95
-	pack.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(h.x, 0.11, h.z))
+	pack.global_transform = Transform3D(Basis.looking_at(away, Vector3.UP), Vector3(h.x, feet.y + 0.11, h.z))
 
 
 func _build_campfire(at: Vector3) -> void:

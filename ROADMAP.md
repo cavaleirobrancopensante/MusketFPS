@@ -172,10 +172,11 @@ the wagon and its crew stand behind, and the warband you met is the army
 you face. The map's terrain picks the battle map. The prologue on Wreck
 Beach is a field battle too: you get the command partway through.
 
-Still on the old company battle: the night camp and the nest assaults.
-Next:
+The night camp (and a besieged nest's sortie) and the nest assaults are
+field battles too: men asleep in rings round the fire who wake and form up,
+and a nest whose palisade is in the paths, whose garrison holds behind the
+stakes and whose gate the guns batter. Next:
 
-- The night camp and the nest assaults as field battles.
 - Big battles when your company fights beside a nation's army (M5), with
   you commanding the allied regiments.
 - Formations (line, column, square against horse), skirmish order, and

@@ -107,6 +107,14 @@ func _physics_process(delta: float) -> void:
 
 func _field_brain(delta: float) -> void:
 	_clock += delta
+	if asleep:
+		_sleep(delta) # (the night camp: until the noise reaches him)
+		return
+	if _groggy > 0.0:
+		_groggy -= delta
+		velocity = Vector3.ZERO
+		set_base_anim("idle")
+		return
 	if not loaded and ammo != 0 and missile != "":
 		reload_left -= delta * (0.75 if reg.state == "wavering" else 1.0)
 		_ram_sound_t -= delta
@@ -257,7 +265,14 @@ func _charge_at(delta: float, foe: Node3D) -> void:
 		if shot_timer < 0.0:
 			_shoot()
 		return
-	velocity = to_f / maxf(d, 0.01) * reg.run_speed() + battle.separation(self, _own(), 1.0) * 1.8
+	var way := to_f
+	if battle.nest != null:
+		# Round by the gate or a gap in the stakes.
+		way = battle.nest.route(global_position, foe.global_position) - global_position
+		way.y = 0.0
+		if way.length() < 0.4:
+			way = Vector3.ZERO
+	velocity = way.normalized() * reg.run_speed() + battle.separation(self, _own(), 1.0) * 1.8
 	face_toward(to_f)
 	set_base_anim("guard" if d < 6.0 else "walk")
 	_move(delta)

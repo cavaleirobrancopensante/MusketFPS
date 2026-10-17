@@ -318,6 +318,39 @@ func minimap_image(n: int) -> Image:
 	return img
 
 
+# ---------------------------------------------------------------- a nest
+
+## Level the ground within `r` of `c` (blending out over 8 m): a nest's
+## clearing. Before build().
+func flatten(c: Vector2, r: float) -> void:
+	var h0 := _sample(c.x, c.y)
+	for j in N:
+		for i in N:
+			var p := Vector2(-HALF + i * RES, -HALF + j * RES)
+			var d := p.distance_to(c)
+			if d < r + 8.0:
+				heights[j * N + i] = lerpf(heights[j * N + i], h0, 1.0 - smoothstep(r, r + 8.0, d))
+
+
+## A ring of stakes (radius `r` round `centre`) in the paths: blocked but
+## within 2.6 m of an opening (a breach, the gate when it's down).
+func ring_wall(centre: Vector3, r: float, openings: Array) -> void:
+	if astar == null:
+		_build_astar()
+	var c := Vector2(centre.x, centre.z)
+	for j in N - 1:
+		for i in N - 1:
+			var cc := Vector2(-HALF + (i + 0.5) * RES, -HALF + (j + 0.5) * RES)
+			if absf(cc.distance_to(c) - r) > 1.5:
+				continue
+			var open := false
+			for op in openings:
+				if cc.distance_to(Vector2(op.x, op.z)) < 2.6:
+					open = true
+			nav[j * N + i] = FREE if open else BLOCKED
+			astar.set_point_solid(Vector2i(i, j), not open)
+
+
 # ---------------------------------------------------------------- paths
 
 func _build_astar() -> void:

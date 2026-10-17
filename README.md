@@ -137,8 +137,8 @@ with every seed.
   stands with your company), the guns join when you have them back, and
   the wagon stands behind with its crew. Bigger fights deploy further
   apart; an ambush starts close, with no time to deploy. Men who run off
-  the field come back after it. (The night camp and the nest assaults are
-  still the company battle.)
+  the field come back after it. The night camp and the nest assaults are
+  field battles too (below).
 - **Settlements:** visit villages, towns, cities and holds to buy food and
   rum, refill water and rest. Raided villages have nothing left. You can
   only buy where someone sells (the wagon's Logistics shows what's on offer
@@ -210,15 +210,17 @@ you on FOLLOW and stays put on HOLD. Before a fight you saw coming, the
 encounter offers **PLAN** first. An **ambush** (a warband you never saw
 coming) gives no time: the men start scattered.
 
-**Attacked in camp.** At night the company sleeps on bedrolls in a ring
+**Attacked in camp** (a field battle: your regiments, the command view, no
+time to deploy). At night the company sleeps on bedrolls in rings
 round the fire, the wagon parked to one side, and two men stand watch at
 the edge of the firelight. Whether they see the lizards coming depends on
 their eyes (aim, a little fitness), whether they're hungry, thirsty or sick,
 the ground (the lizards creep right up through forest and swamp) and luck.
 **Seen:** the alarm goes up, the men throw off their blankets and are on
-their feet in a second or two, and the warband comes out of the dark from
-the front (or you abandon the camp and try to slip away). **Not seen:** you
-wake on your back by the fire with the lizards already among the bedrolls;
+their feet in a second or two, form on their regiments' ground in front of
+the fire, and the warband comes out of the dark from the front (or you abandon the camp and try to slip away). **Not seen:** you
+wake on your back by the fire with the lizards' mobs already among the
+bedrolls, all round the fire;
 each man wakes when the noise reaches him (a lizard close by or a blow wakes
 him at once; steady men sooner), and some die where they lie. Night battles
 are dark: firelight and muzzle flashes show the way.
@@ -396,20 +398,23 @@ the garrison, how sound the stakes are, and the choices **PLAN**,
   to hunger and desertion, and the stakes rot and are pulled down (more
   breaches when you storm it). They may **sally at night**: a camp battle in
   the dark. A besieged nest sends out no warbands. Walk away and it regrows.
-- **The assault** is its own battle. The nest stands 46 m in front of your
-  line: a ring of leaning stakes on a mud bank with one log gate facing
-  you. Nobody walks through the stakes; everyone goes round by the gate (once
-  it's down) or a breach.
+- **The assault** is a field battle. The nest stands in the far half of
+  the field, in a levelled clearing: a ring of leaning stakes on a mud bank
+  with one log gate facing you. You deploy your regiments first. Nobody
+  walks through the stakes; everyone goes round by the gate (once it's
+  down) or a breach. Order an attack on the garrison and the regiment
+  marches to the gate (or the nearest gap) and goes in.
   - **The gate** has hit points (shown on the status strip). Round shot
     smashes it, grenades blow chunks out of it, and men within reach hack at
     it (you count double). Musket balls barely mark it.
   - **The garrison** splits: javelin throwers on platforms behind the
-    stakes, defenders holding inside until the gate falls or your men reach
-    the stakes, and sallies that burst out of the gate in waves (the next
+    stakes (you can shoot them), mobs holding inside (you can't: the stakes
+    cover them; a grenade lobbed over still works) until the gate falls or
+    your men reach a gap, and sallies that burst out of the gate in waves (the next
     one comes when the last is spent or the gate starts to give).
-  - **Your guns** (if you have them) stand on the wings with their crews:
-    they fire canister and round shot at what comes out, and batter the
-    gate when nothing does.
+  - **Your guns** (if you have them) are a battery like any other: they
+    fire canister and round shot at what comes out, and batter the gate
+    whenever there's nothing outside the stakes to shoot.
   - Win when every lizard is dead and no sally is left to come. The nest
     burns and sends out no more warbands; you get pay and plunder.
 - **The stash nest** holds the ship's stores. Storm it and you recover
@@ -732,7 +737,8 @@ aftermath node.
 | `scripts/officer_sheet.gd` | Your character sheet screen (YOU) |
 | `scripts/company_screen.gd` | The Company screen: portrait, kit, pack, attributes, the men |
 | `scripts/logistics_popup.gd` | The wagon: stocks, days left, sharing out, sutler, grog |
-| `scripts/battle.gd` | The battle: world, the company's line and orders, the beach's scenery, dialogue and hints, smoke, sound (the old company battle still fights the night camp and the nest assaults) |
+| `scripts/battle.gd` | The battle: world, the company's line and orders, the beach's scenery, dialogue and hints, smoke, sound (the old company battle only with `-- --oldbattle`) |
+| `scripts/nest_assault.gd` | A lizard nest: the palisade, the gate and its hit points, the garrison, the sallies, the ways in (in a field battle its garrison and sallies are regiments, and its ring is in the paths) |
 | `scripts/field_prologue.gd` | Wreck Beach as a field battle: the Major's battle, his fall, your command (with the lesson), the collapse and the retreat |
 | `scripts/projectiles.gd` | Musket balls, grenades and future arrows/javelins: flight, hits, tracers |
 | `scripts/player.gd` | Movement, looking, camera, musket, melee and blocking |
@@ -951,7 +957,10 @@ battle with automatic volleys, bayonet fighting and blocking, and prints the
 result. Add `--campaign` to play the beach prologue and then four
 linked campaign battles (buying, sharing out and marching in between), `--stress` for the 50 vs 200 battle, `--mixed` for the
 skirmish with a mixed company (muskets, spears, bows, crossbows), or `--tp` for
-third person. `-- --company` opens the Company screen after the prologue,
+third person. `--camp` (add `--spotted` for the watch seeing them) is
+the night camp attacked, and `--assault` (with `--walls=0.3` for a broken
+palisade) storms a nest with two guns; both start a fresh campaign after
+the prologue and then march on to more battles. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a
 phone. `-- --intro` plays the cutscene at 4x speed. `-- --plantest` and
