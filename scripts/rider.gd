@@ -57,12 +57,15 @@ func _ready() -> void:
 	add_to_group("enemies" if side == 1 else "friendlies")
 	rig_kind = "cavalry" if mount == "horse" else "raptor_rider"
 	rig_look = mount
-	hp = 170.0 if mount == "horse" else 190.0
+	hp = 240.0 if mount == "horse" else 260.0
 	if mount == "raptor":
 		walk_speed = 3.4
 		trot_speed = 6.5
 		charge_speed = 10.0
 	tempo = randf_range(0.92, 1.08)
+	walk_speed *= field.pace
+	trot_speed *= field.pace
+	charge_speed *= lerpf(1.0, field.pace, 0.5) # (still fast enough to ride men down)
 	think_every = 2
 	if sprite_kind == "":
 		sprite_kind = "soldier" if mount == "horse" else "lizard"
@@ -246,7 +249,7 @@ func _melee(delta: float, foe: Node3D) -> void:
 
 func _cut() -> void:
 	windup = -1.0
-	_cut_t = CUT_COOLDOWN * randf_range(0.85, 1.2)
+	_cut_t = CUT_COOLDOWN * randf_range(0.85, 1.2) / field.pace
 	play_oneshot("strike", 0.35)
 	if not is_valid_target(target) or global_position.distance_to(target.global_position) > REACH + 0.6:
 		battle.play_sound("swish", global_position + Vector3.UP * 2.0, -8.0)

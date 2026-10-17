@@ -102,7 +102,9 @@ func _process(delta: float) -> void:
 	# crosshair whatever the pitch.
 	rig.aim_pitch = player.pitch
 	rig.pitch_pivot = EYE
-	rig.show_head = player.third_person
+	rig.show_head = player.third_person and not player.spyglass
+	# At the spyglass your own arms would fill the narrow view.
+	rig.visible = not player.spyglass
 	_pose()
 
 
@@ -141,6 +143,10 @@ func _pose() -> void:
 		else:
 			rig.t_hand_r = out.lerp(rest, smoothstep(0.7, 1.0, tp))
 		rig.pose_rate = 30.0
+		return
+
+	if player.point_t > 0.0 and not player.is_switching() and player.swing_phase == "idle":
+		_point_pose()
 		return
 
 	if player.is_switching() and (player.switch_target in ["pistol", "saber", "bow", "crossbow"] or player.switch_from in ["pistol", "saber", "bow", "crossbow"]):
@@ -219,6 +225,37 @@ func _pose() -> void:
 			_apply_pose(STRIKE[dir] if player.phase_time < 0.06 else MELEE_IDLE, 12.0)
 		_:
 			_apply_pose(BLOCK if player.blocking else MELEE_IDLE, 20.0 if player.blocking else 14.0)
+
+
+## Pointing out an order. With the musket: the right hand lets go, the left
+## brings it slanting up across the chest, and the right arm points. With
+## the pistol, the left hand points; with the sabre, the blade does.
+func _point_pose() -> void:
+	# The rig tilts the arms with your pitch; take it back out of the aim.
+	var d: Vector3 = Basis(Vector3.RIGHT, -player.pitch) * player.point_body_dir()
+	d.y = clampf(d.y + 0.12, -0.2, 0.6) # (the arm held up a little, as men point)
+	d = d.normalized()
+	var k := clampf((1.6 - player.point_t) / 0.25, 0.0, 1.0) * clampf(player.point_t / 0.3, 0.0, 1.0)
+	var sh_r := Vector3(0.2, 1.42, -0.05)
+	var sh_l := Vector3(-0.2, 1.42, -0.05)
+	match player.weapon:
+		"pistol":
+			_pistol_pose()
+			rig.t_hand_l = (Vector3(-0.27, 0.95, -0.05)).lerp(sh_l + d * 0.62, k)
+		"saber":
+			_apply_pose([(S_IDLE[0] as Vector3).lerp(sh_r + d * 0.5, k), (S_IDLE[1] as Vector3).lerp(d, k)], 16.0)
+			rig.t_hand_l = Vector3(-0.24, 1.0, 0.02)
+		"bow", "crossbow":
+			if player.weapon == "bow":
+				_bow_pose()
+			else:
+				_xbow_pose()
+			rig.t_hand_r = sh_r + d * 0.62 * k + Vector3(0.05, -0.4, 0.1) * (1.0 - k)
+		_:
+			rig.bayonet_on = player.weapon == "melee"
+			_apply_pose([Vector3(0.16, 0.98, -0.3), Vector3(-0.55, 1.0, -0.1)], 12.0) # port arms, in the left hand
+			rig.t_hand_r = Vector3(0.24, 1.0, -0.1).lerp(sh_r + d * 0.64, k)
+	rig.pose_rate = 14.0
 
 
 ## Drawing or putting away a sidearm: the hand goes to the sash or the

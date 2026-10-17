@@ -760,26 +760,50 @@ at the bottom warns when it gets big for a phone.
 (or its card) and tap or drag where it should stand in your half; BEGIN THE
 BATTLE when you're ready.
 
-**You** fight in first person with your company, with the usual orders
-(FOLLOW, HOLD, CHARGE, AT WILL, VOLLEY: they're your company's). **COMMAND**
-(top left) lifts you into the command view:
+**Pace** (on the setup screen): Brisk, Steady (the default) or Slow. Marching,
+loading and blows all scale with it, so there's time to fight on foot and
+to command.
+
+**On foot** (first or third person) you command too:
+
+- **Your army** across the top right: a card for every regiment (kind, men
+  left, a bar coloured by its nerve, WAVERING, ⚔ when fighting). Tap cards to
+  select them (several at once), tap again to let go; ✕ lets go of all.
+- With nothing selected, the row under the cards is your own company's
+  orders (FOLLOW, HOLD, CHARGE, AT WILL). With regiments selected, it's
+  theirs (HALT, CHARGE, FIRE, VOLLEY, RUN, FALL BACK), and a **quick tap in
+  the world** sends them: on an enemy regiment, at it; on the ground, there.
+  You turn to it, point (musket across your chest in your left hand and your
+  right arm out; with the pistol the left hand points; with the sabre, the
+  blade) and shout the order.
+- The **minimap** on the left shows the ground and every regiment; tap it to
+  open the command view over that spot.
+- The **SPYGLASS** in the weapon row: the view closes in to a brass circle,
+  and you can tap distant regiments through it to send your men at them.
+
+**COMMAND** (top left) lifts you into the command view:
 
 - **Time**: PAUSE, SLOW (a quarter speed) or PLAY.
 - **Your regiments**: a card each along the bottom (what they are, men
-  left, nerve, WAVERING / ROUTING / FIGHTING). Tap a card, or the regiment on
-  the field; ALL takes every one. Each block is drawn on the ground in its
-  side's colour, with a banner.
+  left, nerve, WAVERING / ROUTING / FIGHTING). Tap cards or regiments on the
+  field to add them to the selection (tap again to drop one); ALL takes every
+  one, NONE lets go. Each block is drawn on the ground in its side's colour,
+  with a banner; a selected shooter shows its reach as a fan on the ground
+  (its range and the arc it can fire into). The selection is the same in
+  the command view and on foot.
 - **Orders**: tap the ground to march there (in column for a long march,
   forming line at the end; round houses and through the bridge or the ford);
-  drag to march and face the way you dragged; tap an enemy regiment to
-  attack it (shooters close to their range and fire, blades and horse close
-  and charge). Buttons: HALT, CHARGE, HOLD FIRE / FIRE AT WILL, VOLLEY, RUN
-  (double time), FALL BACK, and FOLLOW ME for your own company.
+  drag to march and face the way you dragged; tap an enemy regiment (its
+  block, its banner or its men) to attack it: they keep after it, shooters
+  closing to their range and firing, blades and horse closing to charge.
+  Buttons: HALT, CHARGE, FIRE: AT WILL / HOLDING (everyone starts at will),
+  VOLLEY, RUN (double time), FALL BACK, and FOLLOW ME for your own company.
 - **Camera**: drag with one finger (nothing selected), two fingers to pan,
   pinch to zoom, twist to turn; or the + − ⟲ ⟳ buttons.
 - **Alerts** at the top left: a regiment wavering, breaking, hit from
-  behind, or enemy horse charging one of yours. With **AUTO-PAUSE** on, the
-  important ones open the command view, paused, wherever you are.
+  behind, or enemy horse charging one of yours. With **AUTO-PAUSE** on (off
+  unless you turn it on), the important ones open the command view, paused,
+  at most once every half minute.
 - **TO YOUR MEN** goes back down to first person. If you fall, you keep
   commanding from above.
 
@@ -817,7 +841,10 @@ How it fights:
   Regiments find their way with Godot's AStarGrid2D; men slide along walls.
 - **Far sprites** for every kind (pikemen with pikes, red coats, horse and
   rider, raptors, brutes) are rendered from the 3D models at the start of
-  the battle (impostor.gd), seen from a little above for the command view.
+  the battle (impostor.gd), seen from a little above for the command view,
+  on a magenta key the sprite shader cuts out (a transparent render isn't
+  reliable on every phone). If the render comes back empty, the hand-drawn
+  sprites stand in.
 
 `-- --fieldtest[=map] [--humans] [--fieldsize=N]` plays a field battle with
 the computer on both sides and reports every ten seconds (headless).

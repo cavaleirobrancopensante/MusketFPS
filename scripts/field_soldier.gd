@@ -59,6 +59,9 @@ func _ready() -> void:
 		remove_from_group("friendlies")
 		add_to_group("enemies")
 	think_every = 3
+	hp *= 1.5 # (field battles last: a man takes two balls, not one)
+	reload_time /= field.pace
+	melee_rate *= field.pace
 	if not pike:
 		ammo = -1 # a field battle: nobody runs dry
 		loaded = true

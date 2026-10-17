@@ -26,7 +26,7 @@ static func make(b, f, s: int, at: Vector3, yaw: float):
 	me.field = f
 	me.side = s
 	me.position = at
-	me.crew = GunCrew.make(b, at, yaw, 9.0)
+	me.crew = GunCrew.make(b, at, yaw, 9.0 / f.pace)
 	if s == 1:
 		me.crew.coat_col = Color(0.62, 0.12, 0.1)
 	return me
@@ -90,7 +90,7 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	if from != null:
 		last_hit_by = from
 	hp -= amount * (0.5 if _shot else 1.0) # (the gun and the limber take a lot of it)
-	crew.reload = 9.0 * lerpf(2.0, 1.0, clampf(hp / max_hp, 0.0, 1.0))
+	crew.reload = 9.0 / field.pace * lerpf(2.0, 1.0, clampf(hp / max_hp, 0.0, 1.0))
 	if reg != null:
 		reg.hurt(amount)
 	if hp <= 0.0:

@@ -45,6 +45,7 @@ static func build_all() -> Dictionary:
 		"crossbow": crossbow(),
 		"crank": crank(),
 		"drum": drum(),
+		"shout": shout(),
 	}
 
 
@@ -216,6 +217,38 @@ static func drum() -> AudioStreamWAV:
 		lp += 0.04 * (_noise() - lp)
 		var body := sin(TAU * (62.0 + 30.0 * exp(-t / 0.05)) * t) * exp(-t / 0.35)
 		b[i] = body + lp * 4.0 * exp(-t / 0.08)
+	return _to_wav(b)
+
+
+## An officer's shouted order: a hoarse open "HAA-ah!", a voice through
+## three vocal formants with a falling pitch and a breathy edge.
+static func shout() -> AudioStreamWAV:
+	var b := _buf(0.75)
+	var ph := 0.0
+	var formants := [[750.0, 90.0, 1.0], [1150.0, 110.0, 0.55], [2500.0, 160.0, 0.22]]
+	var st: Array = []
+	for f in formants:
+		st.append([0.0, 0.0])
+	for i in b.size():
+		var t := float(i) / RATE
+		var f0 := lerpf(175.0, 120.0, clampf(t / 0.6, 0.0, 1.0)) * (1.0 + 0.02 * sin(t * 37.0))
+		ph += f0 / RATE
+		ph -= floorf(ph)
+		var src := (ph * 2.0 - 1.0) * 0.6 + _noise() * 0.25 # buzz and breath
+		var y := 0.0
+		for k in formants.size():
+			var fr: float = formants[k][0] * (1.0 - 0.12 * clampf(t / 0.5, 0.0, 1.0))
+			var bw: float = formants[k][1]
+			var r := exp(-PI * bw / RATE)
+			var a1 := 2.0 * r * cos(TAU * fr / RATE)
+			var a2 := -r * r
+			var s: Array = st[k]
+			var out := src + a1 * float(s[0]) + a2 * float(s[1])
+			s[1] = s[0]
+			s[0] = out
+			y += out * float(formants[k][2])
+		var env := smoothstep(0.0, 0.04, t) * (1.0 - smoothstep(0.35, 0.72, t)) * (1.0 + 0.4 * exp(-t / 0.12))
+		b[i] = y * env
 	return _to_wav(b)
 
 

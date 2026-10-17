@@ -263,6 +263,40 @@ func free_spot(p: Vector3) -> Vector3:
 	return p
 
 
+## A picture of the field for the HUD's minimap, n pixels square, north
+## (-z) up: grass shaded by the slope (lit from the north-west), water,
+## roofs, woods.
+func minimap_image(n: int) -> Image:
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var step := HALF * 2.0 / n
+	for j in n:
+		for i in n:
+			var x := -HALF + (i + 0.5) * step
+			var z := -HALF + (j + 0.5) * step
+			var h := height(x, z)
+			var gx := height(x + step, z) - height(x - step, z)
+			var gz := height(x, z + step) - height(x, z - step)
+			var light := clampf(1.0 - (gx + gz) * 0.9 / step + h * 0.012, 0.55, 1.35)
+			var col := Color(0.3, 0.42, 0.19) * light
+			var p := Vector3(x, 0, z)
+			var c := cell(p)
+			if has_water and h < WATER:
+				col = Color(0.25, 0.38, 0.5)
+			elif not houses.is_empty() and solid_y(p) > h + 0.5:
+				col = Color(0.62, 0.36, 0.26)
+			elif c == SLOW:
+				col = Color(0.16, 0.27, 0.12) * light
+			if kind == "town" and absf(x) < 64.0 and absf(z) < 64.0 and solid_y(p) <= h + 0.5:
+				for sl in STREETS:
+					if absf(x - sl) < STREET_HALF or absf(z - sl) < STREET_HALF:
+						col = Color(0.55, 0.47, 0.34)
+			if has_water and _on_bridge(x, z):
+				col = Color(0.6, 0.58, 0.52)
+			col.a = 1.0
+			img.set_pixel(i, j, col)
+	return img
+
+
 # ---------------------------------------------------------------- paths
 
 func _build_astar() -> void:

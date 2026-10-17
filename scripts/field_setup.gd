@@ -40,6 +40,7 @@ var _foe_box: VBoxContainer
 var _map_buttons := {}
 var _size_buttons := {}
 var _army_buttons := {}
+var _pace_buttons := {}
 var _total: Label
 var _auto: CheckButton
 
@@ -48,7 +49,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cfg = Settings.field_last.duplicate(true)
 	if cfg.is_empty() or not cfg.has("you"):
-		cfg = {"map": "hills", "size": 20, "foe_army": "lizards", "auto_pause": true,
+		cfg = {"map": "hills", "size": 20, "foe_army": "lizards", "auto_pause": false,
 			"you": {"musket": 2, "pike": 1, "bow": 1, "xbow": 0, "cav": 1, "gun": 1},
 			"foe": {"liz_warrior": 3, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1},
 			"foe_h": {"musket": 3, "pike": 1, "bow": 1, "xbow": 0, "cav": 1, "gun": 1},
@@ -106,6 +107,15 @@ func _ready() -> void:
 		b2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sizes.add_child(b2)
 		_size_buttons[int(sz[0])] = b2
+	left.add_child(_sub("Pace"))
+	var paces := HBoxContainer.new()
+	paces.add_theme_constant_override("separation", 6)
+	left.add_child(paces)
+	for pc in [[1.0, "Brisk"], [0.75, "Steady"], [0.55, "Slow"]]:
+		var b3 := _toggle(pc[1], func(): _set_pace(float(pc[0])))
+		b3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		paces.add_child(b3)
+		_pace_buttons[float(pc[0])] = b3
 	var size_note := Label.new()
 	size_note.text = "Horse come in half that, brutes fewer; a battery is two guns."
 	size_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -114,7 +124,7 @@ func _ready() -> void:
 	left.add_child(size_note)
 	_auto = CheckButton.new()
 	_auto.text = "Auto-pause on trouble"
-	_auto.button_pressed = bool(cfg.get("auto_pause", true))
+	_auto.button_pressed = bool(cfg.get("auto_pause", false))
 	_auto.add_theme_font_size_override("font_size", 18)
 	_auto.toggled.connect(func(on): cfg["auto_pause"] = on)
 	left.add_child(_auto)
@@ -173,6 +183,7 @@ func _ready() -> void:
 	_set_map(String(cfg["map"]))
 	_set_men(int(cfg["size"]))
 	_set_army(String(cfg["foe_army"]))
+	_set_pace(float(cfg.get("pace", 0.75)))
 
 
 func _panel(parent: Control, stretch: float) -> VBoxContainer:
@@ -271,6 +282,12 @@ func _set_men(n: int) -> void:
 	for k in _size_buttons:
 		_size_buttons[k].button_pressed = k == n
 	_refresh()
+
+
+func _set_pace(p: float) -> void:
+	cfg["pace"] = p
+	for k in _pace_buttons:
+		_pace_buttons[k].button_pressed = is_equal_approx(k, p)
 
 
 func _set_army(a: String) -> void:

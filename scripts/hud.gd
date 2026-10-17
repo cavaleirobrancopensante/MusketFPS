@@ -10,6 +10,14 @@ extends Control
 ##   VOLLEY!    - the company fires every loaded musket
 ##   top right  - FOLLOW / HOLD / fire mode toggle
 ##
+## In a field battle (field.gd) the top right is your army instead: a card for
+## every regiment (tap to select, tap again to let go; several at once). With
+## some selected, a row of their orders appears, and a tap in the world sends
+## them: on an enemy regiment, at it; on the ground, there; you point and
+## shout it. With none selected, the row is your own company's orders. A
+## minimap on the left (tap it for the command view), and the SPYGLASS in
+## the weapon row.
+##
 ## Touches are handled by hand (not Buttons) so several fingers work at once.
 const UI := preload("res://scripts/ui.gd")
 
@@ -30,6 +38,11 @@ var joy_origin := Vector2.ZERO
 var joy_pos := Vector2.ZERO
 var look_index := -1
 var look_last := Vector2.ZERO
+var _look_start := Vector2.ZERO
+var _look_t0 := 0
+var _look_moved := 0.0
+var _minimap: ImageTexture
+const MAP_RECT := Rect2(14, 150, 196, 196)
 var swing_index := -1 # finger holding a swing button
 var block_index := -1
 
@@ -128,7 +141,13 @@ func _melee() -> bool:
 
 
 const WEAPON_LABELS := {"musket": "MUSKET", "melee": "BAYONET", "pistol": "PISTOL", "saber": "SABRE",
-	"bow": "BOW", "crossbow": "CROSSBOW"}
+	"bow": "BOW", "crossbow": "CROSSBOW", "spyglass": "SPYGLASS"}
+
+
+func _field_ui():
+	if battle.field != null and battle.field.ui != null:
+		return battle.field.ui
+	return null
 
 
 # ---------------------------------------------------------------- layout
@@ -150,7 +169,9 @@ func _buttons() -> Array:
 		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": "FIRE"})
 		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": "AIM"})
 	# A small button for every weapon you carry, along the very bottom.
-	var ws: Array = player.weapons()
+	var ws: Array = player.weapons().duplicate()
+	if _field_ui() != null:
+		ws.append("spyglass")
 	var ww := 118.0 if ws.size() <= 4 else 96.0
 	var x0 := s.x * 0.5 - (ws.size() * (ww + 8.0) - 8.0) * 0.5 - 70.0 # clear of VOLLEY
 	for i in ws.size():
@@ -163,10 +184,14 @@ func _buttons() -> Array:
 	var bh := 56.0
 	var y := 18.0
 	var mode_label := "AT WILL" if battle.is_at_will() else "ON COMMAND"
-	list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 4 * (bw + 10), y, bw, bh), "label": "FOLLOW"})
-	list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": "HOLD"})
-	list.append({"id": "charge", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": "CHARGE"})
-	list.append({"id": "mode", "circle": false, "rect": Rect2(s.x - (bw + 10), y, bw, bh), "label": mode_label})
+	var fui = _field_ui()
+	if fui != null:
+		_army_buttons(list, fui, mode_label)
+	else:
+		list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 4 * (bw + 10), y, bw, bh), "label": "FOLLOW"})
+		list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": "HOLD"})
+		list.append({"id": "charge", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": "CHARGE"})
+		list.append({"id": "mode", "circle": false, "rect": Rect2(s.x - (bw + 10), y, bw, bh), "label": mode_label})
 	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": "MENU"})
 	list.append({"id": "view", "circle": false, "rect": Rect2(140, 92, 150, 46),
 			"label": "3RD PERSON" if player.third_person else "1ST PERSON"})
@@ -186,6 +211,46 @@ func _buttons() -> Array:
 		list.append({"id": "restart", "circle": false, "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 + 30, 260, 72),
 			"label": "CONTINUE" if Company.active else "RESTART"})
 	return list
+
+
+## A field battle's top right: a card per regiment, and the orders row under
+## it (the selection's, or your company's when nothing is selected).
+func _army_buttons(list: Array, fui, mode_label: String) -> void:
+	var s := size
+	var regs: Array = fui._my_regs()
+	var x0 := 486.0
+	var avail := s.x - 14.0 - x0
+	var cw := minf(100.0, (avail - 6.0 * (regs.size() - 1)) / maxf(1.0, regs.size()))
+	var x := s.x - 14.0 - (cw + 6.0) * regs.size() + 6.0
+	for r in regs:
+		list.append({"id": "u_%d" % r.id, "circle": false, "rect": Rect2(x, 12, cw, 58), "label": "", "reg": r})
+		x += cw + 6.0
+	var row: Array = []
+	if fui.selected.is_empty():
+		row = [["follow", "FOLLOW"], ["hold", "HOLD"], ["charge", "CHARGE"], ["mode", mode_label]]
+	else:
+		var r0 = fui.selected[0]
+		row = [["o_halt", "HALT"], ["o_charge", "CHARGE"]]
+		if fui.selected.any(func(r): return r.is_ranged()):
+			row.append(["o_fire", "FIRE: AT WILL" if r0.fire_at_will else "FIRE: HOLD"])
+			row.append(["o_volley", "VOLLEY"])
+		row.append(["o_run", "RUN" if not r0.run else "RUNNING"])
+		row.append(["o_fallback", "FALL BACK"])
+		if fui.selected.size() == 1 and r0.player_led:
+			row.append(["o_follow", "FOLLOW ME"])
+		row.append(["o_none", "✕"])
+	# Right-aligned rows of order buttons, clear of the buttons on the left.
+	var ow := 108.0
+	var per := maxi(1, int((s.x - 14.0 - x0) / (ow + 6.0)))
+	var i := 0
+	while i < row.size():
+		var chunk: Array = row.slice(i, i + per)
+		var ox := s.x - 14.0 - (ow + 6.0) * chunk.size() + 6.0
+		for k in chunk:
+			list.append({"id": k[0], "circle": false, "rect": Rect2(ox, 78 + (i / per) * 50, ow, 44), "label": k[1]})
+			ox += ow + 6.0
+		i += per
+	list.append({"id": "minimap", "circle": false, "rect": MAP_RECT, "label": ""})
 
 
 func _hit(b: Dictionary, p: Vector2) -> bool:
@@ -210,6 +275,7 @@ func _input(event: InputEvent) -> void:
 			joy_pos = d.position
 		elif d.index == look_index:
 			player.add_look(d.position - look_last)
+			_look_moved = maxf(_look_moved, d.position.distance_to(_look_start))
 			look_last = d.position
 
 
@@ -225,6 +291,9 @@ func _touch_down(idx: int, p: Vector2) -> void:
 	elif look_index == -1:
 		look_index = idx
 		look_last = p
+		_look_start = p
+		_look_t0 = Time.get_ticks_msec()
+		_look_moved = 0.0
 
 
 func _touch_up(idx: int) -> void:
@@ -233,6 +302,10 @@ func _touch_up(idx: int) -> void:
 		player.move_input = Vector2.ZERO
 	if idx == look_index:
 		look_index = -1
+		# A quick tap in the world, with regiments selected: an order.
+		var fui = _field_ui()
+		if fui != null and _look_moved < 14.0 and Time.get_ticks_msec() - _look_t0 < 350 and swing_index == -1:
+			fui.fp_tap(look_last)
 	if idx == swing_index:
 		swing_index = -1
 		player.release_swing()
@@ -264,7 +337,19 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 		"weapon":
 			player.toggle_weapon()
 		"w_musket", "w_melee", "w_pistol", "w_saber", "w_bow", "w_crossbow":
+			player.spyglass = false
 			player.switch_to(id.substr(2))
+		"w_spyglass":
+			player.toggle_spyglass()
+		"minimap":
+			var fui = _field_ui()
+			fui.open(false)
+			fui.focus = _map_to_world(p)
+		"o_halt", "o_charge", "o_fire", "o_volley", "o_run", "o_fallback", "o_follow":
+			_field_ui()._order(id.substr(2))
+			battle.play_sound_ui("drum", -10.0)
+		"o_none":
+			_field_ui().selected = []
 		"pg_still1":
 			battle.playground_spawn(1, true)
 		"pg_still5":
@@ -302,6 +387,12 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			player.toggle_view()
 		"command":
 			battle.field.ui.open(false)
+		_:
+			if id.begins_with("u_"):
+				var fui2 = _field_ui()
+				for r in battle.field.regs:
+					if "u_%d" % r.id == id:
+						fui2._toggle(r)
 
 
 func _process(delta: float) -> void:
@@ -328,10 +419,14 @@ func _draw() -> void:
 
 	# Crosshair and hit marker.
 	var c := s * 0.5
+	if player.spyglass:
+		_draw_spyglass(c)
 	# First person: sighting down the barrel replaces the crosshair dot.
 	# Third person has no barrel to sight along: aiming tightens a small
 	# ring round the dot instead.
-	if player.third_person:
+	if player.spyglass:
+		pass
+	elif player.third_person:
 		draw_circle(c, 2.5, Color(1, 1, 1, 0.9))
 		var r := lerpf(14.0, 6.0, player.aim_amount)
 		draw_arc(c, r, 0.0, TAU, 24, Color(1, 1, 1, 0.35 + 0.45 * player.aim_amount), 1.5)
@@ -381,9 +476,14 @@ func _draw() -> void:
 		_text_center("MOVE", hint, 18, Color(1, 1, 1, 0.25))
 
 	_draw_objective()
+	if _field_ui() != null:
+		_draw_minimap()
 
 	for b in _buttons():
 		_draw_button(b)
+	var fui = _field_ui()
+	if fui != null and not fui.selected.is_empty():
+		_text_center("Tap an enemy regiment to send them at it  ·  tap the ground to march them there", Vector2(s.x - 330, 194), 16, Color(UI.BRASS.lightened(0.25), 0.9))
 
 	_draw_story()
 	_draw_hint()
@@ -496,6 +596,11 @@ func _rbox(bg: Color, edge: Color, radius: int, width := 1) -> StyleBoxFlat:
 
 func _draw_button(b: Dictionary) -> void:
 	var id: String = b["id"]
+	if id == "minimap":
+		return
+	if id.begins_with("u_"):
+		_draw_unit_card(b)
+		return
 	var bg := Color(UI.NIGHT, 0.5)
 	var edge := Color(UI.PIPECLAY, 0.6)
 	var label_col := Color(UI.PIPECLAY, 0.95)
@@ -551,7 +656,15 @@ func _draw_button(b: Dictionary) -> void:
 			# The weapon in hand is gold; the one you're switching to pulses.
 			var w := id.substr(2)
 			var gold := UI.BRASS
-			if w == player.weapon and not player.is_switching():
+			if w == "spyglass":
+				if player.spyglass:
+					bg = Color(gold, 0.3)
+					edge = gold
+					label_col = gold
+				draw_style_box(_rbox(bg, Color(edge, edge.a * 0.8), 5, 2 if player.spyglass else 1), rect)
+				_text_center(b["label"], rect.get_center(), 16, label_col)
+				return
+			if w == player.weapon and not player.is_switching() and not player.spyglass:
 				bg = Color(gold, 0.3)
 				edge = gold
 				label_col = gold
@@ -568,6 +681,92 @@ func _draw_button(b: Dictionary) -> void:
 			return
 		draw_style_box(_rbox(bg, Color(edge, edge.a * 0.8), 5, 2 if active else 1), rect)
 		_text_center(b["label"], rect.get_center(), 19, label_col)
+
+
+# ---------------------------------------------------------------- field battle extras
+
+const MAP_BLUE := Color(0.55, 0.72, 1.0)
+const MAP_RED := Color(1.0, 0.45, 0.38)
+
+
+## A regiment's card in the top bar: its kind, men left, its nerve as a
+## coloured edge along the bottom; brass when selected.
+func _draw_unit_card(b: Dictionary) -> void:
+	var r = b["reg"]
+	var rect: Rect2 = b["rect"]
+	var fui = _field_ui()
+	var sel: bool = r in fui.selected
+	var bg := Color(UI.NIGHT, 0.6) if not sel else Color(UI.WOOL_LIGHT, 0.92)
+	if r.broken():
+		bg = Color(0.3, 0.08, 0.06, 0.7)
+	draw_style_box(_rbox(bg, UI.BRASS if sel else Color(UI.PIPECLAY, 0.4), 5, 2 if sel else 1), rect)
+	var lab := String(r.info["short"]) + ("★" if r.player_led else "")
+	_text_center(lab, rect.get_center() + Vector2(0, -12), 15 if rect.size.x > 80 else 13, UI.BRASS.lightened(0.2) if sel else Color(UI.PIPECLAY, 0.95))
+	var st := "%d" % r.members.size()
+	match r.state:
+		"wavering": st = "WAVERING"
+		"routing", "shattered": st = "RUNNING"
+	if r.engaged() and not r.broken():
+		st += " ⚔"
+	_text_center(st, rect.get_center() + Vector2(0, 8), 13, Color(1.0, 0.75, 0.35) if r.state == "wavering" else Color(UI.PIPECLAY, 0.75))
+	var m: float = clampf(r.morale / maxf(1.0, r.max_morale), 0.0, 1.0)
+	var bar := Rect2(rect.position + Vector2(5, rect.size.y - 8), Vector2((rect.size.x - 10) * r.strength(), 4))
+	draw_rect(bar, Color(0.45, 0.75, 0.4).lerp(Color(0.9, 0.3, 0.2), 1.0 - m))
+
+
+## The minimap: the ground (hills shaded, water, houses, woods), every
+## regiment as its block, you as an arrow. North (the enemy's side) is up.
+func _draw_minimap() -> void:
+	var f = battle.field
+	if _minimap == null:
+		_minimap = ImageTexture.create_from_image(f.terrain.minimap_image(int(MAP_RECT.size.x)))
+	draw_style_box(_rbox(Color(UI.NIGHT, 0.6), Color(UI.PIPECLAY, 0.45), 4), MAP_RECT.grow(3))
+	draw_texture_rect(_minimap, MAP_RECT, false, Color(1, 1, 1, 0.85))
+	var fui = _field_ui()
+	for r in f.regs:
+		if r.gone() or r.members.is_empty():
+			continue
+		var col: Color = MAP_BLUE if r.side == 0 else MAP_RED
+		if r in fui.selected:
+			col = UI.BRASS.lightened(0.3)
+		if r.broken():
+			col = col.darkened(0.45)
+		var hw: float = maxf(3.0, r.width() * 0.5 + 1.0)
+		var hd: float = maxf(2.5, ceilf(float(r.members.size()) / r.files_now()) * r.rank_gap * 0.5)
+		var pts := PackedVector2Array()
+		for k in [[-1, -1], [1, -1], [1, 1], [-1, 1]]:
+			var w: Vector3 = r.centroid + r.right() * hw * k[0] + r.forward * hd * k[1]
+			pts.append(_world_to_map(w))
+		draw_colored_polygon(pts, col)
+	if player.alive:
+		var pp := _world_to_map(player.global_position)
+		var fwd: Vector3 = -player.global_transform.basis.z
+		var d := Vector2(fwd.x, fwd.z).normalized()
+		var sd := Vector2(-d.y, d.x)
+		draw_colored_polygon(PackedVector2Array([pp + d * 8.0, pp - d * 5.0 + sd * 5.0, pp - d * 5.0 - sd * 5.0]), Color.WHITE)
+	_text(" MAP · tap for command", MAP_RECT.position + Vector2(0, MAP_RECT.size.y + 18), 13, Color(UI.PIPECLAY, 0.6))
+
+
+func _world_to_map(w: Vector3) -> Vector2:
+	var half: float = battle.field.terrain.HALF
+	return MAP_RECT.position + Vector2((w.x + half) / (half * 2.0), (w.z + half) / (half * 2.0)) * MAP_RECT.size
+
+
+func _map_to_world(p: Vector2) -> Vector3:
+	var half: float = battle.field.terrain.HALF
+	var k := (p - MAP_RECT.position) / MAP_RECT.size
+	return Vector3(k.x * half * 2.0 - half, 0, k.y * half * 2.0 - half)
+
+
+## Through the spyglass: a circle of the world in black, a brass rim and a
+## faint cross.
+func _draw_spyglass(c: Vector2) -> void:
+	var rad := minf(size.x, size.y) * 0.44
+	var w := size.x
+	draw_arc(c, rad + w * 0.5, 0.0, TAU, 96, Color(0.02, 0.02, 0.03), w)
+	draw_arc(c, rad + 3.0, 0.0, TAU, 96, Color(UI.BRASS, 0.85), 6.0)
+	draw_line(c + Vector2(-rad * 0.15, 0), c + Vector2(rad * 0.15, 0), Color(0, 0, 0, 0.5), 1.5)
+	draw_line(c + Vector2(0, -rad * 0.15), c + Vector2(0, rad * 0.15), Color(0, 0, 0, 0.5), 1.5)
 
 
 func _text(t: String, pos: Vector2, fsize: int, col: Color) -> void:

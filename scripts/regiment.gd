@@ -92,6 +92,12 @@ func is_ranged() -> bool:
 	return float(info.get("range", 0.0)) > 0.0
 
 
+## Half the angle in front it can shoot into (radians): a line of muskets
+## or bows wide, a battery's guns less (the trails have to be shifted).
+func fire_arc() -> float:
+	return 1.0 if is_gun() else acos(0.25)
+
+
 func range_m() -> float:
 	return float(info.get("range", 0.0))
 
@@ -145,14 +151,14 @@ func slot(i: int) -> Vector3:
 
 
 func march_speed() -> float:
-	var s := float(info["run"] if run else info["walk"])
+	var s: float = float(info["run"] if run else info["walk"]) * field.pace
 	if state == "wavering":
 		s *= 0.85
 	return s
 
 
 func run_speed() -> float:
-	return float(info["run"])
+	return float(info["run"]) * field.pace
 
 
 func may_fire() -> bool:
@@ -477,7 +483,7 @@ func _pick_fire_target() -> void:
 			var to: Vector3 = r.centroid - centroid
 			to.y = 0.0
 			var d := to.length()
-			if d < bd and (is_gun() or to.normalized().dot(forward) > 0.25 or d < 20.0):
+			if d < bd and (to.normalized().dot(forward) > cos(fire_arc()) or d < 20.0):
 				bd = d
 				best = r
 		fire_target = best
@@ -504,8 +510,8 @@ func shock(by, amount: float) -> void:
 func morale_tick(dt: float, losses: int) -> void:
 	if state in ["shattered", "gone"]:
 		return
-	# Losing half the regiment costs about 45 points of nerve.
-	var loss_hit := 100.0 / maxf(8.0, size0) * 0.9
+	# Losing half the regiment costs about 30 points of nerve.
+	var loss_hit := 100.0 / maxf(8.0, size0) * 0.6
 	morale = maxf(0.0, morale - losses * loss_hit)
 	_hurt_acc = 0.0
 	if strength() < 0.25:

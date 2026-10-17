@@ -25,6 +25,7 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, skip_vertex_transform;
 uniform sampler2D atlas : source_color, filter_nearest;
 uniform vec2 cell_size;
+uniform bool keyed = false; // (sprites rendered on a magenta key, see impostor.gd)
 varying vec4 tint;
 
 void vertex() {
@@ -53,6 +54,7 @@ void vertex() {
 void fragment() {
 	vec4 c = texture(atlas, UV);
 	if (c.a < 0.5) { discard; }
+	if (keyed && c.r > 0.75 && c.g < 0.25 && c.b > 0.75) { discard; }
 	ALBEDO = c.rgb * tint.rgb;
 }
 """
@@ -182,7 +184,7 @@ func remove_rig(r) -> void:
 func add_sprite_kind(kind: String, frames: Dictionary) -> Dictionary:
 	var keys: Array = []
 	for k in frames:
-		if k != "counts":
+		if k != "counts" and k != "keyed":
 			keys.append(k)
 	keys.sort()
 	var cols := 16
@@ -202,6 +204,7 @@ func add_sprite_kind(kind: String, frames: Dictionary) -> Dictionary:
 	mat.shader = shader
 	mat.set_shader_parameter("atlas", ImageTexture.create_from_image(img))
 	mat.set_shader_parameter("cell_size", Vector2(1.0 / cols, 1.0 / rows))
+	mat.set_shader_parameter("keyed", bool(frames.get("keyed", false)))
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE
 	quad.material = mat
