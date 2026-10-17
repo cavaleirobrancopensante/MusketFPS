@@ -46,6 +46,9 @@ static func build_all() -> Dictionary:
 		"crank": crank(),
 		"drum": drum(),
 		"shout": shout(),
+		"plop": plop(),
+		"splash": splash(),
+		"reel": reel(),
 	}
 
 
@@ -205,6 +208,43 @@ static func thud() -> AudioStreamWAV:
 		var t := float(i) / RATE
 		lp += 0.1 * (_noise() - lp)
 		b[i] = lp * exp(-t / 0.03) + sin(TAU * 90.0 * t) * exp(-t / 0.04) * 0.5
+	return _to_wav(b)
+
+
+## A float or a small fish going into water: a short falling "plop".
+static func plop() -> AudioStreamWAV:
+	var b := _buf(0.22)
+	var lp := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		lp += 0.25 * (_noise() - lp)
+		var f := 900.0 * exp(-t / 0.05) + 260.0
+		b[i] = sin(TAU * f * t) * exp(-t / 0.05) * 0.8 + lp * exp(-t / 0.02) * 0.6
+	return _to_wav(b)
+
+
+## A fish thrashing at the surface: a burst of wet, broken noise.
+static func splash() -> AudioStreamWAV:
+	var b := _buf(0.6)
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in b.size():
+		var t := float(i) / RATE
+		var n := _noise()
+		lp += 0.35 * (n - lp)
+		lp2 += 0.05 * (lp - lp2)
+		var grain := 0.5 + 0.5 * sin(TAU * 23.0 * t + sin(TAU * 7.0 * t) * 3.0)
+		b[i] = (lp - lp2) * grain * exp(-t / 0.22)
+	return _to_wav(b)
+
+
+## The reel's click: a few quick ticks of a wooden ratchet.
+static func reel() -> AudioStreamWAV:
+	var b := _buf(0.3)
+	for i in b.size():
+		var t := float(i) / RATE
+		var ph := fmod(t * 26.0, 1.0)
+		b[i] = _noise() * exp(-ph / 0.06) * 0.7 + sin(TAU * 2400.0 * t) * exp(-ph / 0.02) * 0.3
 	return _to_wav(b)
 
 

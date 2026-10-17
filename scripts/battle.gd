@@ -285,7 +285,7 @@ func _ready() -> void:
 	elif field != null and field.hunt == "game":
 		hud.show_message(Lang.t("Deer in the woods: creep close."), 5.0)
 	elif field != null and field.hunt == "fish":
-		hud.show_message(Lang.t("Fish in the river: watch for the fins."), 5.0)
+		hud.show_message(Lang.t("Fish in the river. Hold CAST, let go to throw."), 5.0)
 	else:
 		hud.show_message(Lang.t("Form the line! They're coming..."), 4.5)
 	Loading.done(self)

@@ -45,6 +45,7 @@ var _minimap: ImageTexture
 const MAP_RECT := Rect2(14, 150, 196, 196)
 var swing_index := -1 # finger holding a swing button
 var block_index := -1
+var cast_index := -1 # finger holding CAST (fishing)
 
 var message := ""
 var message_time := 0.0
@@ -177,11 +178,14 @@ func _buttons() -> Array:
 			"label": Lang.t("FIRE") if gp >= 1.0 else Lang.t("LOADING %d%%") % int(gp * 100.0)})
 		list.append({"id": "shot", "circle": true, "pos": Vector2(s.x - 225, s.y - 315), "r": 62.0,
 			"label": Lang.t("BALL") if player.gun_shot == "roundshot" else Lang.t("CANISTER")})
+	elif player.fishing != null:
+		# The rod: hold to cast, tap to strike, hold to reel.
+		list.append({"id": "cast", "circle": true, "pos": c, "r": 80.0, "label": player.fishing.button_label()})
 	else:
 		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": Lang.t("FIRE")})
 		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": Lang.t("AIM")})
 	# A small button for every weapon you carry, along the very bottom.
-	var ws: Array = player.weapons().duplicate() if player.gun == null else []
+	var ws: Array = player.weapons().duplicate() if player.gun == null and player.fishing == null else []
 	if _field_ui() != null:
 		ws.append("spyglass")
 	var ww := 118.0 if ws.size() <= 4 else 96.0
@@ -189,7 +193,7 @@ func _buttons() -> Array:
 	for i in ws.size():
 		list.append({"id": "w_" + String(ws[i]), "circle": false, "rect": Rect2(x0 + i * (ww + 8.0), s.y - 48.0, ww, 40.0),
 			"label": Lang.t("PIKE") if ws[i] == "melee" and player.has_pike else (Lang.t("LANCE") if ws[i] == "melee" and player.has_lance else Lang.t(WEAPON_LABELS[ws[i]])), "small": true})
-	if player.gun == null:
+	if player.gun == null and player.fishing == null:
 		list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
 		"label": Lang.t("GRENADE %d") % player.grenades})
 	var hunting: bool = battle.field != null and battle.field.hunt != ""
@@ -347,6 +351,10 @@ func _touch_up(idx: int) -> void:
 	if idx == block_index:
 		block_index = -1
 		player.set_block(false)
+	if idx == cast_index:
+		cast_index = -1
+		if player.fishing != null:
+			player.fishing.release()
 
 
 func _press(id: String, idx: int, p: Vector2) -> void:
@@ -401,6 +409,9 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			player.throw_grenade()
 		"aim":
 			player.toggle_aim()
+		"cast":
+			cast_index = idx
+			player.fishing.press()
 		"block":
 			block_index = idx
 			player.set_block(true)
@@ -489,6 +500,8 @@ func _draw() -> void:
 	_draw_swing_indicator(c)
 	if player.gun != null:
 		_draw_gun_sight()
+	if player.fishing != null:
+		_draw_fishing()
 	_draw_horse_marker()
 	if block_flash > 0.0:
 		_text_center(Lang.t("BLOCKED"), c + Vector2(0, 60), 30, Color(0.95, 0.78, 0.3, block_flash * 2.0))
@@ -542,6 +555,41 @@ func _draw() -> void:
 		var mc := Vector2(s.x * 0.5, s.y * 0.3)
 		_text_center(message, mc + Vector2(2, 3), 46, Color(0, 0, 0, 0.6 * alpha), display)
 		_text_center(message, mc, 46, Color(UI.PIPECLAY, alpha), display)
+
+
+## The rod: how far the cast will go while you wind it, and the strain on
+## the line while a fish is on it (past the red, it snaps).
+func _draw_fishing() -> void:
+	var f = player.fishing
+	var s := size
+	var c := Vector2(s.x - 150, s.y - 165)
+	if f.state == "charging":
+		var w := 200.0
+		var r := Rect2(c.x - w * 0.5, c.y - 128, w, 16)
+		draw_style_box(_rbox(Color(UI.NIGHT, 0.7), Color(UI.PIPECLAY, 0.5), 4), r)
+		draw_rect(Rect2(r.position + Vector2(2, 2), Vector2((w - 4) * f.power, 12)), UI.BRASS)
+		_text_center(Lang.t("%d m") % int(lerpf(f.CAST_MIN, f.CAST_MAX, f.power)), c + Vector2(0, -146), 20, UI.PIPECLAY)
+	elif f.state == "hooked":
+		var h := 300.0
+		var x := s.x - 300.0
+		var top := s.y * 0.5 - h * 0.5 - 40.0
+		var r2 := Rect2(x, top, 30, h)
+		draw_style_box(_rbox(Color(UI.NIGHT, 0.7), Color(UI.PIPECLAY, 0.5), 4), r2)
+		var red := h * 0.82
+		draw_rect(Rect2(x + 2, top + 2, 26, h - red - 2), Color(UI.MADDER, 0.45))
+		var t := clampf(f.tension, 0.0, 1.0)
+		var col := UI.BRASS if t < 0.82 else UI.MADDER.lightened(0.2)
+		draw_rect(Rect2(x + 3, top + h - t * (h - 4) - 2, 24, t * (h - 4)), col)
+		_text_center(Lang.t("LINE"), Vector2(x + 15, top - 16), 16, UI.PIPECLAY)
+		_text_center(Lang.t("%d m") % int(f.line_out), Vector2(x + 15, top + h + 18), 18, UI.PIPECLAY)
+		# The fish's strength.
+		var sx := x - 26.0
+		draw_rect(Rect2(sx, top, 10, h), Color(UI.NIGHT, 0.6))
+		draw_rect(Rect2(sx, top + h * (1.0 - f.stamina), 10, h * f.stamina), Color(0.55, 0.75, 0.9, 0.9))
+	elif f.state in ["waiting", "nibble"]:
+		_text_center(Lang.t("Watch the float..."), Vector2(s.x * 0.5, s.y - 60), 22, Color(UI.PIPECLAY, 0.8))
+	elif f.state == "bite":
+		_text_center(Lang.t("NOW!"), Vector2(s.x * 0.5, s.y * 0.42), 54, UI.BRASS, display)
 
 
 ## Your horse, standing where you left it: a small marker over it.

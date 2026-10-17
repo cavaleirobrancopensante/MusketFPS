@@ -256,6 +256,7 @@ func _ready() -> void:
 			Company.new_campaign(_test_start())
 			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 			Company.next_battle = {"hunt": "game" if "--hunt=game" in args else "fish", "res": -1}
+			Company.add_item("fishing_rod", 2)
 		elif "--campaign" in args:
 			Company.new_campaign(_test_start())
 		else:

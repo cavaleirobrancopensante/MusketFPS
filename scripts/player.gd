@@ -163,6 +163,7 @@ const MOUNT_REACH := 3.2
 ## The gun you're laying (a field gun's GunPost: your galloper, or any of
 ## your batteries' guns), or null; and what's in it.
 var gun = null
+var fishing = null # a rod in your hands (fishing.gd, fishing at the river)
 var gun_shot := "roundshot"
 const GUN_REACH := 3.6
 
@@ -667,7 +668,7 @@ func point_body_dir() -> Vector3:
 
 
 func request_fire() -> void:
-	if asleep_left > 0.0 or wake_left > 0.0:
+	if asleep_left > 0.0 or wake_left > 0.0 or fishing != null:
 		return
 	if spyglass:
 		spyglass = false # (lower it first)
@@ -911,6 +912,12 @@ func _keyboard_controls() -> void:
 		block_held = true
 	if Input.is_action_just_released("block"):
 		block_held = false
+	if fishing != null:
+		if Input.is_action_just_pressed("fire"):
+			fishing.press()
+		if Input.is_action_just_released("fire"):
+			fishing.release()
+		return
 	if is_gun():
 		if Input.is_action_just_pressed("fire"):
 			_want_fire = true

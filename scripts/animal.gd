@@ -31,6 +31,8 @@ var _calm_t := 0.0 # > 0: still bolting
 var _pick_t := 0.0
 var _home := Vector3.ZERO
 var last_hit_by: Node3D = null
+var lure = null # a float in the water this fish has noticed (fishing.gd): it swims to it
+var hooked := false # on the line: fishing.gd moves it
 var kills := 0
 
 
@@ -102,7 +104,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not alive:
+	if not alive or hooked:
 		return
 	var pl = battle.player
 	var to_pl: Vector3 = pl.global_position - global_position
@@ -118,7 +120,13 @@ func _physics_process(delta: float) -> void:
 		top = 9.5 if kind == "deer" else 3.5
 	else:
 		top = 1.0 if kind == "deer" else 0.6
-		if _pick_t <= 0.0:
+		if lure != null:
+			var tl: Vector3 = lure - global_position
+			tl.y = 0.0
+			_want = tl.normalized() if tl.length() > 0.45 else Vector3.ZERO
+			top = 0.7
+			_pick_t = 1.0
+		elif _pick_t <= 0.0:
 			_pick_t = randf_range(3.0, 8.0)
 			if kind == "deer" and randf() < 0.45:
 				_want = Vector3.ZERO # stand and graze
@@ -179,6 +187,7 @@ func scare(from: Vector3) -> void:
 	_want = (away.normalized() + Vector3(randf_range(-0.3, 0.3), 0, randf_range(-0.3, 0.3))).normalized()
 	_calm_t = randf_range(7.0, 11.0) if kind == "deer" else 2.5
 	_pick_t = _calm_t
+	lure = null
 
 
 func take_shot(amount: float, from: Node3D = null) -> void:

@@ -651,6 +651,26 @@ func _fill_list() -> void:
 		b.custom_minimum_size = Vector2(0, 58)
 		b.pressed.connect(_select.bind(m))
 		_list.add_child(b)
+	# Who works but doesn't fight, and who's away working.
+	if not Company.workers.is_empty():
+		_list.add_child(_label(Lang.t("LABOURERS  ·  %d") % Company.workers.size(), 18, GOLD))
+		for w in Company.workers:
+			var l := _label("%s  ·  %s%s" % [w["name"], Company.trade_name(String(w["trade"])).to_lower(),
+				Lang.t("  ·  hungry") if int(w.get("hunger", 0)) > 0 else ""], 15, DIM)
+			_list.add_child(l)
+	if not Company.posts.is_empty():
+		_list.add_child(_label(Lang.t("WORK PARTIES"), 18, GOLD))
+		for key in Company.posts:
+			var post: Dictionary = Company.posts[key]
+			var spec: Dictionary = World.RESOURCES.get(String(post.get("kind", "")), {})
+			var names: Array = []
+			for m in post["men"]:
+				names.append(Company.title(m))
+			for w in post["workers"]:
+				names.append(String(w["name"]))
+			var l2 := _label(Lang.t("At the %s: %s") % [Lang.t(String(spec.get("name", "site"))).to_lower(), ", ".join(names)], 15, DIM)
+			l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_list.add_child(l2)
 
 
 func _refresh_wagon() -> void:

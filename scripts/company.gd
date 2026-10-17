@@ -137,6 +137,17 @@ const ITEMS := {
 		"desc": "A short musket for a dragoon, to fire from the saddle. Less reach, easier to load on a horse."},
 	"kettle_hat": {"name": "Kettle hat", "slot": "head", "steady": 0.04, "armour": 0.05, "kg": 1.5, "space": 0.6, "value": 7,
 		"desc": "A broad-brimmed iron helmet, the town watch's hat."},
+	# Tools: for the work at the sites on the map (world.gd RESOURCES). A man
+	# with the right tool does his whole day's work; bare-handed, a third of
+	# it. A tool can break (TOOL_BREAK a day's work).
+	"axe": {"name": "Felling axe", "slot": "tool", "kg": 2.5, "space": 0.4, "value": 6,
+		"desc": "A long-hafted axe for timber. For the woods and the charcoal stacks."},
+	"pickaxe": {"name": "Pickaxe", "slot": "tool", "kg": 3.0, "space": 0.5, "value": 7,
+		"desc": "An iron pick for breaking ore out of the rock: lead, sulphur, saltpetre crust."},
+	"shovel": {"name": "Shovel", "slot": "tool", "kg": 2.2, "space": 0.5, "value": 4,
+		"desc": "For digging out saltpetre earth, banking the charcoal clamps, and every other kind of digging."},
+	"fishing_rod": {"name": "Fishing rod", "slot": "tool", "kg": 0.6, "space": 0.5, "value": 3,
+		"desc": "A whippy ash rod with a horsehair line, a cork float and a hook. Cast it, wait for the float to go under, strike, and reel in."},
 	# Goods: no use to us, but worth something to someone.
 	"lizard_shield": {"name": "Lizard shield", "slot": "goods", "kg": 4.0, "space": 1.2, "value": 6,
 		"desc": "Hide stretched over a wicker frame. Collectors in the towns pay for them."},
@@ -164,6 +175,8 @@ const RECIPES := {
 		"text": "No lead? Hard wood whittled round and rolled in cartridges. They fly short and hit soft (about half a lead ball), but they fly."},
 	"rations": {"name": "Smoke meat", "needs": {"meat": 6, "charcoal": 1}, "makes": {"rations": 6}, "hours": 4,
 		"text": "Fresh meat and fish spoil in days; smoked over the fire they keep."},
+	"fishing_rod": {"name": "Make a fishing rod", "needs": {"wood": 3}, "makes": {"fishing_rod": 1}, "hours": 2,
+		"text": "A straight length of ash, cut, dried and tapered, a line plaited from horsehair, and a hook filed from a nail."},
 }
 ## Stores that refill a man's pack "ammo" by what his weapon shoots.
 const SHOT_STORE := {"ball": "ammo", "arrow": "arrows", "bolt": "bolts"}
@@ -298,6 +311,15 @@ var visiting := -1 # the settlement you've walked into (town.tscn)
 var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
+## Labourers: villagers who work for you (hired in villages and towns, or
+## freed from the lizards) but don't fight. They follow the wagon, eat its
+## rations, and work the sites (see the work section).
+var workers: Array = []
+## Work parties left at sites on the map: site id (string) -> {"men":
+## soldiers' records, "workers": labourers' records, "tools": {id: n},
+## "stock": {store: lb, as floats}, "since": day}. They're off the roll
+## while they're there.
+var posts := {}
 
 
 # ---------------------------------------------------------------- new game
@@ -379,6 +401,8 @@ func new_campaign(start: Dictionary = {}) -> void:
 	tongues = {}
 	towns = {}
 	visiting = -1
+	workers = []
+	posts = {}
 	ensure_wagon_crew()
 	prologue = true
 	stash = {}
@@ -563,7 +587,11 @@ func weekly_wages() -> int:
 	var total := 0
 	for m in roster:
 		total += WAGES[int(m["rank"])]
-	return total
+	for k in posts:
+		for m in posts[k]["men"]:
+			total += WAGES[int(m["rank"])]
+		total += posts[k]["workers"].size() * LABOURER_WAGE
+	return total + workers.size() * LABOURER_WAGE
 
 
 ## The warband you'll face next: grows as the company makes a name for itself.
@@ -696,6 +724,8 @@ func apply_battle(result: Dictionary) -> void:
 		# they carried is the reward).
 		summary["pay"] = 15 + 5 * int(result["slain"]) if String(result.get("enemy", "lizards")) == "lizards" else 0
 		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
+		if String(result.get("enemy", "lizards")) == "lizards":
+			_free_captives(summary, int(result.get("assault", -1)) >= 0)
 		if int(result.get("assault", -1)) >= 0:
 			# A burned nest: what they'd hoarded from a dozen raids.
 			summary["nest_burned"] = String(result.get("nest_name", Lang.t("the nest")))
@@ -1192,6 +1222,12 @@ static func market_offers(kind: String, fac: String) -> Array:
 		out.append(["hunting_bow", 1, 9, Lang.t("a hunting bow")])
 	if kind != "hold":
 		out.append(["war_spear", 1, 7, Lang.t("a spear")])
+	# Tools for the work at the sites.
+	out.append(["pickaxe", 1, 8 if kind != "hold" else 6, Lang.t("a pickaxe")])
+	out.append(["shovel", 1, 5, Lang.t("a shovel")])
+	if kind != "hold":
+		out.append(["axe", 1, 7, Lang.t("a felling axe")])
+		out.append(["fishing_rod", 1, 4, Lang.t("a fishing rod")])
 	return out
 
 
@@ -1272,9 +1308,304 @@ func craft(id: String, n := 1) -> int:
 	for k in r["needs"]:
 		stores[k] = int(stores[k]) - b * int(r["needs"][k])
 	for k in r["makes"]:
-		stores[k] = int(stores.get(k, 0)) + b * int(r["makes"][k])
+		if ITEMS.has(k):
+			add_item(k, b * int(r["makes"][k])) # (a tool)
+		else:
+			stores[k] = int(stores.get(k, 0)) + b * int(r["makes"][k])
 	save()
 	return b
+
+
+## A beaten lizard warband often has people with it, roped together:
+## villagers carried off in a raid. They're free now, and some of them come
+## with you to work (labourers: see the work section). A burned nest
+## always has some.
+func _free_captives(summary: Dictionary, nest: bool) -> void:
+	if not nest and randf() > 0.45:
+		return
+	var n := randi_range(3, 7) if nest else randi_range(1, 4)
+	var fac: String = market_faction if market_faction in ["aurest", "vell", "dwarves"] else ["aurest", "vell"].pick_random()
+	var folk = load("res://scripts/folk.gd")
+	var trades: Array = TRADES.keys()
+	var joined: Array = []
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for i in n:
+		if workers.size() >= MAX_WORKERS or randf() < 0.3:
+			continue # (gone home to whoever's left there)
+		var sex := "m" if rng.randf() < 0.55 else "f"
+		var names: Dictionary = folk.FIRST.get(fac, folk.FIRST["aurest"])
+		var nm := "%s %s" % [names[sex][rng.randi() % names[sex].size()], folk._family(rng, fac)]
+		var w := make_worker(String(trades.pick_random()), nm, fac)
+		w["freed"] = true
+		workers.append(w)
+		joined.append("%s (%s)" % [nm, trade_name(String(w["trade"])).to_lower()])
+	summary["freed"] = n
+	summary["freed_joined"] = joined
+
+
+# ---------------------------------------------------------------- work
+
+## Tools, labourers and work parties. A site on the map (world.gd
+## RESOURCES) is worked by people: labourers first (they're what you hired
+## them for), then fit soldiers. A man with the right tool does a whole
+## day's work; bare-handed, BARE_HANDS of it; a labourer at his own trade
+## TRADE_BONUS more. Every tool in use may break (TOOL_BREAK a day).
+## SET TO WORK is a few hours with the party there; a work party (posts)
+## stays behind and works every day until you come back for it.
+const TOOLS := ["axe", "pickaxe", "shovel", "fishing_rod"]
+const TOOL_BREAK := 0.03
+const BARE_HANDS := 0.35
+const TRADE_BONUS := 1.5
+## A labourer's trade, and the sites (RESOURCES kinds) he's best at.
+const TRADES := {"woodcutter": ["charcoal"], "miner": ["lead", "sulphur", "saltpetre"], "hunter": ["game"],
+	"fisher": ["fish"], "farmer": []}
+const TRADE_NAMES := {"woodcutter": "Woodcutter", "miner": "Miner", "hunter": "Hunter", "fisher": "Fisher", "farmer": "Farmhand"}
+const LABOURER_COST := 12
+const LABOURER_WAGE := 1 # a week
+const MAX_WORKERS := 24
+const POST_RAID := 0.025 # a day: lizards find a work party
+
+
+static func trade_name(t: String) -> String:
+	return Lang.t(String(TRADE_NAMES.get(t, "Labourer")))
+
+
+func make_worker(trade: String, nm := "", fac := "") -> Dictionary:
+	if nm == "":
+		nm = "%s %s" % [FIRST_NAMES.pick_random(), LAST_NAMES.pick_random()]
+	var w := {"id": next_id, "name": nm, "trade": trade, "hunger": 0, "native": fac}
+	next_id += 1
+	return w
+
+
+func can_hire_labourer() -> bool:
+	return money >= price(LABOURER_COST) and workers.size() < MAX_WORKERS
+
+
+func hire_labourer(trade: String, nm := "", fac := "") -> Dictionary:
+	if not can_hire_labourer():
+		return {}
+	money -= price(LABOURER_COST)
+	var w := make_worker(trade, nm, fac)
+	workers.append(w)
+	save()
+	return w
+
+
+## Everyone who can work a site now: labourers first, then fit soldiers.
+func hands_for_work() -> Array:
+	return workers + fit_men()
+
+
+## The tools in the wagon, {id: n}.
+func wagon_tools() -> Dictionary:
+	var out := {}
+	for t in TOOLS:
+		if item_count(t) > 0:
+			out[t] = item_count(t)
+	return out
+
+
+## What these people make of a site of `kind` with these tools:
+## {"eff": the work they do, in whole men's work, "used": {tool: n}, "bare": n without a tool}.
+static func work_force(kind: String, people: Array, tools: Dictionary) -> Dictionary:
+	var need: Array = World.RESOURCES.get(kind, {}).get("tools", [])
+	var left := tools.duplicate()
+	var eff := 0.0
+	var used := {}
+	var bare := 0
+	for w in people:
+		var e := 1.0
+		if not need.is_empty():
+			var t := ""
+			for tid in need:
+				if int(left.get(tid, 0)) > 0:
+					t = String(tid)
+					break
+			if t == "":
+				e = BARE_HANDS
+				bare += 1
+			else:
+				left[t] = int(left[t]) - 1
+				used[t] = int(used.get(t, 0)) + 1
+		if kind in TRADES.get(String(w.get("trade", "")), []):
+			e *= TRADE_BONUS
+		eff += e
+	return {"eff": eff, "used": used, "bare": bare}
+
+
+## Tools in use for `days` days of work may break. They come out of the
+## wagon (or out of `post`'s tools). Returns the ids that broke.
+func wear_tools(used: Dictionary, days := 1.0, post := {}) -> Array:
+	var broke: Array = []
+	var p := 1.0 - pow(1.0 - TOOL_BREAK, days)
+	for t in used:
+		for i in int(used[t]):
+			if randf() < p:
+				broke.append(t)
+	for t in broke:
+		if post.is_empty():
+			add_item(t, -1)
+		else:
+			post["tools"][t] = int(post["tools"].get(t, 0)) - 1
+			if int(post["tools"][t]) <= 0:
+				post["tools"].erase(t)
+	return broke
+
+
+## "a pickaxe and 2 shovels broke".
+static func broke_note(broke: Array) -> String:
+	if broke.is_empty():
+		return ""
+	var n := {}
+	for t in broke:
+		n[t] = int(n.get(t, 0)) + 1
+	var bits: Array = []
+	for t in n:
+		bits.append(("%d× %s" % [n[t], item_name(t)]) if int(n[t]) > 1 else item_name(t))
+	return Lang.t("Broken: %s.") % ", ".join(bits)
+
+
+## Leave a work party of `n` at site `sid` (labourers first, then soldiers),
+## with the wagon's tools for the work. Returns how many stayed.
+func post_party(sid: int, n: int) -> int:
+	var r := World.resource(sid)
+	if r.is_empty() or n <= 0:
+		return 0
+	var kind := String(r["kind"])
+	var key := str(sid)
+	var post: Dictionary = posts.get(key, {"men": [], "workers": [], "tools": {}, "stock": {}, "since": day, "kind": kind})
+	var people := hands_for_work().slice(0, n)
+	var need: Array = World.RESOURCES[kind].get("tools", [])
+	for w in people:
+		if workers.has(w):
+			workers.erase(w)
+			post["workers"].append(w)
+		else:
+			roster.erase(w)
+			post["men"].append(w)
+	# Tools: one each, as far as the wagon has them.
+	var want := people.size()
+	for tid in need:
+		var have := item_count(String(tid))
+		var k := mini(have, want)
+		if k > 0:
+			add_item(String(tid), -k)
+			post["tools"][tid] = int(post["tools"].get(tid, 0)) + k
+			want -= k
+	posts[key] = post
+	ensure_wagon_crew()
+	save()
+	return people.size()
+
+
+func post_size(post: Dictionary) -> int:
+	return post["men"].size() + post["workers"].size()
+
+
+## Take what a work party has made into the wagon (as far as it fits).
+## Returns {store: n} taken.
+func collect_post(sid: int) -> Dictionary:
+	var post: Dictionary = posts.get(str(sid), {})
+	var got := {}
+	if post.is_empty():
+		return got
+	var st: Dictionary = post["stock"]
+	for k in st.keys():
+		var whole := int(floor(float(st[k])))
+		if whole <= 0:
+			continue
+		var k2 := stow(String(k), whole)
+		if k2 > 0:
+			got[k] = k2
+			st[k] = float(st[k]) - k2
+	save()
+	return got
+
+
+## Bring the work party back: what they made, their tools, and themselves.
+func recall_post(sid: int) -> Dictionary:
+	var key := str(sid)
+	var post: Dictionary = posts.get(key, {})
+	if post.is_empty():
+		return {}
+	var got := collect_post(sid)
+	for m in post["men"]:
+		roster.append(m)
+	for w in post["workers"]:
+		workers.append(w)
+	for t in post["tools"]:
+		add_item(String(t), int(post["tools"][t]))
+	posts.erase(key)
+	save()
+	return got
+
+
+## A day for every work party: they work (with their tools wearing out),
+## and now and then the lizards find one.
+func _posts_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	for key in posts.keys():
+		var post: Dictionary = posts[key]
+		var kind := String(post.get("kind", ""))
+		var spec: Dictionary = World.RESOURCES.get(kind, {})
+		if spec.is_empty() or post_size(post) == 0:
+			continue
+		var site_name := Lang.t(String(spec["name"])).to_lower()
+		for m in post["men"]:
+			m["wounded_days"] = maxi(0, int(m["wounded_days"]) - 1)
+		var people: Array = post["workers"] + post["men"]
+		var wf := work_force(kind, people, post["tools"])
+		var st: Dictionary = post["stock"]
+		var store := String(spec.get("post_store", spec["store"]))
+		st[store] = float(st.get(store, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"])
+		var also: Dictionary = spec.get("also", {})
+		for k in also:
+			st[k] = float(st.get(k, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"])
+		var broke := wear_tools(wf["used"], 1.0, post)
+		if not broke.is_empty():
+			notes.append(Lang.t("At the %s: %s") % [site_name, broke_note(broke)])
+		if randf() < POST_RAID:
+			if post["men"].size() >= 2:
+				var m: Dictionary = post["men"].pick_random()
+				m["wounded_days"] = int(m["wounded_days"]) + randi_range(2, 5)
+				notes.append(Lang.t("Lizards came at the party at the %s; the soldiers there drove them off. %s was hurt.") % [site_name, m["name"]])
+			else:
+				var taken: Array = []
+				var pool: Array = post["workers"] + post["men"]
+				pool.shuffle()
+				for w in pool.slice(0, maxi(1, pool.size() / 3)):
+					taken.append(w["name"])
+					post["workers"].erase(w)
+					post["men"].erase(w)
+				for k in st:
+					st[k] = float(st[k]) * 0.5
+				notes.append(Lang.t("Lizards fell on the work party at the %s and carried off %s. Leave soldiers with them.") % [site_name, ", ".join(taken)])
+				if post_size(post) == 0:
+					posts.erase(key) # (and the tools with them)
+	return notes
+
+
+## The labourers eat from the wagon. Unfed for two days, they start to go home.
+func _workers_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	if workers.is_empty():
+		return notes
+	var left: Array = []
+	for w in workers:
+		if int(stores.get("rations", 0)) > 0:
+			stores["rations"] = int(stores["rations"]) - 1
+			w["hunger"] = 0
+		else:
+			w["hunger"] = int(w.get("hunger", 0)) + 1
+			if int(w["hunger"]) >= 2 and randf() < 0.5:
+				left.append(w)
+	for w in left:
+		workers.erase(w)
+	if not left.is_empty():
+		notes.append(Lang.t("Unfed, %d labourers went home.") % left.size())
+	return notes
 
 
 ## Two men to haul the wagon if nobody has been given the job: the two
@@ -1526,6 +1857,8 @@ func pass_day(water: String) -> PackedStringArray:
 			for m in roster:
 				Men.add_morale(m, -20)
 	notes.append_array(_contract_day())
+	notes.append_array(_workers_day())
+	notes.append_array(_posts_day())
 	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult())
 	for g in gone:
 		roster.erase(g)
@@ -1557,6 +1890,8 @@ func march_on() -> String:
 		totals["dry"] += int(dn["dry"])
 		died.append_array(dn["died"])
 		unfair = unfair or bool(dn["unfair"])
+		notes.append_array(_workers_day())
+		notes.append_array(_posts_day())
 	if totals["dry"] > 0:
 		notes.append(Lang.t("%s without water on the road.") % (Lang.t("A day") if totals["dry"] == 1 else Lang.t("%d days") % totals["dry"]))
 	if totals["foul"] > 0:
@@ -1641,6 +1976,7 @@ func save() -> void:
 		"last_result": last_result, "march_note": march_note,
 		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
+		"workers": workers, "posts": posts,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
@@ -1685,6 +2021,8 @@ func load_campaign() -> bool:
 	tongues = data.get("tongues", {})
 	towns = data.get("towns", {})
 	visiting = int(data.get("visiting", -1))
+	workers = data.get("workers", [])
+	posts = data.get("posts", {})
 	for l in loot:
 		l["n"] = int(l["n"])
 	ensure_wagon_crew()

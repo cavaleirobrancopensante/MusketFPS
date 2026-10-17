@@ -537,9 +537,36 @@ places about a hundred, `world.gd` RESOURCES): **saltpetre caves** and
 **sulphur springs** in the hills, **woodland** to burn for charcoal,
 **lead outcrops**, **hunting grounds** and **fishing water**, and **fresh
 springs**. Each has a small model on the map and its name once you're
-close. Tap one to march there: SET TO WORK takes some hours (more fit men,
-more yield) and fills the wagon; then it's worked out for days (a spring
-just fills the water cart with clean water).
+close. Tap one to march there and choose how many **hands** to put to it
+(labourers first, then fit soldiers): SET TO WORK takes some hours and fills
+the wagon; then it's worked out for days (a spring just fills the water
+cart with clean water).
+
+**Tools.** Each site wants its tool: a **felling axe** for woodland, a
+**pickaxe** for lead, sulphur and saltpetre (or a **shovel** for the
+saltpetre earth and sulphur crust), a **fishing rod** for fishing water.
+A man with the right tool does a whole share of the work; bare-handed, a
+third. Every tool in use has a 3% chance a day of breaking. Markets sell
+them (villages and towns: all four; dwarf holds: picks and shovels), and
+CRAFT makes a fishing rod from 3 lb of hardwood.
+
+**Work parties.** LEAVE THEM HERE posts the hands you chose at the site,
+with the wagon's tools for the work: they leave the roll and work it every
+day (a tent and your flag mark the spot, with how many are there). Come
+back to COLLECT what they've made, or RECALL THEM. Hunters and fishers
+smoke what they bring in, so their stock is rations. They feed themselves,
+but they're still paid, and now and then lizards find them: two or more
+soldiers there drive them off, but a party of labourers alone loses a
+third of its people and half its stock. Leave some men at the lead and
+some at the fishing, and march on with the rest.
+
+**Labourers.** HIRE LABOURERS in a village or town (12 crowns, then a
+crown a week; a few each week): **woodcutters, miners, hunters, fishers**
+(by what's round the place) and **farmhands**. They don't fight and never
+go into battle; they follow the wagon, eat a ration a day (unfed, they go
+home), and work half again as hard at their own trade's sites. Beating a
+lizard warband often frees **captives** roped together in its train (a
+burned nest always has some); most of them stay with you as labourers.
 
 **CRAFT** (on the map, and at any site) turns materials into what you need,
 the hours passing while the men work (Logistics shortens them):
@@ -550,6 +577,7 @@ the hours passing while the men work (Logistics shortens them):
 | Smelt lead | 6 lead ore, 3 charcoal | 4 lb lead |
 | Roll cartridges | 1 lb powder, 3 lb lead | 40 cartridges |
 | Smoke meat | 6 meat, 1 charcoal | 6 rations |
+| Make a fishing rod | 3 hardwood | a fishing rod |
 
 Fresh meat and fish lose a third a day until smoked.
 
@@ -560,10 +588,15 @@ flies slower and hits for half.
 
 **Hunt or fish yourself** (optional; SET TO WORK still sends the men): at
 a hunting ground or fishing water, HUNT/FISH YOURSELF takes you into the
-woods or to a river with your musket. Deer graze in small herds and bolt
-when you come close (closer still on a horse) or a shot rings out;
-fish show as fins and ripples and scatter when a ball misses near them. A
-deer is 30-45 lb of meat, a fish 3-6. END THE HUNT puts it in the wagon
+woods with your musket, or to a river with a rod (you need one in the
+wagon). Deer graze in small herds and bolt when you come close (closer
+still on a horse) or a shot rings out. Fishing: hold CAST to wind the rod
+back (the longer, the further) and let go; the float lands on the water
+and fish nose up to it. It twitches while one nibbles; when it goes under,
+STRIKE at once. Hooked, hold REEL to bring it in and let go when it runs:
+reeling against a run pulls the line past the red, and it snaps (the rod
+may break with it). Tire it and bring it to the bank. A deer is 30-45 lb
+of meat, a fish 3-6. END THE HUNT puts it in the wagon
 (four hours pass). With these a company
 can keep itself in powder, shot, food and water without a market.
 

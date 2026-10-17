@@ -1089,9 +1089,24 @@ func _build_menu() -> void:
 	sc.add_child(_menu_box)
 
 
-func _fill_menu(people := false, market := false) -> void:
+func _fill_menu(people := false, market := false, labour := false) -> void:
 	for c in _menu_box.get_children():
 		c.queue_free()
+	if labour:
+		var left := Folk.labour_left(sid, kind)
+		var cost := Company.price(Company.LABOURER_COST)
+		_menu_box.add_child(_label(Lang.t("HANDS FOR HIRE  ·  %d crowns") % Company.money, 20, GOLD))
+		_menu_box.add_child(_label(Lang.t("Labourers don't fight. They follow the wagon, eat its rations, earn %d crown a week, and work the caves, woods and waters on the map: best at their own trade. %d will come this week. You have %d.") % [Company.LABOURER_WAGE, left, Company.workers.size()], 15, DIM))
+		for tr in Folk.labour_trades(kind, fac, sur):
+			var b := _button(Lang.t("Hire a %s  ·  %d cr") % [Company.trade_name(String(tr)).to_lower(), cost], func():
+				var w := Folk.hire_labourer(sid, kind, fac, String(tr))
+				_show_toast(Lang.t("%s, %s, will work for you.") % [w["name"], Company.trade_name(String(w["trade"])).to_lower()] if not w.is_empty() else Lang.t("Nobody else will come."))
+				_fill_menu(false, false, true))
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.disabled = left <= 0 or not Company.can_hire_labourer()
+			_menu_box.add_child(b)
+		_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
+		return
 	if market:
 		_menu_box.add_child(_label(Lang.t("THE MARKET  ·  %d crowns") % Company.money, 20, GOLD))
 		var load := Company.wagon_load()
@@ -1134,6 +1149,7 @@ func _fill_menu(people := false, market := false) -> void:
 	_menu_box.add_child(_button(Lang.t("TALK TO SOMEONE"), func(): _fill_menu(true)))
 	var sells := Lang.t("food, arrows, spears") if kind == "village" else (Lang.t("powder, lead, bolts, crossbows") if kind == "hold" else Lang.t("food, rum, lead, bolts, bows, crossbows"))
 	_menu_box.add_child(_button(Lang.t("MARKET  (%s)") % sells, func(): _fill_menu(false, true)))
+	_menu_box.add_child(_button(Lang.t("HIRE LABOURERS  (%d here)") % Folk.labour_left(sid, kind), func(): _fill_menu(false, false, true)))
 	if Company.cartridge_batches() > 0:
 		_menu_box.add_child(_button(Lang.t("MAKE %d CARTRIDGES (1 lb powder, 3 lb lead)") % Company.CARTRIDGE_BATCH, func():
 			var n := Company.make_cartridges(1)

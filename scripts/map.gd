@@ -404,6 +404,7 @@ func _build_settlements() -> void:
 		_box(c + Vector3(2.3, 5.4 if st["kind"] != "city" else 11.4, 1.5), Vector3(1.6, 1.0, 0.08), banner)
 		_label_for(st, c)
 	_build_resources()
+	_refresh_resource_labels()
 	var cube := BoxMesh.new()
 	cube.material = _mat
 	var mm := MultiMesh.new()
@@ -715,6 +716,65 @@ func _button(text: String, cb: Callable) -> Button:
 	return b
 
 
+## A tent and a fire at every site where you've left a work party.
+var _tents := {} # resource id -> Node3D
+
+
+func _refresh_resource_labels() -> void:
+	for rid in _tents.keys():
+		if not Company.posts.has(str(rid)):
+			_tents[rid].queue_free()
+			_tents.erase(rid)
+	for key in Company.posts:
+		var rid := int(key)
+		if _tents.has(rid):
+			continue
+		var r := World.resource(rid)
+		if r.is_empty():
+			continue
+		var n := Node3D.new()
+		n.position = _world_pos(Vector2(r["x"], r["y"]) + Vector2(0.5, 0.5)) + Vector3(-4.5, 0, 3.5)
+		add_child(n)
+		var canvas := StandardMaterial3D.new()
+		canvas.albedo_color = Color(0.86, 0.82, 0.7)
+		var pm := PrismMesh.new()
+		pm.size = Vector3(3.2, 2.2, 3.6)
+		pm.material = canvas
+		var tent := MeshInstance3D.new()
+		tent.mesh = pm
+		tent.position = Vector3(0, 1.1, 0)
+		n.add_child(tent)
+		var fire := StandardMaterial3D.new()
+		fire.albedo_color = Color(1.0, 0.55, 0.15)
+		fire.emission_enabled = true
+		fire.emission = Color(1.0, 0.5, 0.1)
+		fire.emission_energy_multiplier = 2.0
+		var fm := BoxMesh.new()
+		fm.size = Vector3(0.7, 0.5, 0.7)
+		fm.material = fire
+		var f := MeshInstance3D.new()
+		f.mesh = fm
+		f.position = Vector3(2.6, 0.25, 0.4)
+		n.add_child(f)
+		var flag := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(1.5, 1.0)
+		var fmat := StandardMaterial3D.new()
+		fmat.albedo_texture = preload("res://scripts/colours.gd").flag_texture(preload("res://scripts/colours.gd").flag())
+		fmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		qm.material = fmat
+		flag.mesh = qm
+		flag.position = Vector3(-0.9, 3.6, 0)
+		n.add_child(flag)
+		var pole := BoxMesh.new()
+		pole.size = Vector3(0.1, 3.8, 0.1)
+		var pl := MeshInstance3D.new()
+		pl.mesh = pole
+		pl.position = Vector3(-1.7, 1.9, 0)
+		n.add_child(pl)
+		_tents[rid] = n
+
+
 ## Put a panel in the middle of the screen once it knows its size.
 func _center(c: Control) -> void:
 	c.reset_size()
@@ -883,6 +943,8 @@ func _update_light() -> void:
 
 
 func _update_labels() -> void:
+	if _tents.size() != Company.posts.size():
+		_refresh_resource_labels()
 	for rid in _res_labels:
 		var r := World.resource(rid)
 		var seen: bool = World.explored[Gen.idx(int(r["x"]), int(r["y"]))] == 1
@@ -891,6 +953,9 @@ func _update_labels() -> void:
 		if rl.visible:
 			var wait := World.harvest_wait(rid)
 			rl.text = Lang.t(World.RESOURCES[r["kind"]]["name"]) + (Lang.t("  (worked out: %d days)") % ceili(wait / 24.0) if wait > 0.0 else "")
+			var post: Dictionary = Company.posts.get(str(rid), {})
+			if not post.is_empty():
+				rl.text += Lang.t("  ·  %d at work") % Company.post_size(post)
 	for id in _labels:
 		var l: Label3D = _labels[id]
 		var st: Dictionary = World.settlement(id)
@@ -1116,48 +1181,211 @@ func _popup_close() -> void:
 		ch.queue_free()
 
 
-## At a resource site: what it gives, and the men set to work (the hours
-## pass while they do).
+## At a resource site: what it gives, and who works it. SET TO WORK: the
+## hands you choose (labourers first, then soldiers) work it for some hours
+## with the wagon's tools (the hours pass). LEAVE THEM HERE: they stay as a
+## work party, working every day till you come back to COLLECT or RECALL
+## them. Or hunt or fish yourself.
+var _work_panel: PanelContainer
+var _work_box: VBoxContainer
+var _work_id := -1
+var _work_n := -1
+
+
 func _visit_resource(id: int) -> void:
 	var r := World.resource(id)
 	if r.is_empty():
 		return
 	var spec: Dictionary = World.RESOURCES[r["kind"]]
+	if String(spec["store"]) == "water":
+		_visit_spring(id, spec)
+		return
+	if _work_id != id:
+		_work_n = -1
+	_work_id = id
+	if _work_panel == null:
+		_work_panel = _panel(Color(UI.WOOL, 0.98))
+		_work_panel.custom_minimum_size = Vector2(940, 0)
+		_popup.get_parent().add_child(_work_panel)
+		var sc := UI.scroll()
+		sc.custom_minimum_size = Vector2(920, 560)
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_work_panel.add_child(sc)
+		_work_box = VBoxContainer.new()
+		_work_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_work_box.add_theme_constant_override("separation", 10)
+		sc.add_child(_work_box)
+	World.stop()
+	World.waiting = false
+	_fill_work()
+	_work_panel.visible = true
+	_center(_work_panel)
+
+
+func _close_work() -> void:
+	if _work_panel != null:
+		_work_panel.visible = false
+
+
+func _visit_spring(id: int, spec: Dictionary) -> void:
 	var text := Lang.t(String(spec["text"]))
-	var wait := World.harvest_wait(id)
 	var buttons: Array = []
-	if wait > 0.0:
-		text += "\n\n" + Lang.t("[i]You've worked it out for now: it gives again in %d days.[/i]") % ceili(wait / 24.0)
-	else:
-		var a: Array = spec["amount"]
-		var hands := clampf(Company.fit_men().size() / 12.0, 0.4, 2.2)
-		if String(spec["store"]) != "water":
-			text += "\n\n" + Lang.t("%d hours' work for about %d to %d of %s, with %d fit men.") % [int(spec["hours"]),
-				int(round(int(a[0]) * hands)), int(round(int(a[1]) * hands)), Company.item_label(String(spec["store"])).to_lower(), Company.fit_men().size()]
-		var verb := Lang.t("FILL THE CART") if String(spec["store"]) == "water" else Lang.t("SET TO WORK")
-		buttons.append([verb, func():
+	if World.harvest_wait(id) <= 0.0:
+		buttons.append([Lang.t("FILL THE CART"), func():
 			var got := World.gather(id)
 			_popup_close()
 			if got.is_empty():
 				return
-			if String(got["store"]) == "water":
-				_push_toast(Lang.t("The water cart is full of clean water."))
-			else:
-				_push_toast(Lang.t("The men set to work: %d %s by the end of it.") % [int(got["n"]), Company.item_label(String(got["store"])).to_lower()])
+			_push_toast(Lang.t("The water cart is full of clean water."))
 			World.waiting = true
 			_rest_until = World.hours + float(got["hours"])])
-	if wait <= 0.0 and String(r["kind"]) in ["game", "fish"]:
-		# Or go after it yourself, musket in hand.
-		buttons.append([Lang.t("HUNT YOURSELF") if r["kind"] == "game" else Lang.t("FISH YOURSELF"), func():
-			_popup_close()
-			Company.next_battle = {"hunt": "game" if r["kind"] == "game" else "fish", "res": id}
+	buttons.append([Lang.t("LEAVE"), _popup_close])
+	_popup_open(Lang.t(String(spec["name"])), text, buttons)
+
+
+func _fill_work() -> void:
+	var id := _work_id
+	var r := World.resource(id)
+	var kind := String(r["kind"])
+	var spec: Dictionary = World.RESOURCES[kind]
+	for c in _work_box.get_children():
+		_work_box.remove_child(c)
+		c.queue_free()
+	var gold := Color(0.95, 0.8, 0.45)
+	var dim := Color(0.75, 0.8, 0.88)
+	var top := HBoxContainer.new()
+	_work_box.add_child(top)
+	var t := _label(Lang.t(String(spec["name"])).to_upper(), 28, gold)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(t)
+	top.add_child(_button(Lang.t("LEAVE"), _close_work))
+	var d := _label(Lang.t(String(spec["text"])), 16, dim)
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_work_box.add_child(d)
+	var need: Array = spec.get("tools", [])
+	var store_name := Company.item_label(String(spec.get("post_store", spec["store"]))).to_lower()
+	var wrap := func(l: Label) -> Label:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		return l
+	if not need.is_empty():
+		var names: Array = []
+		for tid in need:
+			names.append("%s (%d)" % [Company.item_name(String(tid)), Company.item_count(String(tid))])
+		_work_box.add_child(wrap.call(_label(Lang.t("Tools for the work: %s in the wagon. Bare-handed, a man does a third of the work; any tool may break.") % Lang.t(" or ").join(names), 16, Color.WHITE)))
+	# The work party here, if you left one.
+	var post: Dictionary = Company.posts.get(str(id), {})
+	if not post.is_empty():
+		var made: Array = []
+		for k in post["stock"]:
+			if int(post["stock"][k]) > 0:
+				made.append("%d %s" % [int(post["stock"][k]), Company.item_label(String(k)).to_lower()])
+		var tl: Array = []
+		for tid in post["tools"]:
+			tl.append("%d %s" % [int(post["tools"][tid]), Company.item_name(String(tid)).to_lower()])
+		var card := _panel(Color(0.15, 0.2, 0.33))
+		_work_box.add_child(card)
+		var cv := VBoxContainer.new()
+		card.add_child(cv)
+		cv.add_child(_label(Lang.t("YOUR WORK PARTY HERE"), 20, gold))
+		cv.add_child(wrap.call(_label(Lang.t("%d soldiers and %d labourers, here since day %d.  Tools: %s.  Made so far: %s.") % [post["men"].size(), post["workers"].size(), int(post["since"]),
+			", ".join(tl) if not tl.is_empty() else Lang.t("none"), ", ".join(made) if not made.is_empty() else Lang.t("nothing yet")], 16, Color.WHITE)))
+		var row := HFlowContainer.new()
+		row.add_theme_constant_override("h_separation", 10)
+		cv.add_child(row)
+		row.add_child(_button(Lang.t("COLLECT"), func():
+			var got := Company.collect_post(id)
+			_push_toast(_got_text(got) if not got.is_empty() else Lang.t("Nothing to collect yet (or no room in the wagon)."))
+			_fill_work()))
+		row.add_child(_button(Lang.t("RECALL THEM"), func():
+			var got := Company.recall_post(id)
+			_push_toast(Lang.t("The work party packs up and falls in with the wagon.") + ("  " + _got_text(got) if not got.is_empty() else ""))
+			_fill_work()))
+	# Who works: a stepper.
+	var avail: Array = Company.hands_for_work()
+	if _work_n < 0 or _work_n > avail.size():
+		_work_n = avail.size()
+	var nl := Company.workers.size()
+	var step := HBoxContainer.new()
+	step.add_theme_constant_override("separation", 10)
+	_work_box.add_child(step)
+	step.add_child(_label(Lang.t("Hands:"), 20, gold))
+	for dn in [-5, -1]:
+		var b := _button("%d" % dn, func(): _work_n = maxi(0, _work_n + dn); _fill_work())
+		b.custom_minimum_size = Vector2(70, 54)
+		b.disabled = _work_n <= 0
+		step.add_child(b)
+	var nlab := _label("%d" % _work_n, 28, Color.WHITE)
+	nlab.custom_minimum_size = Vector2(60, 0)
+	nlab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	step.add_child(nlab)
+	for dn in [1, 5]:
+		var b2 := _button("+%d" % dn, func(): _work_n = mini(avail.size(), _work_n + dn); _fill_work())
+		b2.custom_minimum_size = Vector2(70, 54)
+		b2.disabled = _work_n >= avail.size()
+		step.add_child(b2)
+	var who := mini(_work_n, nl)
+	step.add_child(_label(Lang.t("of %d  (%d labourers, %d fit soldiers)") % [avail.size(), nl, avail.size() - nl], 17, dim))
+	var est := World.work_estimate(id, _work_n)
+	var info := ""
+	var wait := World.harvest_wait(id)
+	if wait > 0.0:
+		info = Lang.t("You've worked it out for now: it gives again in %d days. A work party left here still brings in a little every day.") % ceili(wait / 24.0)
+	elif _work_n > 0:
+		info = Lang.t("%d hours' work for about %d to %d %s.") % [int(spec["hours"]), int(est["lo"]), int(est["hi"]), Company.item_label(String(spec["store"])).to_lower()]
+	if _work_n > 0 and not need.is_empty() and int(est["bare"]) > 0:
+		info += "  " + Lang.t("%d of them without a tool.") % int(est["bare"])
+	if who > 0:
+		info += "  " + Lang.t("%d labourers first, then soldiers.") % who
+	if _work_n > 0:
+		info += "\n" + Lang.t("Left here as a work party: about %.1f %s a day (they feed themselves).") % [float(spec.get("daily", 0.3)) * float(est["eff"]), store_name]
+	if info != "":
+		_work_box.add_child(wrap.call(_label(info, 17, Color.WHITE)))
+	var row2 := HFlowContainer.new()
+	row2.add_theme_constant_override("h_separation", 10)
+	row2.add_theme_constant_override("v_separation", 10)
+	_work_box.add_child(row2)
+	var bw := _button(Lang.t("SET TO WORK"), func():
+		var got := World.gather(id, _work_n)
+		_close_work()
+		if got.is_empty():
+			return
+		var msg := Lang.t("They set to work: %d %s by the end of it.") % [int(got["n"]), Company.item_label(String(got["store"])).to_lower()]
+		var bn := Company.broke_note(got["broke"])
+		if bn != "":
+			msg += "  " + bn
+		_push_toast(msg)
+		World.waiting = true
+		_rest_until = World.hours + float(got["hours"]))
+	bw.disabled = wait > 0.0 or _work_n <= 0
+	row2.add_child(bw)
+	var bp := _button(Lang.t("LEAVE THEM HERE"), func():
+		var n := Company.post_party(id, _work_n)
+		_work_n = -1
+		_push_toast(Lang.t("%d stay behind to work the %s. Come back to collect what they make.") % [n, Lang.t(String(spec["name"])).to_lower()])
+		_refresh_resource_labels()
+		_fill_work())
+	bp.disabled = _work_n <= 0
+	row2.add_child(bp)
+	if kind in ["game", "fish"]:
+		# Or go after it yourself.
+		var has_rod := Company.item_count("fishing_rod") > 0
+		var hb := _button(Lang.t("HUNT YOURSELF") if kind == "game" else (Lang.t("FISH YOURSELF") if has_rod else Lang.t("FISH YOURSELF (no rod)")), func():
+			_close_work()
+			Company.next_battle = {"hunt": kind, "res": id}
 			Company.results_unseen = false
 			Company.save()
 			World.save()
-			_go(BATTLE)])
-	buttons.append([Lang.t("CRAFT"), func(): _popup_close(); _open_craft()])
-	buttons.append([Lang.t("LEAVE"), _popup_close])
-	_popup_open(Lang.t(String(spec["name"])), text, buttons)
+			_go(BATTLE))
+		hb.disabled = wait > 0.0 or (kind == "fish" and not has_rod)
+		row2.add_child(hb)
+	row2.add_child(_button(Lang.t("CRAFT"), func(): _close_work(); _open_craft()))
+
+
+func _got_text(got: Dictionary) -> String:
+	var bits: Array = []
+	for k in got:
+		bits.append("%d %s" % [int(got[k]), Company.item_label(String(k)).to_lower()])
+	return Lang.t("Into the wagon: %s.") % ", ".join(bits)
 
 
 # ---------------------------------------------------------------- craft

@@ -192,6 +192,10 @@ func _refresh() -> void:
 			t += "[color=#%s]%s[/color]\n" % [_hex(RED), r["standing_note"]]
 		if r.has("nest_burned"):
 			t += Lang.t("[color=#%s][b]%s burns.[/b] Its mounds are torn open and fired; no more warbands will come out of it.[/color]\n") % [_hex(GOLD), r["nest_burned"]]
+		if int(r.get("freed", 0)) > 0:
+			t += Lang.t("[color=#%s][b]%d captives freed[/b] from the lizards' ropes.[/color] ") % [_hex(GOLD), int(r["freed"])]
+			var fj: Array = r.get("freed_joined", [])
+			t += (Lang.t("%d of them will work for you, for their keep: %s.\n") % [fj.size(), ", ".join(fj)]) if not fj.is_empty() else Lang.t("They all go home.\n")
 		if r.has("stash"):
 			t += Lang.t("[color=#%s][b]The ship's stores are ours again:[/b] %s. The guns will march with the company now, each with its crew.[/color]\n") % [_hex(GOLD), r["stash"]]
 		var pay := int(r["pay"])

@@ -540,18 +540,18 @@ func _walk(dh: float) -> void:
 ## fills, how much (a range, for a dozen men: more hands, more), the hours
 ## it takes, and the days before it gives again.
 const RESOURCES := {
-	"saltpetre": {"name": "Saltpetre cave", "store": "saltpetre", "amount": [10, 18], "hours": 8.0, "regrow": 10.0,
+	"saltpetre": {"name": "Saltpetre cave", "store": "saltpetre", "amount": [10, 18], "hours": 8.0, "regrow": 10.0, "tools": ["shovel", "pickaxe"], "daily": 0.45,
 		"text": "White crust on the walls of a cave where bats roost: scraped, leached and boiled down, it's saltpetre. Three parts in four of gunpowder."},
-	"sulphur": {"name": "Sulphur spring", "store": "sulphur", "amount": [4, 8], "hours": 6.0, "regrow": 8.0,
+	"sulphur": {"name": "Sulphur spring", "store": "sulphur", "amount": [4, 8], "hours": 6.0, "regrow": 8.0, "tools": ["pickaxe", "shovel"], "daily": 0.3,
 		"text": "Yellow crystals round a hot spring that stinks of rotten eggs. A tenth of gunpowder is sulphur."},
-	"charcoal": {"name": "Woodland", "store": "charcoal", "amount": [8, 14], "hours": 10.0, "regrow": 3.0, "also": {"wood": [8, 14]},
+	"charcoal": {"name": "Woodland", "store": "charcoal", "amount": [8, 14], "hours": 10.0, "regrow": 3.0, "also": {"wood": [8, 14]}, "tools": ["axe"], "daily": 0.5,
 		"text": "Good hardwood. Cut, stacked and burned slowly under turf, it makes charcoal: for powder, for smelting, for smoking meat. Some is kept back as timber for carving."},
-	"lead": {"name": "Lead outcrop", "store": "ore", "amount": [8, 14], "hours": 10.0, "regrow": 12.0,
+	"lead": {"name": "Lead outcrop", "store": "ore", "amount": [8, 14], "hours": 10.0, "regrow": 12.0, "tools": ["pickaxe"], "daily": 0.4,
 		"text": "Grey, heavy galena in the rock. Smelted with charcoal, it gives lead for musket balls."},
-	"game": {"name": "Hunting grounds", "store": "meat", "amount": [10, 22], "hours": 8.0, "regrow": 4.0,
+	"game": {"name": "Hunting grounds", "store": "meat", "amount": [10, 22], "hours": 8.0, "regrow": 4.0, "daily": 0.9, "post_store": "rations",
 		"text": "Tracks everywhere: deer and big flightless birds. A day's hunting feeds the company; the meat keeps only if it's smoked."},
-	"fish": {"name": "Fishing water", "store": "meat", "amount": [8, 16], "hours": 6.0, "regrow": 3.0,
-		"text": "Fish in the shallows. Nets of cord and a few hours: fresh fish, which spoils as fast as meat."},
+	"fish": {"name": "Fishing water", "store": "meat", "amount": [8, 16], "hours": 6.0, "regrow": 3.0, "tools": ["fishing_rod"], "daily": 0.9, "post_store": "rations",
+		"text": "Fish in the shallows. Rods and lines and a few hours: fresh fish, which spoils as fast as meat."},
 	"spring": {"name": "Fresh spring", "store": "water", "amount": [0, 0], "hours": 1.0, "regrow": 0.0,
 		"text": "Clear, cold water out of the rock. The water cart is filled, and nobody falls sick of it."},
 }
@@ -567,23 +567,49 @@ func harvest_wait(id: int) -> float:
 	return maxf(0.0, float(harvest.get(str(id), 0.0)) - hours)
 
 
-## Work site `id` with the fit men: fills the store at once (the hours then
-## pass, map.gd). Returns {"store", "n", "hours"} or {} if it's spent.
-func gather(id: int) -> Dictionary:
+## How much `n` people (labourers first, then fit soldiers; -1: everyone)
+## would make at site `id`: {"lo", "hi", "eff", "used", "bare", "people"}.
+func work_estimate(id: int, n := -1) -> Dictionary:
+	var r := resource(id)
+	if r.is_empty():
+		return {}
+	var spec: Dictionary = RESOURCES[r["kind"]]
+	var people: Array = Company.hands_for_work()
+	if n >= 0:
+		people = people.slice(0, n)
+	var wf: Dictionary = Company.work_force(String(r["kind"]), people, Company.wagon_tools())
+	var hands := clampf(float(wf["eff"]) / 10.0, 0.0, 3.0)
+	var a: Array = spec["amount"]
+	wf["lo"] = int(round(int(a[0]) * hands))
+	wf["hi"] = int(round(int(a[1]) * hands))
+	wf["hands"] = hands
+	wf["people"] = people
+	return wf
+
+
+## Work site `id` with `n` people (see work_estimate): fills the store at
+## once (the hours then pass, map.gd); their tools may break. Returns
+## {"store", "n", "hours", "broke"} or {} if it's spent.
+func gather(id: int, n_people := -1) -> Dictionary:
 	var r := resource(id)
 	if r.is_empty() or harvest_wait(id) > 0.0:
 		return {}
 	var spec: Dictionary = RESOURCES[r["kind"]]
 	var store := String(spec["store"])
 	var n := 0
+	var broke: Array = []
 	if store == "water":
 		Company.stores["water"] = maxi(int(Company.stores["water"]), Company.WATER_CART)
 		Company.stores["foul"] = false
 		_day_water = "clean"
 	else:
-		var hands := clampf(Company.fit_men().size() / 12.0, 0.4, 2.2)
+		var est := work_estimate(id, n_people)
+		var hands := float(est["hands"])
+		if hands <= 0.0:
+			return {}
 		var a: Array = spec["amount"]
 		n = maxi(1, int(round(randi_range(int(a[0]), int(a[1])) * hands)))
+		broke = Company.wear_tools(est["used"])
 		Company.stores[store] = int(Company.stores.get(store, 0)) + n
 		var also: Dictionary = spec.get("also", {})
 		for k in also:
@@ -591,7 +617,7 @@ func gather(id: int) -> Dictionary:
 		Company.save()
 	harvest[str(id)] = hours + float(spec["hours"]) + float(spec["regrow"]) * 24.0
 	save()
-	return {"store": store, "n": n, "hours": float(spec["hours"])}
+	return {"store": store, "n": n, "hours": float(spec["hours"]), "broke": broke}
 
 
 ## The nearest resource site to the party, if it's within reach.

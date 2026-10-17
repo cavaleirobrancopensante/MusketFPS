@@ -144,6 +144,9 @@ func _pose() -> void:
 	rig.t_bow_up = Vector3.ZERO
 	rig.t_turn = 0.0
 	rig.t_twist = 0.0
+	if player.fishing != null:
+		player.fishing.pose(rig)
+		return
 
 	if player.is_throwing():
 		# Musket dropped to the left hand; the right hand winds back over the

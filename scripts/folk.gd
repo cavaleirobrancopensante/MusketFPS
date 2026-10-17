@@ -801,6 +801,53 @@ static func native_kit(p: Dictionary) -> Dictionary:
 	return {"gear": g, "ammo": ammo, "tag": tag}
 
 
+## Hands for hire: the trades this place's people follow (a woodcutter
+## where there are woods, miners in the hills, fishers by water...), and how
+## many will come this week (it fills again every 7 days).
+static func labour_trades(kind: String, fac: String, sur: Dictionary) -> Array:
+	var out: Array = ["farmer"]
+	if float(sur.get("forest", 0.0)) > 0.1 or fac == "vell":
+		out += ["woodcutter", "hunter"]
+	if fac == "dwarves" or float(sur.get("mountain", 0.0)) > 0.05 or float(sur.get("hills", 0.0)) > 0.15:
+		out.append("miner")
+	if bool(sur.get("river", false)) or bool(sur.get("coast", false)):
+		out.append("fisher")
+	if fac == "dwarves":
+		out = ["miner", "miner", "woodcutter"]
+	if not "hunter" in out and kind == "village":
+		out.append("hunter")
+	var uniq: Array = []
+	for t in out:
+		if not t in uniq:
+			uniq.append(t)
+	return uniq
+
+
+static func labour_left(sid: int, kind: String) -> int:
+	var t := town(sid)
+	var week := Company.day / 7
+	if int(t.get("labour_week", -1)) != week:
+		t["labour_week"] = week
+		t["labour_left"] = {"village": 3, "town": 5, "city": 7, "hold": 4}.get(kind, 3)
+	return int(t["labour_left"])
+
+
+## Hire one: a labourer with a name of this people. Returns the record or {}.
+static func hire_labourer(sid: int, kind: String, fac: String, trade: String) -> Dictionary:
+	if labour_left(sid, kind) <= 0:
+		return {}
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var sex := "m" if rng.randf() < 0.6 else "f"
+	var names: Dictionary = FIRST.get(fac, FIRST["aurest"])
+	var nm := "%s %s" % [names[sex][rng.randi() % names[sex].size()], _family(rng, fac)]
+	var w: Dictionary = Company.hire_labourer(trade, nm, fac)
+	if not w.is_empty():
+		town(sid)["labour_left"] = labour_left(sid, kind) - 1
+		Company.save()
+	return w
+
+
 ## They join the company: a real man (or woman) on the roll, with the
 ## weapon they brought from home (see native_kit).
 static func recruit(p: Dictionary) -> Dictionary:

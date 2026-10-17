@@ -351,8 +351,13 @@ func spawn_hunt() -> void:
 				battle.enemies.append(a)
 				battle.add_child(a)
 	else:
-		for k in 16:
-			var x := rng.randf_range(-100, 100)
+		# Your rod (fishing.gd): cast, wait for the float to go under, strike, reel.
+		var fishing = preload("res://scripts/fishing.gd").make(battle)
+		battle.add_child(fishing)
+		battle.player.fishing = fishing
+		for k in 18:
+			# (a few in the pool in front of you, the rest up and down the river)
+			var x := rng.randf_range(-12, 32) if k < 6 else rng.randf_range(-100, 100)
 			if absf(x - Terrain.BRIDGE_X) < 8.0:
 				x += 16.0
 			var at2 := Vector3(x, terrain.water_y - 0.2, Terrain.river_z(x) + rng.randf_range(-4.0, 4.0))
