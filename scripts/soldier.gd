@@ -723,6 +723,13 @@ func _rout(delta: float) -> void:
 	_move(delta)
 
 
+## A ball through the arm: loading and the bayonet both come slower.
+func _on_arm_hurt() -> void:
+	reload_time *= 1.5
+	melee_rate *= 0.7
+	spread_mult *= 1.4
+
+
 func _on_died() -> void:
 	# Not every man who goes down is dead: many are wounded and live.
 	down_status = "wounded" if randf() < Company.WOUND_CHANCE else "killed"

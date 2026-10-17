@@ -207,7 +207,7 @@ func _go_loot(delta: float) -> bool:
 
 func _strike(dist: float) -> void:
 	windup = -1.0
-	attack_timer = ATTACK_COOLDOWN
+	attack_timer = ATTACK_COOLDOWN * cooldown_mult
 	set_tint(Color.WHITE)
 	play_oneshot("strike", 0.3)
 	_punch(Vector3(1.12, 0.92, 1.0), 0.3)
@@ -303,6 +303,14 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	super.take_damage(amount, from)
 	if alive and amount < 100.0:
 		battle.play_sound("hiss", global_position + Vector3.UP * 1.6, -4.0)
+
+
+## Hit in the arm: slower to hack again.
+var cooldown_mult := 1.0
+
+
+func _on_arm_hurt() -> void:
+	cooldown_mult = 1.5
 
 
 func _on_died() -> void:

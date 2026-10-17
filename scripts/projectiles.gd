@@ -327,10 +327,52 @@ func _impact_unit(p: Dictionary, k: Dictionary, u: Node3D, at: Vector3) -> void:
 	if u == battle.player:
 		dmg = float(k.get("player_damage", dmg))
 	dmg *= float(p.get("dmg_mult", 1.0))
+	# Where it struck: the head and the chest kill, an arm or a leg wounds
+	# (and a wounded leg slows a man, a wounded arm slows his loading and
+	# his blows). Round shot takes whatever it hits.
+	if p["kind"] != "roundshot":
+		var zone := hit_zone(u, at)
+		var table: Dictionary = PLAYER_ZONES if u == battle.player else ZONES
+		dmg *= float(table.get(zone, 1.0))
+		if u != battle.player and u.alive and u.has_method("wound"):
+			u.wound(zone)
 	u.take_shot(dmg, shooter)
 	battle.spawn_puff(at, Color(0.5, 0.08, 0.06), 0.3)
 	if shooter != null and is_instance_valid(shooter) and shooter.has_method("on_projectile_hit"):
 		shooter.on_projectile_hit(u)
+
+
+## Damage by where it struck (see hit_zone). A ball in the head or the chest
+## kills even a big man; one in an arm or a leg rarely does on its own.
+const ZONES := {"head": 3.0, "chest": 1.7, "arm": 0.45, "leg": 0.55, "horse": 0.8}
+const PLAYER_ZONES := {"head": 1.6, "chest": 1.05, "arm": 0.6, "leg": 0.7, "horse": 1.0}
+
+
+## Which part of a body a shot entering at `at` struck: by height up the
+## body (head, chest, legs), and toward the sides at chest height, an arm.
+## Mounted men: the rider above the saddle, the horse below.
+static func hit_zone(u: Node3D, at: Vector3) -> String:
+	var base := u.global_position
+	var h_total: float = float(u.get("hit_height")) if u.get("hit_height") != null else 1.8
+	var r: float = float(u.get("hit_radius")) if u.get("hit_radius") != null else 0.35
+	var h := clampf((at.y - base.y) / maxf(h_total, 0.1), 0.0, 1.0)
+	if u.get("mount") != null:
+		if h > 0.88:
+			return "head"
+		return "chest" if h > 0.62 else "horse"
+	if h > 0.84:
+		return "head"
+	if h < 0.47:
+		return "leg"
+	var f = u.get("facing")
+	var facing: Vector3 = f if f != null else -u.global_transform.basis.z
+	facing.y = 0.0
+	var side := facing.normalized().cross(Vector3.UP)
+	var off := at - base
+	off.y = 0.0
+	if absf(off.dot(side)) > r * 0.7:
+		return "arm"
+	return "chest"
 
 
 ## Line of fire: would a shot from `from` to `to` pass close to a comrade of

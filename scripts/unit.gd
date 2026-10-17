@@ -65,6 +65,10 @@ var _think_acc := 0.0
 var _moving := false # the last decision set him walking (velocity)
 var _move_f := 1.0
 var _standin_skip := 0
+## Wounds that didn't kill: a lame man limps (slower), a man hit in the arm
+## loads and strikes slower (soldier.gd reads `arm_hurt`).
+var lame := false
+var arm_hurt := false
 
 
 func _setup_body(layer: int, radius: float, height: float, sprite_height_m: float) -> void:
@@ -165,7 +169,7 @@ func _process(delta: float) -> void:
 	if not alive:
 		return
 	if _moving:
-		var dv := Vector3(velocity.x, 0.0, velocity.z) * delta * _move_f
+		var dv := Vector3(velocity.x, 0.0, velocity.z) * delta * _move_f * (0.55 if lame else 1.0)
 		if battle.field != null:
 			position = battle.field.terrain.step(position, dv)
 		else:
@@ -264,6 +268,19 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	_flash_left = 0.2
 	if hp <= 0.0:
 		_die()
+
+
+## A shot that struck an arm or a leg (projectiles.gd): the wound slows him.
+func wound(zone: String) -> void:
+	if zone == "leg":
+		lame = true
+	elif zone == "arm" and not arm_hurt:
+		arm_hurt = true
+		_on_arm_hurt()
+
+
+func _on_arm_hurt() -> void:
+	pass
 
 
 ## Damage from a projectile or blast: like take_damage, but no parrying it.

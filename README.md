@@ -593,6 +593,17 @@ weapon in hand is gold, and an unloaded gun's button fills as it reloads.
   hand rests on the hip and swings out for balance. Damage follows your
   Strength and Bladework.
 
+### Where a shot strikes
+
+Every ball, arrow, bolt and javelin hits a part of the body, worked out from
+where it entered: the **head** (top of the body) and the **chest** kill (a
+ball there is more than any man or lizard can take), an **arm** (out to the
+sides at chest height) or a **leg** (below the waist) mostly wounds. A man
+hit in the leg limps at half speed; hit in the arm, he loads slower, shoots
+wider and strikes slower (a lizard hacks slower). Riders: above the saddle
+is the man, below it the horse. You take the same, gentler: head shots hurt
+you most. Round shot takes whatever it hits.
+
 ### Real projectiles
 
 Every musket ball is a real projectile: it leaves the muzzle at about 330 m/s,
