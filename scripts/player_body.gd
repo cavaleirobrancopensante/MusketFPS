@@ -22,6 +22,10 @@ const BLOCK := [Vector3(0.32, 1.52, -0.42), Vector3(-1, 0.1, -0.05)]
 ## The pike levelled at the charge: low at the hip, the head just above the
 ## line of sight, so you see it out in front.
 const PIKE_IDLE := [Vector3(0.2, 1.18, -0.12), Vector3(0, 0.1, -1)]
+## The lance: carried up at a slant riding, couched under the right arm,
+## level and a little across, for the charge.
+const LANCE_UP := [Vector3(0.26, 1.12, -0.12), Vector3(0.05, 0.85, -0.5)]
+const COUCHED := [Vector3(0.22, 1.2, 0.05), Vector3(-0.06, -0.02, -1)]
 # Swing directions: 0 overhead, 1 from left, 2 from right, 3 thrust.
 const WINDUP := {
 	0: [Vector3(0.12, 1.68, -0.42), Vector3(0, 0.75, -0.65)],
@@ -238,7 +242,10 @@ func _pose() -> void:
 		"recover":
 			_apply_pose(STRIKE[dir] if player.phase_time < 0.06 else (PIKE_IDLE if player.has_pike else MELEE_IDLE), 12.0)
 		_:
-			var idle := PIKE_IDLE if player.has_pike else MELEE_IDLE
+			if player.couched:
+				_apply_pose(COUCHED, 10.0)
+				return
+			var idle := PIKE_IDLE if player.has_pike else (LANCE_UP if player.has_lance and player.mounted else MELEE_IDLE)
 			_apply_pose(BLOCK if player.blocking else idle, 20.0 if player.blocking else 14.0)
 
 

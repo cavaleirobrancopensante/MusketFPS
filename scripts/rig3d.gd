@@ -521,9 +521,13 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 		_p_vis[ramrod] = false
 		return
-	if primary == "pike" or primary == "spear" or primary == "war_spear":
+	if primary in ["pike", "spear", "war_spear", "lance"]:
 		# A pole arm: an ash shaft, butt behind the right hand, head far forward.
-		var long: float = {"pike": 3.0, "spear": 2.2, "war_spear": 2.5}[primary]
+		var long: float = {"pike": 3.0, "spear": 2.2, "war_spear": 2.5, "lance": 3.3}[primary]
+		if primary == "lance":
+			# A pennon below the head: red over white.
+			_part(musket, _box_mesh(Vector3(0.006, 0.09, 0.26)), Color(0.75, 0.12, 0.1), Vector3(0, 0.05, -long + 0.62), Vector3.ZERO, true)
+			_part(musket, _box_mesh(Vector3(0.006, 0.07, 0.2)), Color(0.92, 0.9, 0.85), Vector3(0, -0.02, -long + 0.6), Vector3.ZERO, true)
 		_part(musket, _cyl_mesh(0.022, 0.026, long), Color(0.55, 0.42, 0.26), Vector3(0, 0, -long * 0.5 + 0.45), Vector3(90, 0, 0))
 		var head := Color(0.45, 0.42, 0.38) if primary == "spear" else STEEL
 		_part(musket, _cyl_mesh(0.0, 0.035, 0.28), head, Vector3(0, 0, -long + 0.31), Vector3(-90, 0, 0))
@@ -562,7 +566,7 @@ static func _weapon_of(primary: String) -> String:
 		return "bow"
 	if primary in ["crossbow", "dwarf_crossbow"]:
 		return "crossbow"
-	if primary in ["pike", "spear", "war_spear", "rammer", "linstock", "spade"]:
+	if primary in ["pike", "spear", "war_spear", "lance", "rammer", "linstock", "spade"]:
 		return "pole"
 	if primary == "none":
 		return "none"

@@ -80,6 +80,8 @@ const ITEMS := {
 	# Pole arms: no gun, but reach. Pikemen hold the line in front of the muskets.
 	"pike": {"name": "Boarding pike", "slot": "primary", "melee": 40.0, "reach": 2.8, "kg": 3.0, "space": 1.5, "value": 6,
 		"desc": "A ship's boarding pike, nine feet of ash and iron. Keeps them at arm's length and more."},
+	"lance": {"name": "Cavalry lance", "slot": "primary", "melee": 44.0, "reach": 3.3, "kg": 2.6, "space": 1.6, "value": 18,
+		"desc": "Ten feet of ash with a steel head and a pennon. Couched under the arm at the gallop, the horse's weight is behind the point."},
 	"spear": {"name": "Lizard spear", "slot": "primary", "melee": 32.0, "reach": 2.3, "kg": 2.0, "space": 1.2, "value": 4,
 		"desc": "A crude spear with a chipped stone head. Light, and longer than it looks."},
 	"cleaver": {"name": "Lizard cleaver", "slot": "secondary", "melee": 30.0, "kg": 2.5, "space": 0.6, "value": 5,
@@ -370,6 +372,8 @@ func _apply_start(start: Dictionary) -> void:
 			o["gear"]["secondary"] = ""
 		"cavalry":
 			o["horse"] = {"hp": HORSE_HP, "max": HORSE_HP}
+			o["gear"]["primary"] = "lance"
+			o["gear"]["secondary"] = ""
 
 
 const HORSE_HP := 220.0

@@ -73,7 +73,7 @@ const BRANCHES := {
 		"text": "A light gun, a galloper, that you lay and fire yourself: round shot at long range, canister when they close. Its crew loads it; you aim it. Your gunnery speeds every gun the company has.",
 		"skills": {"gunnery": 3, "tactics": 1}, "extra_men": 0, "extra_kind": ""},
 	"cavalry": {"name": "Officer of Horse", "short": "CAVALRY",
-		"text": "You start mounted. Ride hard and cut from the saddle (speed makes the blow), fire your pistol, ride down skirmishers. Dismount to fight on foot, and keep your horse alive.",
+		"text": "You start mounted, with a lance, a sabre and a pistol. Couch the lance at the gallop and the horse's weight is behind the point; cut from the saddle with the sabre (speed makes the blow); ride down skirmishers. Dismount to fight on foot, and keep your horse alive.",
 		"skills": {"riding": 3, "bladework": 1}, "extra_men": 0, "extra_kind": ""},
 }
 const BRANCH_ORDER := ["line", "pike", "artillery", "cavalry"]

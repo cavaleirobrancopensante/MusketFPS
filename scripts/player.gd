@@ -41,7 +41,7 @@ const MISSILE := {
 const DRAW_TIME := 0.55 # a pistol from the belt or a sabre from the scabbard
 ## How each blade swings, relative to the bayonet the swings were tuned for:
 ## [damage x, reach x, strike speed x, recovery speed x].
-const BLADES := {"melee": [1.0, 1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.0, 1.6], "pike": [1.1, 1.45, 0.8, 0.85]}
+const BLADES := {"melee": [1.0, 1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.0, 1.6], "pike": [1.1, 1.45, 0.8, 0.85], "lance": [1.15, 1.4, 0.85, 0.85]}
 const RANGE := 90.0
 const BALL_SPEED := 340.0
 const GRENADES_PER_BATTLE := 3
@@ -95,6 +95,13 @@ var has_saber := true
 var has_bow := false
 var has_crossbow := false
 var has_pike := false # a pike officer's: "melee" is the pike
+var has_lance := false # a cavalry officer's: "melee" is the lance
+## The lance couched under your arm at the gallop (COUCH): it hits whatever
+## the point meets, with the horse's speed behind it.
+var couched := false
+var _couch_cd := 0.0
+const COUCH_SPEED := 5.0 # m/s: slower than this and the lance comes up
+const LANCE_TIP := 3.6 # metres ahead of you, couched
 ## Bow and crossbow: nocked/spanned, and how long until they are again.
 var m_loaded := {"bow": true, "crossbow": true}
 var m_left := {"bow": 0.0, "crossbow": 0.0}
@@ -227,7 +234,8 @@ func _apply_sheet() -> void:
 	has_pistol = String(g.get("pistol", "")) != ""
 	has_saber = String(g.get("sword", "")) != ""
 	has_pike = String(g.get("primary", "")) in ["pike", "spear", "war_spear"]
-	if has_pike:
+	has_lance = String(g.get("primary", "")) == "lance"
+	if has_pike or has_lance:
 		weapon = "melee"
 		switch_from = "melee"
 		switch_target = "melee"
@@ -301,8 +309,8 @@ func reload_progress_of(w: String) -> float:
 ## The weapons you can take up, in the order of the buttons along the bottom.
 func weapons() -> Array:
 	var out := ["musket", "melee"]
-	if has_pike:
-		out = ["melee"] # (a pike officer carries no musket)
+	if has_pike or has_lance:
+		out = ["melee"] # (a pike or a lance, and no musket)
 	elif mounted:
 		out = ["musket"] # (no bayonet work from the saddle)
 	if has_pistol:
@@ -439,15 +447,64 @@ func toggle_mount() -> void:
 		rotation.y = horse.yaw
 		mount_t = MOUNT_TIME
 		aim_wanted = false
-		if weapon == "melee" and not has_pike:
+		if weapon == "melee" and not has_pike and not has_lance:
 			weapon = "saber" if has_saber else "musket"
 			switch_target = weapon
 		battle.play_sound_ui("swish", -10.0)
 
 
+func can_couch() -> bool:
+	return mounted and has_lance and weapon == "melee" and switch_left <= 0.0 and swing_phase == "idle" \
+		and horse != null and horse.speed >= COUCH_SPEED and _couch_cd <= 0.0
+
+
+## COUCH: lower the lance for the charge (or raise it again).
+func toggle_couch() -> void:
+	if couched:
+		couched = false
+	elif can_couch():
+		couched = true
+		blocking = false
+		battle.play_sound_ui("swish", -12.0)
+
+
+## Couched: the first foe the point meets takes the charge.
+func _couch_tick(delta: float) -> void:
+	_couch_cd = maxf(0.0, _couch_cd - delta)
+	if not couched:
+		return
+	if not mounted or horse == null or horse.speed < COUCH_SPEED * 0.8 or weapon != "melee" or swing_phase != "idle":
+		couched = false
+		return
+	var fwd := _flat_forward()
+	var from := global_position
+	for e in battle.enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		var to: Vector3 = e.global_position - from
+		to.y = 0.0
+		var d := to.length()
+		if d > LANCE_TIP or d < 0.5:
+			continue
+		if rad_to_deg(fwd.angle_to(to)) > 14.0:
+			continue
+		var dmg: float = (30.0 + 10.0 * horse.speed) * melee_mult * Company.Officer.mounted_blow_mult()
+		var r: String = e.receive_blow(dmg, self, true)
+		if r == "hit" and e.has_method("stagger"):
+			e.stagger(fwd * 7.0, 1.0)
+		battle.play_sound_ui("stab", 0.0)
+		shake(0.6)
+		horse.speed *= 0.8 # the shock of it
+		couched = false
+		_couch_cd = 1.2 # (bring it back down again)
+		melee_hit.emit(1)
+		return
+
+
 ## Off the horse, to its left side; it stands where it is.
 func _get_down() -> void:
 	mounted = false
+	couched = false
 	horse.player = null
 	horse.speed = 0.0
 	var left: Vector3 = horse.forward().cross(Vector3.UP) * -1.3
@@ -682,6 +739,8 @@ func reload_progress() -> float:
 func blade() -> Array:
 	if weapon == "melee" and has_pike:
 		return BLADES["pike"]
+	if weapon == "melee" and has_lance:
+		return BLADES["lance"]
 	return BLADES.get(weapon, [1.0, 1.0, 1.0, 1.0])
 
 
@@ -754,6 +813,7 @@ func _physics_process(delta: float) -> void:
 
 		_update_switch(delta)
 		_update_swing(delta)
+		_couch_tick(delta)
 		blocking = block_held and is_melee() and swing_phase == "idle" and switch_left <= 0.0
 
 		_update_throw(delta)

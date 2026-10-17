@@ -167,6 +167,9 @@ func _buttons() -> Array:
 		list.append({"id": "swing2", "circle": true, "pos": c + Vector2(gap, 0), "r": 46.0, "label": Lang.t("RIGHT")})
 		list.append({"id": "swing3", "circle": true, "pos": c + Vector2(0, gap), "r": 46.0, "label": Lang.t("THRUST")})
 		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 310, s.y - 280), "r": 52.0, "label": Lang.t("BLOCK")})
+		if player.has_lance and player.mounted and (player.couched or player.can_couch()):
+			list.append({"id": "couch", "circle": true, "pos": Vector2(s.x - 330, s.y - 400), "r": 58.0,
+				"label": Lang.t("RAISE") if player.couched else Lang.t("COUCH")})
 	elif player.gun != null:
 		# At the gun: FIRE when it's loaded, the shot it's loaded with.
 		var gp: float = player.gun_progress()
@@ -185,7 +188,7 @@ func _buttons() -> Array:
 	var x0 := s.x * 0.5 - (ws.size() * (ww + 8.0) - 8.0) * 0.5 - 70.0 # clear of VOLLEY
 	for i in ws.size():
 		list.append({"id": "w_" + String(ws[i]), "circle": false, "rect": Rect2(x0 + i * (ww + 8.0), s.y - 48.0, ww, 40.0),
-			"label": Lang.t("PIKE") if ws[i] == "melee" and player.has_pike else Lang.t(WEAPON_LABELS[ws[i]]), "small": true})
+			"label": Lang.t("PIKE") if ws[i] == "melee" and player.has_pike else (Lang.t("LANCE") if ws[i] == "melee" and player.has_lance else Lang.t(WEAPON_LABELS[ws[i]])), "small": true})
 	if player.gun == null:
 		list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
 		"label": Lang.t("GRENADE %d") % player.grenades})
@@ -412,6 +415,8 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			player.toggle_gun()
 		"shot":
 			player.toggle_shot()
+		"couch":
+			player.toggle_couch()
 		"command":
 			battle.field.ui.open(false)
 		_:

@@ -284,7 +284,7 @@ func _sortie_tick(delta: float) -> void:
 			if wave == 1 and skirm_reg != null and not skirm_reg.gone() and skirm_reg.centroid.z > FOREST_Z + 22.0:
 				sortie = "out"
 				_sortie_t = 0.0
-				battle.say(Lore.COMMANDER, Lang.t("Ensign! Their javelin men, out in front. Ride them down! Sabre out, at the gallop!"), 5.0)
+				battle.say(Lore.COMMANDER, Lang.t("Ensign! Their javelin men, out in front. Ride them down! Lance couched, at the gallop!"), 5.0)
 		"out":
 			if skirm_reg != null and not skirm_reg.gone() and not skirm_reg.broken():
 				battle.objective = {"label": Lang.t("THE SKIRMISHERS"), "pos": skirm_reg.centroid}
@@ -435,7 +435,7 @@ func _tutorial() -> void:
 			if phase == "line" and wave == 0:
 				b._hint("ride", Lang.t("RIDING: push the stick the way you want to go: the further, the faster (walk, trot, gallop). The horse can't turn on the spot at a gallop. DISMOUNT to fight on foot."), 12.0)
 			if sortie == "out":
-				b._hint("ride_down", Lang.t("SABRE from the saddle: the horse's speed goes into the blow, and you reach further. Ride straight through them and they're knocked flying."), 12.0)
+				b._hint("ride_down", Lang.t("THE LANCE: at the gallop, COUCH it and ride at one of them: the point takes him with the horse's speed behind it. Then raise it, wheel, and couch again. Ride straight through them and they're knocked flying."), 13.0)
 	if wave >= 1 and phase == "line" and branch == "line":
 		b._hint("fire", Lang.t("FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys."), 12.0)
 	if branch != "pike" and not b.player.mounted and not b._hints.has("melee") and b.player.alive and b.nearest_enemy(b.player.global_position, 14.0) != null:
