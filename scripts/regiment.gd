@@ -138,6 +138,8 @@ func slot(i: int) -> Vector3:
 	var file := i % f
 	var in_rank := mini(f, n - rank * f)
 	var x := (file - (in_rank - 1) * 0.5) * spacing
+	if rank % 2 == 1 and kind in ["musket", "bow", "xbow"]:
+		x += spacing * 0.5 # (the rear rank fires through the gaps in the front)
 	if player_led:
 		# A gap in the middle of the line for you, as in the campaign.
 		x += spacing * 0.6 * (1.0 if x >= 0.0 else -1.0)

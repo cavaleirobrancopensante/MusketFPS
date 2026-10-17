@@ -1024,7 +1024,7 @@ func _check_end() -> void:
 				parts.append("%s%d:%s/%d %s %d%%m %s" % ["Y" if r.side == 0 else "T", r.id, r.kind, r.members.size(), r.state.substr(0, 4), int(r.morale), r.order.substr(0, 4)])
 			print("FIELD t%d fps%d %s | %s" % [int(clock), Engine.get_frames_per_second(), status_line(), " ".join(parts)])
 		if over != "" and _report_t > 3.0:
-			print("FIELD END ", over, " at ", int(clock))
+			print("FIELD END ", over, " at ", int(clock), " shots ", battle.projectiles.stats)
 			get_tree().quit()
 		if clock > (600.0 if prologue else 300.0):
 			print("FIELD END timeout")

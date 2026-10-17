@@ -10,9 +10,13 @@ extends Control
 ##                    ROUTING when it goes. Tap a card (or the regiment on the
 ##                    field) to select it; ALL selects every one.
 ##   orders           with a regiment selected:
-##                      tap the ground          march there
-##                      drag on the ground      march there and face the way
-##                                              you dragged (an arrow shows it)
+##                      tap the ground          march there (deploying: stand
+##                                              there in a column of twos)
+##                      drag on the ground      form a line along the drag, as
+##                                              long as the drag, facing away
+##                                              from you (a short drag: march
+##                                              there and face the way you
+##                                              dragged)
 ##                      tap an enemy regiment   attack it (shooters close to
 ##                                              range and fire; the rest charge)
 ##                    and the buttons on the right: HALT, CHARGE (the nearest
@@ -343,7 +347,20 @@ func _draw_overlay() -> void:
 				_line(c, r.target.centroid, Color(UI.MADDER.lightened(0.3), 0.9))
 			if r.is_ranged() and not r.broken():
 				_cone_edge(r)
-	if _drag_arrow.size() == 2:
+	if _drag_arrow.size() == 2 and (_drag_arrow[1] - _drag_arrow[0]).length() >= LINE_DRAG:
+		# The line it will form: along the drag, an arrow for the way it faces.
+		var a2: Vector3 = _drag_arrow[0]
+		var b2: Vector3 = _drag_arrow[1]
+		var f2 := _line_facing(a2, b2)
+		var sd2 := f2.cross(Vector3.UP)
+		_line(a2, b2, UI.BRASS)
+		_line(a2 - f2 * 1.5, a2 + f2 * 1.5, UI.BRASS)
+		_line(b2 - f2 * 1.5, b2 + f2 * 1.5, UI.BRASS)
+		var m2 := (a2 + b2) * 0.5
+		_line(m2, m2 + f2 * 7.0, UI.BRASS)
+		_line(m2 + f2 * 7.0, m2 + f2 * 4.5 + sd2 * 2.0, UI.BRASS)
+		_line(m2 + f2 * 7.0, m2 + f2 * 4.5 - sd2 * 2.0, UI.BRASS)
+	elif _drag_arrow.size() == 2:
 		var a: Vector3 = _drag_arrow[0]
 		var b: Vector3 = _drag_arrow[1]
 		var d := b - a
@@ -607,7 +624,10 @@ func _touch_up(idx: int, p: Vector2) -> void:
 	elif not selected.is_empty() and g0 != null and _drag_arrow.size() == 2:
 		var face: Vector3 = _drag_arrow[1] - _drag_arrow[0]
 		face.y = 0.0
-		_order_move(g0, face.normalized() if face.length() > 2.0 else Vector3.ZERO)
+		if face.length() >= LINE_DRAG:
+			_order_line(_drag_arrow[0], _drag_arrow[1])
+		else:
+			_order_move(g0, face.normalized() if face.length() > 2.0 else Vector3.ZERO)
 	_drag_arrow = []
 
 
@@ -822,6 +842,67 @@ func _order_move(to: Vector3, face: Vector3) -> void:
 		var at: Vector3 = to + rt * (x + r.width() * 0.5)
 		x += r.width() + 8.0
 		if deploying:
+			if face.length_squared() < 0.01 and not r.is_gun() and r.members.size() > 2:
+				r.files = 2 # (a tap: a column of twos, ready to march off)
+			_deploy_to(r, at, f)
+		else:
+			if r.player_led and r.order == "follow":
+				r.order_hold()
+			r.order_move(at, f, r.run)
+	battle.play_sound_ui("drum", -10.0)
+
+
+## A drag at least this long (m) lays out a line; shorter, it's a move with a facing.
+const LINE_DRAG := 6.0
+
+
+## The way a line laid from a to b faces: square to it, away from the camera.
+func _line_facing(a: Vector3, b: Vector3) -> Vector3:
+	var along := b - a
+	along.y = 0.0
+	var f := along.normalized().cross(Vector3.UP)
+	var look := -cam.global_transform.basis.z
+	look.y = 0.0
+	if f.dot(look) < 0.0:
+		f = -f
+	return f
+
+
+## A line along the drag: the selection shares it out (by their numbers,
+## in their present left-to-right order), each regiment as many files wide
+## as its share of the frontage.
+func _order_line(a: Vector3, b: Vector3) -> void:
+	if selected.is_empty():
+		return
+	var f := _line_facing(a, b)
+	var rt := f.cross(Vector3.UP).normalized()
+	var along := b - a
+	along.y = 0.0
+	if along.dot(rt) < 0.0:
+		var t := a
+		a = b
+		b = t
+	var length := Vector2(b.x - a.x, b.z - a.z).length()
+	var c := Vector3.ZERO
+	for r in selected:
+		c += r.pos
+	c /= selected.size()
+	var sorted := selected.duplicate()
+	sorted.sort_custom(func(x, y): return (x.pos - c).dot(rt) < (y.pos - c).dot(rt))
+	var men := 0
+	for r in sorted:
+		men += maxi(1, r.members.size())
+	var gap := 6.0 if sorted.size() > 1 else 0.0
+	var usable := maxf(4.0, length - gap * (sorted.size() - 1))
+	var x := 0.0
+	for r in sorted:
+		var share := usable * maxi(1, r.members.size()) / float(men)
+		var at: Vector3 = a + rt * (x + share * 0.5)
+		at.y = field.terrain.height(at.x, at.z)
+		x += share + gap
+		if not r.is_gun():
+			r.files = clampi(int(round(share / r.spacing)) + 1, 2, maxi(2, r.members.size()))
+		if deploying:
 			_deploy_to(r, at, f)
 		else:
 			if r.player_led and r.order == "follow":
@@ -962,9 +1043,9 @@ func _draw() -> void:
 		title = "VICTORY" if field.over == "won" else "DEFEAT"
 	_text_c(title, Vector2(s.x * 0.5, 104 if deploying else 44), 30, UI.BRASS, display)
 	if deploying and _hint_t > 0.0 or deploying:
-		_text_c("Tap a regiment (or its card), then tap or drag where it should stand. Drag sets which way it faces.", Vector2(s.x * 0.5, 138), 18, UI.PIPECLAY)
+		_text_c("Select a regiment, then tap the ground (a column of twos) or drag along it (a line as long as the drag).", Vector2(s.x * 0.5, 138), 18, UI.PIPECLAY)
 	elif not selected.is_empty() and _hint_t > -30.0:
-		_text_c("Tap the ground to march · drag to march and face · tap an enemy to attack", Vector2(s.x * 0.5, 76), 17, Color(UI.PIPECLAY, 0.85))
+		_text_c("Tap the ground to march · drag along the ground to form a line · tap an enemy to attack", Vector2(s.x * 0.5, 76), 17, Color(UI.PIPECLAY, 0.85))
 	if not lesson.is_empty():
 		_draw_lesson()
 	for b in _buttons():

@@ -264,7 +264,7 @@ func _begin_command() -> void:
 		field.ui.lesson = [
 			"YOU HAVE THE REGIMENT",
 			"Your companies and the guns are on the cards along the bottom. Tap a card, or the regiment on the field, to select it (ALL takes every one).",
-			"Then tap the ground to march there, drag to march and face, or tap an enemy to attack it.",
+			"Then tap the ground to march there, drag along the ground to form a line there, or tap an enemy to attack it.",
 			"Up here time runs slow (PAUSE stops it). TO YOUR MEN takes you back down; COMMAND at the top brings you up again.",
 			"In first person the cards are along the top: select one and tap the world to send it.",
 		]
