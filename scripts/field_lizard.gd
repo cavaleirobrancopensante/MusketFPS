@@ -35,18 +35,19 @@ func _ready() -> void:
 	match variant:
 		"skirm":
 			speed = randf_range(4.6, 5.4)
-			hp = 70.0
+			hp = 100.0
 			_throw_t = randf_range(0.5, 3.0)
 		"brute":
 			speed = randf_range(3.3, 3.8)
-			hp = 320.0
+			hp = 440.0
 			dmg_mult = 2.2
 			hit_radius = 0.65
 			hit_height = 2.9
 			rig.scale = Vector3.ONE * 1.12 * 1.45
 			_sprite_h = float(get_meta("sprite_cell", 1.95 * 1.45))
 		_:
-			hp = 110.0
+			hp = 160.0
+	speed *= field.pace
 
 
 func _physics_process(delta: float) -> void:
@@ -156,7 +157,7 @@ func _move(_delta: float) -> void:
 ## A hack: heavier from a brute, and a brute's blow sends a man reeling.
 func _strike(dist: float) -> void:
 	windup = -1.0
-	attack_timer = ATTACK_COOLDOWN * (1.4 if variant == "brute" else 1.0)
+	attack_timer = ATTACK_COOLDOWN * (1.4 if variant == "brute" else 1.0) / field.pace
 	set_tint(Color.WHITE)
 	play_oneshot("strike", 0.3)
 	_punch(Vector3(1.12, 0.92, 1.0), 0.3)

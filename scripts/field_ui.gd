@@ -33,7 +33,7 @@ extends Control
 const UI := preload("res://scripts/ui.gd")
 const Terrain := preload("res://scripts/field_terrain.gd")
 
-const SLOW := 0.25
+const SLOW := 0.2
 const BLUE := Color(0.55, 0.72, 1.0)
 const RED := Color(1.0, 0.45, 0.38)
 const CARD_W := 132.0
@@ -44,7 +44,8 @@ var battle
 var active := false
 var deploying := true
 var speed := "slow" # pause, slow, play
-var auto_pause := true
+var auto_pause := false
+var _auto_t := -99.0 # (real seconds) the last time an alert pulled you up here
 var selected: Array = []
 var cam: Camera3D
 var focus := Vector3(0, 0, 40)
@@ -76,7 +77,7 @@ func setup(f) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	font = UI.font("alegreya_sans_500")
 	display = UI.display_font()
-	auto_pause = bool(f.cfg.get("auto_pause", true))
+	auto_pause = bool(f.cfg.get("auto_pause", false))
 	cam = Camera3D.new()
 	cam.far = 900.0
 	cam.fov = 55.0
@@ -184,7 +185,9 @@ func alert(r, text: String, important: bool) -> void:
 	alerts.push_front([text, r, 0.0])
 	if alerts.size() > 5:
 		alerts.pop_back()
-	if important and auto_pause and not active and not deploying and battle.player.alive and not field.test_mode:
+	var now := Time.get_ticks_msec() / 1000.0
+	if important and auto_pause and not active and not deploying and battle.player.alive and not field.test_mode and now - _auto_t > 30.0:
+		_auto_t = now
 		open(true)
 		if r != null and r.side == 0:
 			selected = [r]
@@ -264,6 +267,8 @@ func _draw_overlay() -> void:
 		var hw: float = maxf(2.5, r.width() * 0.5 + 1.0)
 		var depth: float = maxf(2.0, ceilf(float(r.members.size()) / r.files_now()) * r.rank_gap)
 		_quad(r.centroid, r.forward, r.right(), hw, depth * 0.5, fc)
+		if r in selected and r.is_ranged() and not r.broken():
+			_cone_fill(r)
 	_imesh.surface_end()
 	_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for r in field.regs:
@@ -298,6 +303,8 @@ func _draw_overlay() -> void:
 					_line(last, last + r.dest_forward * 6.0, Color(UI.BRASS, 0.9))
 			if r.target != null and not r.target.gone():
 				_line(c, r.target.centroid, Color(UI.MADDER.lightened(0.3), 0.9))
+			if r.is_ranged() and not r.broken():
+				_cone_edge(r)
 	if _drag_arrow.size() == 2:
 		var a: Vector3 = _drag_arrow[0]
 		var b: Vector3 = _drag_arrow[1]
@@ -312,6 +319,43 @@ func _draw_overlay() -> void:
 			_line(a + fw * 7.0, a + fw * 4.5 + sd * 2.0, UI.BRASS)
 			_line(a + fw * 7.0, a + fw * 4.5 - sd * 2.0, UI.BRASS)
 	_imesh.surface_end()
+
+
+## A ranged regiment's reach: a fan on the ground out to its range, as wide
+## as the arc it can shoot into.
+func _cone_pts(r) -> Array:
+	var c: Vector3 = r.centroid
+	var arc: float = r.fire_arc()
+	var out: Array = []
+	var n := 16
+	for i in n + 1:
+		var a := lerpf(-arc, arc, float(i) / n)
+		out.append(c + (Basis(Vector3.UP, a) * r.forward) * r.range_m())
+	return out
+
+
+func _cone_fill(r) -> void:
+	var c: Vector3 = r.centroid
+	c.y = field.terrain.height(c.x, c.z) + 0.25
+	var pts := _cone_pts(r)
+	var col := Color(1.0, 0.85, 0.4, 0.09)
+	for i in pts.size() - 1:
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[i + 1]
+		a.y = field.terrain.height(a.x, a.z) + 0.25
+		b.y = field.terrain.height(b.x, b.z) + 0.25
+		for q in [c, a, b]:
+			_imesh.surface_set_color(col)
+			_imesh.surface_add_vertex(q)
+
+
+func _cone_edge(r) -> void:
+	var pts := _cone_pts(r)
+	var col := Color(1.0, 0.85, 0.4, 0.75)
+	_line(r.centroid, pts[0], col)
+	_line(r.centroid, pts[pts.size() - 1], col)
+	for i in pts.size() - 1:
+		_line(pts[i], pts[i + 1], col)
 
 
 ## A rectangle on the ground (centre c, half-width hw along `rt`, half-depth
@@ -388,7 +432,7 @@ func _buttons() -> Array:
 		var list: Array = [["halt", "HALT"], ["charge", "CHARGE"]]
 		var any_ranged := selected.any(func(r): return r.is_ranged())
 		if any_ranged:
-			list.append(["fire", "HOLD FIRE" if r0.fire_at_will else "FIRE AT WILL"])
+			list.append(["fire", "FIRE: AT WILL" if r0.fire_at_will else "FIRE: HOLDING"])
 			list.append(["volley", "VOLLEY"])
 		list.append(["run", "RUN: " + ("ON" if r0.run else "OFF")])
 		list.append(["fallback", "FALL BACK"])
@@ -400,6 +444,8 @@ func _buttons() -> Array:
 			out.append({"id": "o_" + k[0], "rect": Rect2(ox, oy, 200, 48), "label": k[1]})
 			oy += 54.0
 	out.append({"id": "all", "rect": Rect2(14, s.y - CARD_H - 18 - 58, 120, 48), "label": "ALL"})
+	if not selected.is_empty():
+		out.append({"id": "none", "rect": Rect2(142, s.y - CARD_H - 18 - 58, 120, 48), "label": "NONE"})
 	return out
 
 
@@ -536,9 +582,11 @@ func _pan(screen_delta: Vector2) -> void:
 	focus += fwd * screen_delta.y * k
 
 
-func _ground_at(p: Vector2):
-	var o := cam.project_ray_origin(p)
-	var d := cam.project_ray_normal(p)
+func _ground_at(p: Vector2, c: Camera3D = null):
+	if c == null:
+		c = cam
+	var o := c.project_ray_origin(p)
+	var d := c.project_ray_normal(p)
 	var t := 0.0
 	var prev := o
 	for i in 400:
@@ -578,38 +626,138 @@ func _reg_at(g: Vector3):
 	return best
 
 
-func _tap(_p: Vector2, g) -> void:
-	if g == null:
-		return
-	var r = _reg_at(g)
+## Which regiment is under a point on the screen: inside its block as drawn
+## on the ground, on its banner, or close to one of its men. With regiments
+## selected, an enemy under the finger wins over one of yours.
+func pick_screen(p: Vector2, c: Camera3D, with_banners: bool) -> Variant:
+	var hits: Array = [] # [regiment, score]
+	for r in field.regs:
+		if r.gone() or r.members.is_empty():
+			continue
+		var score := INF
+		# The block on the ground.
+		var hw: float = maxf(2.5, r.width() * 0.5 + 1.5)
+		var hd: float = maxf(2.0, ceilf(float(r.members.size()) / r.files_now()) * r.rank_gap) * 0.5 + 1.5
+		var poly := PackedVector2Array()
+		var ok := true
+		for k in [[-1, -1], [1, -1], [1, 1], [-1, 1]]:
+			var w: Vector3 = r.centroid + r.right() * hw * k[0] + r.forward * hd * k[1]
+			w.y = field.terrain.height(w.x, w.z) + 0.5
+			if c.is_position_behind(w):
+				ok = false
+				break
+			poly.append(c.unproject_position(w))
+		if ok and Geometry2D.is_point_in_polygon(p, poly):
+			score = 0.0
+		# The banner.
+		if with_banners and _banners.has(r):
+			var l: Label3D = _banners[r]
+			if l.visible and not c.is_position_behind(l.global_position):
+				var sp := c.unproject_position(l.global_position)
+				var half := Vector2(maxf(40.0, l.text.length() * 8.5), 22.0)
+				if Rect2(sp - half, half * 2.0).has_point(p):
+					score = minf(score, 0.5)
+		# Close to one of its men (far away, a block is a few pixels).
+		var step := maxi(1, r.members.size() / 12)
+		for i in range(0, r.members.size(), step):
+			var m = r.members[i]
+			var w2: Vector3 = m.global_position + Vector3.UP
+			if c.is_position_behind(w2):
+				continue
+			var d := c.unproject_position(w2).distance_to(p)
+			if d < 42.0:
+				score = minf(score, 1.0 + d / 42.0)
+		if score < INF:
+			hits.append([r, score])
+	if hits.is_empty():
+		return null
+	var want_enemy := not selected.is_empty()
+	hits.sort_custom(func(a, b):
+		var ea: bool = a[0].side == 1
+		var eb: bool = b[0].side == 1
+		if want_enemy and ea != eb:
+			return ea
+		return float(a[1]) < float(b[1]))
+	return hits[0][0]
+
+
+func _tap(p: Vector2, g) -> void:
+	var r = pick_screen(p, cam, true)
+	if r == null and g != null:
+		r = _reg_at(g)
 	if r != null and r.side == 0:
-		if r in selected and selected.size() == 1:
-			selected.clear()
-		else:
-			selected = [r]
+		_toggle(r)
 		return
 	if selected.is_empty():
 		if r != null:
 			focus = Vector3(r.centroid.x, 0, r.centroid.z)
 		return
 	if r != null and r.side == 1:
-		if deploying:
-			return
-		for s in selected:
-			if s.player_led and battle.player.alive and s.order == "follow":
-				s.order_hold()
-			s.order_attack(r)
-		battle.play_sound_ui("drum", -8.0)
+		if not deploying:
+			order_attack(r)
 		return
-	_order_move(g, Vector3.ZERO)
+	if g != null:
+		_order_move(g, Vector3.ZERO)
+
+
+## Add a regiment to the selection, or take it out if it's in.
+func _toggle(r) -> void:
+	if r in selected:
+		selected.erase(r)
+	else:
+		selected.append(r)
 
 
 func _tap_card(r) -> void:
-	if r in selected and selected.size() == 1:
-		selected.clear()
-	else:
-		selected = [r]
+	_toggle(r)
+	if r in selected and active:
 		focus = Vector3(r.centroid.x, 0, r.centroid.z)
+
+
+## Send the selection at an enemy regiment: they close with it and keep
+## after it (shooters to their range, the rest to charge).
+func order_attack(r) -> void:
+	for s in selected:
+		if s.broken():
+			continue
+		if s.player_led and battle.player.alive and s.order == "follow":
+			s.order_hold()
+		s.order_attack(r)
+	battle.play_sound_ui("drum", -8.0)
+
+
+## On foot: a tap in the world with regiments selected (the bar at the top
+## of the HUD). On an enemy regiment: attack it; on the ground: march there.
+## You point, and shout it. Returns true if it was an order.
+func fp_tap(p: Vector2) -> bool:
+	selected = selected.filter(func(r): return not r.gone() and not r.broken())
+	if selected.is_empty() or not battle.player.alive:
+		return false
+	var c: Camera3D = battle.player.camera
+	var r = pick_screen(p, c, false)
+	var names := _names(selected)
+	if r != null and r.side == 1:
+		order_attack(r)
+		battle.player.point_at(r.centroid + Vector3.UP * 1.5)
+		battle.hud.show_message("%s — at %s!" % [names, r.title.to_lower() if not r.title.begins_with("1st") else "those " + String(r.info["name"]).to_lower()], 2.0)
+		battle.play_sound_ui("shout", -2.0)
+		return true
+	var g = _ground_at(p, c)
+	if g == null or (g as Vector3).distance_to(battle.player.global_position) > 320.0:
+		return false
+	_order_move(g, Vector3.ZERO)
+	battle.player.point_at(g + Vector3.UP * 1.0)
+	battle.hud.show_message("%s — forward, to there!" % names, 2.0)
+	battle.play_sound_ui("shout", -2.0)
+	return true
+
+
+func _names(regs: Array) -> String:
+	if regs.size() == 1:
+		return "Company" if regs[0].player_led else String(regs[0].title)
+	if regs.size() == 2:
+		return "%s and %s" % [regs[0].title, regs[1].title]
+	return "%d regiments" % regs.size()
 
 
 ## March the selection to `to` (keeping their places side by side if more
@@ -710,8 +858,9 @@ func _button(id: String) -> void:
 		"turn_r":
 			yaw -= 0.35
 		"all":
-			var mine := _my_regs().filter(func(r): return not r.broken())
-			selected = [] if selected.size() == mine.size() else mine
+			selected = _my_regs().filter(func(r): return not r.broken())
+		"none":
+			selected = []
 		_:
 			if id.begins_with("o_"):
 				_order(id.substr(2))
@@ -753,6 +902,7 @@ func _order(what: String) -> void:
 func _draw() -> void:
 	# Alerts show even in first person.
 	var y := 84.0 if active else 150.0
+	var ax := 14.0 if active else 226.0
 	for a in alerts:
 		var age: float = a[2]
 		var alpha := clampf(1.0 - (age - 10.0) / 4.0, 0.0, 1.0)
@@ -760,8 +910,8 @@ func _draw() -> void:
 		var col := UI.PIPECLAY
 		if r != null and r.side == 0 and String(a[0]).find("rall") < 0:
 			col = Color(1.0, 0.72, 0.6)
-		draw_style_box(_box(Color(UI.NIGHT, 0.72 * alpha), Color(col, 0.3 * alpha)), Rect2(14, y, 520, 30))
-		draw_string(font, Vector2(24, y + 22), String(a[0]), HORIZONTAL_ALIGNMENT_LEFT, 500, 19, Color(col, alpha))
+		draw_style_box(_box(Color(UI.NIGHT, 0.72 * alpha), Color(col, 0.3 * alpha)), Rect2(ax, y, 520 if active else 420, 30))
+		draw_string(font, Vector2(ax + 10, y + 22), String(a[0]), HORIZONTAL_ALIGNMENT_LEFT, 500, 19, Color(col, alpha))
 		y += 34.0
 	if not active:
 		return

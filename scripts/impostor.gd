@@ -16,7 +16,11 @@ extends Node
 const Rig3D := preload("res://scripts/rig3d.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 
-const CELL_PX := 128 # rendered size of a cell (shrunk to 64 for the atlas)
+const CELL_PX := 64 # rendered size of a cell (the atlas's size: no resampling)
+## The background: a colour no unit wears. The sprite shader drops it
+## (rendering onto a transparent background isn't reliable on every phone
+## renderer: on some the whole picture comes back see-through).
+const KEY := Color(1, 0, 1)
 const TILT := deg_to_rad(24.0)
 const FOOT_ANIMS := {"idle": 1, "walk": 4, "aim": 1, "fire": 1, "reload": 2, "guard": 1, "thrust": 1, "block": 1}
 const LIZARD_ANIMS := {"idle": 1, "walk": 4, "windup": 1, "strike": 1, "stagger": 1, "shield": 1}
@@ -44,18 +48,18 @@ static func render(host: Node, spec: Dictionary) -> Dictionary:
 	var cell_m: float = spec["cell_m"]
 	var vp := SubViewport.new()
 	vp.size = Vector2i(cols * CELL_PX, rows * CELL_PX)
-	vp.transparent_bg = true
+	vp.transparent_bg = false
 	vp.own_world_3d = true
-	vp.msaa_3d = Viewport.MSAA_4X
+	vp.msaa_3d = Viewport.MSAA_DISABLED # (blended edges would tint pink)
 	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	host.add_child(vp)
 	var env := Environment.new()
-	env.background_mode = Environment.BG_CLEAR_COLOR
-	env.background_color = Color(0, 0, 0, 0)
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = KEY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.75, 0.78, 0.82)
 	env.ambient_light_energy = 0.75
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR # (keeps the key colour exact)
 	var we := WorldEnvironment.new()
 	we.environment = env
 	vp.add_child(we)
@@ -103,11 +107,21 @@ static func render(host: Node, spec: Dictionary) -> Dictionary:
 	if img == null or img.is_empty():
 		return {}
 	img.convert(Image.FORMAT_RGBA8)
-	var out := {"counts": anims}
+	# Did anything draw? (If not, keep the hand-drawn sprites.)
+	var solid := 0
+	for y in range(0, img.get_height(), 3):
+		for x in range(0, img.get_width(), 3):
+			var c := img.get_pixel(x, y)
+			if absf(c.r - 1.0) + c.g + absf(c.b - 1.0) > 0.3:
+				solid += 1
+	if solid < cols * rows * 8:
+		return {}
+	var out := {"counts": anims, "keyed": true}
 	for row in rows:
 		for col in cols:
 			var cell := img.get_region(Rect2i(col * CELL_PX, row * CELL_PX, CELL_PX, CELL_PX))
-			cell.resize(64, 64, Image.INTERPOLATE_BILINEAR) # (the sprite shader cuts at half alpha)
+			if CELL_PX != 64:
+				cell.resize(64, 64, Image.INTERPOLATE_NEAREST)
 			out["%s_%s_%d" % [VIEWS[row], frames[col][0], frames[col][1]]] = ImageTexture.create_from_image(cell)
 	return out
 

@@ -134,6 +134,15 @@ var throw_left := 0.0
 var _thrown := false
 var _shake := 0.0
 var aim_wanted := false
+## The officer's spyglass (field battles): the view closes in to a circle,
+## far away and steady; you look about slowly.
+var spyglass := false
+const SPYGLASS_FOV := 11.0
+## Pointing out an order to your men: your free hand (or blade) at where
+## you sent them, for a moment; you turn to face it.
+var point_t := 0.0
+var point_dir := Vector3.FORWARD # world direction you point
+var _point_yaw := 0.0
 var aim_amount := 0.0 # 0 = hip, 1 = fully sighted
 
 var _want_fire := false
@@ -219,6 +228,12 @@ func _process(delta: float) -> void:
 		aim_amount = move_toward(aim_amount, target, delta / AIM_TIME)
 		var k := aim_amount * aim_amount * (3.0 - 2.0 * aim_amount)
 		camera.fov = lerpf(FOV, AIM_FOV, k)
+		if spyglass:
+			camera.fov = SPYGLASS_FOV
+		if point_t > 0.0:
+			point_t -= delta
+			if point_t > 1.0:
+				rotation.y = lerp_angle(rotation.y, _point_yaw, 1.0 - exp(-10.0 * delta))
 		_shake = move_toward(_shake, 0.0, delta * 1.5)
 		_update_camera()
 
@@ -320,7 +335,7 @@ func _update_throw(delta: float) -> void:
 
 
 func _update_camera() -> void:
-	if third_person and rig != null:
+	if third_person and rig != null and not spyglass:
 		# Over the right shoulder; the orbit follows your pitch. Aiming pulls
 		# the camera in tight over the shoulder (the HUD keeps a small sight).
 		var k := aim_amount * aim_amount * (3.0 - 2.0 * aim_amount)
@@ -357,12 +372,46 @@ func add_look(drag: Vector2) -> void:
 		return
 	# Finer turning while aiming, for steady shots.
 	var sens := LOOK_SENS * lerpf(1.0, 0.55, aim_amount)
+	if spyglass:
+		sens *= SPYGLASS_FOV / FOV
 	rotation.y -= drag.x * sens
 	pitch = clampf(pitch - drag.y * sens, -1.2, 1.2)
 
 
+## Put the spyglass to your eye, or take it down.
+func toggle_spyglass() -> void:
+	if not alive:
+		return
+	spyglass = not spyglass
+	if spyglass:
+		aim_wanted = false
+	battle.play_sound_ui("swish", -14.0)
+
+
+## Point at a spot in the world (an order to your men): turn to it and hold
+## out your hand (or blade) for a moment.
+func point_at(p: Vector3) -> void:
+	if not alive:
+		return
+	var to := p - (global_position + Vector3.UP * 1.5)
+	point_dir = to.normalized()
+	var flat := Vector2(to.x, to.z)
+	if flat.length() > 0.5:
+		_point_yaw = atan2(-to.x, -to.z)
+	point_t = 1.6
+	spyglass = false
+
+
+## The way you point, in your own body's space (for the arms).
+func point_body_dir() -> Vector3:
+	return global_transform.basis.inverse() * point_dir
+
+
 func request_fire() -> void:
 	if asleep_left > 0.0 or wake_left > 0.0:
+		return
+	if spyglass:
+		spyglass = false # (lower it first)
 		return
 	_want_fire = true
 

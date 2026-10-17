@@ -33,16 +33,16 @@ const Look := preload("res://scripts/look.gd")
 ## between files and ranks (m); walk and run (m/s); range (m, 0 = blades);
 ## morale; cav: horse.
 const KINDS := {
-	"musket": {"name": "Musketeers", "short": "MUSKETS", "men": 1.0, "ranks": 2, "spacing": 1.25, "gap": 1.5, "walk": 2.6, "run": 4.4, "range": 60.0, "morale": 65.0},
-	"pike": {"name": "Pikemen", "short": "PIKES", "men": 1.0, "ranks": 3, "spacing": 1.15, "gap": 1.3, "walk": 2.4, "run": 4.0, "range": 0.0, "morale": 75.0},
-	"bow": {"name": "Bowmen", "short": "BOWS", "men": 0.8, "ranks": 2, "spacing": 1.6, "gap": 1.8, "walk": 2.8, "run": 4.8, "range": 78.0, "morale": 50.0},
-	"xbow": {"name": "Crossbowmen", "short": "XBOWS", "men": 0.8, "ranks": 2, "spacing": 1.4, "gap": 1.6, "walk": 2.6, "run": 4.4, "range": 66.0, "morale": 55.0},
-	"cav": {"name": "Cavalry", "short": "HORSE", "men": 0.5, "ranks": 2, "spacing": 2.4, "gap": 4.0, "walk": 3.2, "run": 7.5, "range": 0.0, "morale": 75.0, "cav": true},
-	"gun": {"name": "Cannon", "short": "GUNS", "men": 0.0, "guns": 2, "ranks": 1, "spacing": 10.0, "gap": 0.0, "walk": 1.4, "run": 1.6, "range": 240.0, "morale": 55.0},
-	"liz_warrior": {"name": "Lizard warriors", "short": "WARRIORS", "men": 1.25, "ranks": 3, "spacing": 1.6, "gap": 1.7, "walk": 3.0, "run": 5.0, "range": 0.0, "morale": 88.0},
-	"liz_skirm": {"name": "Javelin throwers", "short": "JAVELINS", "men": 0.8, "ranks": 2, "spacing": 2.4, "gap": 2.4, "walk": 3.2, "run": 5.2, "range": 28.0, "morale": 55.0},
-	"liz_brute": {"name": "Brutes", "short": "BRUTES", "men": 0.4, "ranks": 2, "spacing": 2.4, "gap": 2.6, "walk": 2.6, "run": 3.8, "range": 0.0, "morale": 100.0},
-	"liz_raptor": {"name": "Raptor riders", "short": "RAPTORS", "men": 0.5, "ranks": 2, "spacing": 2.6, "gap": 4.0, "walk": 3.4, "run": 7.0, "range": 0.0, "morale": 80.0, "cav": true},
+	"musket": {"name": "Musketeers", "short": "MUSKETS", "men": 1.0, "ranks": 2, "spacing": 1.25, "gap": 1.5, "walk": 2.21, "run": 3.74, "range": 60.0, "morale": 65.0},
+	"pike": {"name": "Pikemen", "short": "PIKES", "men": 1.0, "ranks": 3, "spacing": 1.15, "gap": 1.3, "walk": 2.04, "run": 3.4, "range": 0.0, "morale": 75.0},
+	"bow": {"name": "Bowmen", "short": "BOWS", "men": 0.8, "ranks": 2, "spacing": 1.6, "gap": 1.8, "walk": 2.38, "run": 4.08, "range": 78.0, "morale": 50.0},
+	"xbow": {"name": "Crossbowmen", "short": "XBOWS", "men": 0.8, "ranks": 2, "spacing": 1.4, "gap": 1.6, "walk": 2.21, "run": 3.74, "range": 66.0, "morale": 55.0},
+	"cav": {"name": "Cavalry", "short": "HORSE", "men": 0.5, "ranks": 2, "spacing": 2.4, "gap": 4.0, "walk": 2.72, "run": 6.38, "range": 0.0, "morale": 75.0, "cav": true},
+	"gun": {"name": "Cannon", "short": "GUNS", "men": 0.0, "guns": 2, "ranks": 1, "spacing": 10.0, "gap": 0.0, "walk": 1.19, "run": 1.36, "range": 240.0, "morale": 55.0},
+	"liz_warrior": {"name": "Lizard warriors", "short": "WARRIORS", "men": 1.25, "ranks": 3, "spacing": 1.6, "gap": 1.7, "walk": 2.55, "run": 4.25, "range": 0.0, "morale": 88.0},
+	"liz_skirm": {"name": "Javelin throwers", "short": "JAVELINS", "men": 0.8, "ranks": 2, "spacing": 2.4, "gap": 2.4, "walk": 2.72, "run": 4.42, "range": 28.0, "morale": 55.0},
+	"liz_brute": {"name": "Brutes", "short": "BRUTES", "men": 0.4, "ranks": 2, "spacing": 2.4, "gap": 2.6, "walk": 2.21, "run": 3.23, "range": 0.0, "morale": 100.0},
+	"liz_raptor": {"name": "Raptor riders", "short": "RAPTORS", "men": 0.5, "ranks": 2, "spacing": 2.6, "gap": 4.0, "walk": 2.89, "run": 5.95, "range": 0.0, "morale": 80.0, "cav": true},
 }
 const HUMAN_KINDS := ["musket", "pike", "bow", "xbow", "cav", "gun"]
 const LIZARD_KINDS := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]
@@ -66,6 +66,9 @@ var _check_t := 0.0
 var _broke_told := {}
 var _flank_side := 1.0
 var deploy_z := 62.0
+## How fast the battle goes (the setup's PACE): marching, loading and blows
+## all scale with it, so there's time to fight and to command.
+var pace := 0.75
 ## `-- --fieldtest[=map]`: both armies fight themselves and it reports.
 var test_mode := false
 
@@ -76,10 +79,11 @@ func setup(b, c: Dictionary) -> void:
 	battle = b
 	cfg = c
 	terrain = Terrain.new(String(c.get("map", "flat")))
+	pace = float(c.get("pace", 0.75))
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--fieldtest"):
 			test_mode = true
-	deploy_z = 82.0 if terrain.kind == "town" else 64.0
+	deploy_z = 92.0 if terrain.kind == "town" else 80.0
 	if test_mode or bool(c.get("auto", false)):
 		ai_sides = [0, 1]
 
