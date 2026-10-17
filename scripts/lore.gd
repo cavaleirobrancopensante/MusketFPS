@@ -16,10 +16,10 @@ const STASH := {"muskets": 60, "ammo": 3000, "cannons": 2, "rum": 200}
 
 ## The land's powers (placeholders too). Colours are their banners on the map.
 const FACTIONS := {
-	"aurest": {"name": "Kingdom of Aurest", "short": "Aurest", "color": Color(0.75, 0.2, 0.18),
+	"aurest": {"name": "Kingdom of Aurest", "short": "Aurest", "color": Color(0.75, 0.2, 0.18), "coat": Color(0.62, 0.12, 0.1),
 		"syll": ["Au", "Ver", "Mar", "Lis", "Bel", "Cor", "Sau", "Tre", "Val", "Ro", "Mon", "Ser"],
 		"end": ["ignac", "eaux", "ond", "elle", "ac", "ville", "mont", "tier", "ais", "on"]},
-	"vell": {"name": "Vellish Marches", "short": "Vell", "color": Color(0.2, 0.42, 0.78),
+	"vell": {"name": "Vellish Marches", "short": "Vell", "color": Color(0.2, 0.42, 0.78), "coat": Color(0.24, 0.32, 0.2),
 		"syll": ["Hal", "Dro", "Wen", "Ost", "Kel", "Bra", "Ul", "Rad", "Gest", "Hel", "Sto", "Fen"],
 		"end": ["burg", "stad", "wick", "holm", "dorf", "mark", "by", "feld", "haven", "rode"]},
 	"dwarves": {"name": "Dwarves of the Greyspine", "short": "Dwarves", "color": Color(0.85, 0.65, 0.2),

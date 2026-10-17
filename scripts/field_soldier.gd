@@ -43,14 +43,30 @@ static func make(b, f, kind: String, s: int):
 	me.ally = true
 	me.frames = b.soldier_frames
 	var rec: Dictionary = Company.make_recruit()
-	rec["gear"] = ((ENEMY_GEAR if s == 1 else GEAR)[kind] as Dictionary).duplicate()
+	rec["gear"] = gear_for(f, kind, s).duplicate()
 	rec["pack"] = {"water": 1, "rations": 1, "ammo": 0 if kind == "pike" else 60}
 	rec["morale"] = 60
 	rec["rank"] = 1 if randf() < 0.2 else 0
 	me.record = rec
 	if s == 1:
-		me.rig_coat = ENEMY_COAT
+		me.rig_coat = f.foe_coat
 	return me
+
+
+## A nation's soldiers (no gunpowder in this land): kettle hats over their
+## coats, spears, war bows and crossbows.
+const NATION_GEAR := {
+	"musket": {"head": "kettle_hat", "torso": "coat", "primary": "pike", "secondary": ""},
+	"pike": {"head": "kettle_hat", "torso": "coat", "primary": "pike", "secondary": ""},
+	"bow": {"head": "hood", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
+	"xbow": {"head": "kettle_hat", "torso": "coat", "primary": "crossbow", "secondary": "hatchet"},
+}
+
+
+static func gear_for(f, kind: String, s: int) -> Dictionary:
+	if s == 0:
+		return GEAR[kind]
+	return (NATION_GEAR if String(f.nation) != "" else ENEMY_GEAR)[kind]
 
 
 ## One of your own men (a campaign record: his kit, his cartridges, his

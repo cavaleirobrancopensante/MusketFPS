@@ -144,7 +144,9 @@ const WAGON_KG := 900.0 # before your Logistics skill (see wagon_kg())
 const WAGON_SPACE := 60.0
 ## What each kind of slain enemy may leave behind: [item id, chance per body].
 const LOOT_TABLE := {"lizards": [["cleaver", 0.22], ["lizard_shield", 0.12], ["hide", 0.2], ["charm", 0.1],
-	["spear", 0.08], ["stolen", 0.06]]}
+	["spear", 0.08], ["stolen", 0.06]],
+	"humans": [["pike", 0.18], ["crossbow", 0.08], ["war_bow", 0.06], ["jack", 0.14], ["kettle_hat", 0.12],
+	["purse", 0.3], ["rations", 0.2]]}
 const PIKE_GEAR := {"head": "cap", "torso": "shirt", "primary": "pike", "secondary": ""}
 const DEFAULT_TAGS := ["Musketeers", "Pikes", "Wagon"]
 const CLUBBED_DAMAGE := 18.0 # no bayonet: he clubs with the butt
@@ -201,6 +203,33 @@ var stash := {}
 ## Field guns the company has (the ship's, once recovered from the stash):
 ## each goes into battle with its crew (gun_crew.gd).
 var guns := 0
+## How the nations see you: below HOSTILE_AT their patrols hunt you. Attack
+## a nation's men and it falls; the other side (they're at war) warms a
+## little.
+var standing := {"aurest": 0, "vell": 0}
+const HOSTILE_AT := -25
+const AT_WAR := {"aurest": "vell", "vell": "aurest"}
+
+
+func is_enemy(faction: String) -> bool:
+	return int(standing.get(faction, 0)) <= HOSTILE_AT
+
+
+func change_standing(faction: String, by: int) -> void:
+	if not standing.has(faction):
+		return
+	standing[faction] = clampi(int(standing[faction]) + by, -100, 100)
+
+
+func standing_word(faction: String) -> String:
+	var s := int(standing.get(faction, 0))
+	if s <= HOSTILE_AT:
+		return "hostile"
+	if s < 0:
+		return "wary"
+	if s < 20:
+		return "neutral"
+	return "friendly"
 ## A fight the map has started: {"enemy": int, "terrain": int, "party": id}.
 var next_battle := {}
 ## The battle plan: tags (groups) the player has made; each man has m["tag"]
@@ -265,6 +294,7 @@ func new_campaign() -> void:
 	prologue = true
 	stash = {}
 	guns = 0
+	standing = {"aurest": 0, "vell": 0}
 	next_battle = {}
 	march_note = ""
 	save()
@@ -413,7 +443,7 @@ func apply_battle(result: Dictionary) -> void:
 	var won: bool = result["won"]
 	var men: Dictionary = result["men"]
 	var was_prologue := bool(result.get("prologue", false))
-	var summary := {"won": won, "slain": int(result["slain"]), "fallen": [], "wounded": [],
+	var summary := {"enemy": String(result.get("enemy", "lizards")), "won": won, "slain": int(result["slain"]), "fallen": [], "wounded": [],
 		"promoted": [], "levelled": [], "pay": 0, "day": day, "prologue": was_prologue, "lost_gear": 0}
 	if not was_prologue:
 		battles += 1
@@ -508,8 +538,9 @@ func apply_battle(result: Dictionary) -> void:
 	if was_prologue:
 		_after_prologue(summary)
 	elif won:
-		# Pay: a bounty on every lizardman slain.
-		summary["pay"] = 15 + 5 * int(result["slain"])
+		# Pay: a bounty on every lizardman slain (nobody pays for men: what
+		# they carried is the reward).
+		summary["pay"] = 15 + 5 * int(result["slain"]) if String(result.get("enemy", "lizards")) == "lizards" else 0
 		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
 		if int(result.get("assault", -1)) >= 0:
 			# A burned nest: what they'd hoarded from a dozen raids.
@@ -615,7 +646,9 @@ func _loot_from(enemy: String, slain: int) -> void:
 		for row in LOOT_TABLE.get(enemy, []):
 			if randf() >= float(row[1]):
 				continue
-			if row[0] == "stolen":
+			if row[0] == "purse":
+				_add_loot("crowns", randi_range(2, 9))
+			elif row[0] == "stolen":
 				match randi() % 4:
 					0: _add_loot("rations", randi_range(4, 10))
 					1: _add_loot("rum", randi_range(3, 6))
@@ -1363,7 +1396,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "standing": standing,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
@@ -1396,6 +1429,7 @@ func load_campaign() -> bool:
 	prologue = bool(data.get("prologue", false))
 	stash = data.get("stash", {})
 	guns = int(data.get("guns", 0))
+	standing = data.get("standing", {"aurest": 0, "vell": 0})
 	next_battle = data.get("next_battle", {})
 	tags = data.get("tags", DEFAULT_TAGS.duplicate())
 	wagon_plan = data.get("wagon_plan", [0.0, -12.0])
