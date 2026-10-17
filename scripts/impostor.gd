@@ -52,6 +52,9 @@ static func render(host: Node, spec: Dictionary) -> Dictionary:
 	vp.own_world_3d = true
 	vp.msaa_3d = Viewport.MSAA_DISABLED # (blended edges would tint pink)
 	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	# The battle is paused while the loading screen is up; this has to run
+	# regardless (its batcher uploads the bodies).
+	vp.process_mode = Node.PROCESS_MODE_ALWAYS
 	host.add_child(vp)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -99,6 +102,8 @@ static func render(host: Node, spec: Dictionary) -> Dictionary:
 			var i: int = frames[col][1]
 			_pose(r, a, i, int(anims[a]), facing, spec)
 			rigs.append(r)
+	# Hand the posed bodies to the batch now, without waiting for its _process.
+	b._process(0.0)
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
