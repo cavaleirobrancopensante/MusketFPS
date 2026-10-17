@@ -787,7 +787,7 @@ func _fire() -> void:
 	var right := camera.global_transform.basis.x
 	if rig != null:
 		var muzzle: Vector3 = rig.muzzle_global()
-		battle.spawn_smoke(muzzle + fwd * 1.2, 0.8)
+		battle.spawn_smoke(muzzle + fwd * 1.2, 0.9, fwd)
 		battle.spawn_flash(muzzle + fwd * 0.1)
 	else:
 		battle.spawn_smoke(from + fwd * 2.5 + right * 0.4 - Vector3.UP * 0.3, 0.8)

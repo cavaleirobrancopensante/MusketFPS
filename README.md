@@ -57,7 +57,7 @@ blocking, grenades, going to the Major, the orders and the command view).
    (follow the gold marker): with his last words he gives you the regiment.
 3. **Your command:** the command view opens, paused, with a short lesson
    (select a regiment by its card or on the field; tap the ground to march,
-   drag to march and face, tap an enemy to attack). A third wave comes on,
+   drag along the ground to form a line, tap an enemy to attack). A third wave comes on,
    brutes in the centre and raptor riders on the right. Fight it from above
    or in the line, as you like.
 4. **The collapse:** after a while (sooner if the regiment bleeds) a horde
@@ -645,8 +645,18 @@ drops under gravity, slows with air drag, and hits the first body in its
 path, **friend or foe**. A faint streak shows where each shot went. Shoot
 through your own line and you will hit your own men (the HUD tells you); a
 careless volley from behind you can hit you too. Your men hold their fire
-when a comrade is in the way (steadier men are more careful). Aimed shots
-are tight, hip shots scatter. Lizard shields don't stop balls, but they will
+when a comrade is anywhere near the line of fire, a corridor that widens
+with the range like a smoothbore's scatter (only now and then does a jumpy
+man let fly anyway), and never fire with **you** in the way; the guns hold
+too. The rear rank stands in the gaps of the front rank and fires through
+them. So a friend is hit mostly in a melee, where a miss flies on into the
+scrum. Aimed shots are tight, hip shots scatter.
+
+**Powder smoke** hangs: each shot leaves a slow, low cloud a pace or two in
+front of the muzzle that spreads, drifts with the battle's breeze and takes
+ten seconds or more to thin, so a volley lays a bank along the front that
+hides what's coming for a while. (Shots into an old cloud thicken it rather
+than piling up more.) Lizard shields don't stop balls, but they will
 stop thrown javelins once the skirmishers arrive.
 
 All of it lives in `projectiles.gd`: a new weapon is one row in its `KINDS`
@@ -804,8 +814,10 @@ riders) or a rival army in red coats with the same kinds as yours. The count
 at the bottom warns when it gets big for a phone.
 
 **Deployment.** The battle opens paused in the command view. Tap a regiment
-(or its card) and tap or drag where it should stand in your half; BEGIN THE
-BATTLE when you're ready.
+(or its card), then **tap** the ground to stand it there in a **column of
+twos**, or **drag** along the ground to lay out its **line** there: as long
+as your drag, facing away from you (select several and they share the line
+out). BEGIN THE BATTLE when you're ready.
 
 **Pace** (on the setup screen): Brisk, Steady (the default) or Slow. Marching,
 loading and blows all scale with it, so there's time to fight on foot and
@@ -840,7 +852,9 @@ to command.
   the command view and on foot.
 - **Orders**: tap the ground to march there (in column for a long march,
   forming line at the end; round houses and through the bridge or the ford);
-  drag to march and face the way you dragged; tap an enemy regiment (its
+  drag along the ground (6 m or more) to form a line there as long as the
+  drag, facing away from you, or a short drag to march and face the way you
+  dragged; tap an enemy regiment (its
   block, its banner or its men) to attack it: they keep after it, shooters
   closing to their range and firing, blades and horse closing to charge.
   Buttons: HALT, CHARGE, FIRE: AT WILL / HOLDING (everyone starts at will),

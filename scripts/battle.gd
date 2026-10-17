@@ -1683,7 +1683,9 @@ func _at_on_hit(count: int) -> void:
 
 # ---------------------------------------------------------------- effects
 
-func spawn_smoke(pos: Vector3, size_mult: float) -> void:
+func spawn_smoke(pos: Vector3, size_mult: float, dir := Vector3.ZERO) -> void:
+	if size_mult >= 0.9:
+		_smoke_bank(pos, size_mult, dir)
 	var puff := Sprite3D.new()
 	puff.texture = smoke_tex
 	puff.pixel_size = 0.02 * size_mult
@@ -1696,6 +1698,53 @@ func spawn_smoke(pos: Vector3, size_mult: float) -> void:
 	tw.tween_property(puff, "modulate:a", 0.0, 3.0).set_ease(Tween.EASE_IN)
 	tw.tween_property(puff, "position:y", pos.y + 1.2, 3.0)
 	tw.chain().tween_callback(puff.queue_free)
+
+
+## Powder smoke that hangs: a slow, low cloud a pace or two in front of the
+## muzzle that spreads, drifts with the breeze and takes ten seconds or more
+## to thin. A volley lays a bank of it along the front that you (and they)
+## can't see through for a while. One cloud per couple of metres at a time:
+## a shot into an old cloud thickens it instead of adding another.
+const SMOKE_LIFE := 13.0
+const SMOKE_MAX := 260
+var wind := Vector3(randf_range(-0.35, 0.35), 0, randf_range(-0.15, 0.25))
+var _banks := {} # grid cell (2 m) -> [Sprite3D, born]
+var _bank_count := 0
+
+
+func _smoke_bank(pos: Vector3, size_mult: float, dir: Vector3) -> void:
+	var flat := Vector3(dir.x, 0, dir.z)
+	if flat.length_squared() > 0.01:
+		flat = flat.normalized()
+	var at := pos + flat * 1.6 * size_mult - Vector3.UP * 0.25
+	var key := Vector2i(floori(at.x / 2.0), floori(at.z / 2.0))
+	var now := Time.get_ticks_msec() / 1000.0
+	var old = _banks.get(key)
+	if old != null and is_instance_valid(old[0]) and now - float(old[1]) < 4.0:
+		var o: Sprite3D = old[0]
+		o.modulate.a = minf(0.62, o.modulate.a + 0.12) # (thicker)
+		return
+	if _bank_count >= SMOKE_MAX:
+		return
+	var puff := Sprite3D.new()
+	puff.texture = smoke_tex
+	puff.pixel_size = 0.03 * size_mult
+	puff.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	puff.modulate = Color(0.82, 0.82, 0.8, 0.5)
+	puff.position = at
+	add_child(puff)
+	_banks[key] = [puff, now]
+	_bank_count += 1
+	var life := SMOKE_LIFE * randf_range(0.85, 1.15)
+	var drift := flat * 1.8 + wind * life + Vector3.UP * 0.9
+	var tw := puff.create_tween().set_parallel(true)
+	tw.tween_property(puff, "scale", Vector3.ONE * (4.2 + randf() * 1.2), life * 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(puff, "position", at + drift, life)
+	# Thick for a few seconds, then thinning slowly away.
+	tw.tween_property(puff, "modulate:a", 0.0, life * 0.65).set_delay(life * 0.35).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func():
+		_bank_count -= 1
+		puff.queue_free())
 
 
 ## A small coloured puff: dirt where a ball strikes the ground, blood on a hit.

@@ -323,6 +323,8 @@ func _impact_unit(p: Dictionary, k: Dictionary, u: Node3D, at: Vector3) -> void:
 		stats["hit_enemy"] += 1
 	else:
 		stats["hit_friend"] += 1
+	if shooter != null and is_instance_valid(shooter) and shooter.is_in_group("enemies") == u.is_in_group("enemies") and u.get("rig_kind") != "lizard":
+		stats["own_side"] = int(stats.get("own_side", 0)) + 1 # (friendly fire, you included)
 	var dmg := float(k["damage"])
 	if u == battle.player:
 		dmg = float(k.get("player_damage", dmg))
@@ -378,13 +380,36 @@ static func hit_zone(u: Node3D, at: Vector3) -> String:
 ## Line of fire: would a shot from `from` to `to` pass close to a comrade of
 ## `shooter` before reaching it? (Soldiers check this before pulling the trigger.)
 func line_blocked(from: Vector3, to: Vector3, shooter: Node3D) -> bool:
-	var hit := _sweep(from, to, shooter, 0.35)
-	if hit.is_empty():
-		return false
-	var u: Node3D = hit["unit"]
-	if shooter != null and shooter.is_in_group("enemies"):
-		return u.is_in_group("enemies")
-	return u == battle.player or u.is_in_group("friendlies")
+	return blocked_by(from, to, shooter) != ""
+
+
+## Who of the shooter's own side stands in the line of fire from `from` to
+## `to`: "" (nobody), "friend", or "player" (you). The corridor widens with
+## the distance like a smoothbore's cone, and you get a wider berth still.
+## Only the stretch up to the target counts: past it (a melee) a miss may
+## still find a friend.
+func blocked_by(from: Vector3, to: Vector3, shooter: Node3D) -> String:
+	var enemy_side: bool = shooter != null and is_instance_valid(shooter) and shooter.is_in_group("enemies")
+	var length := maxf(from.distance_to(to), 0.01)
+	var dir := (to - from) / length
+	if not enemy_side:
+		var pl: Node3D = battle.player
+		if pl != shooter and pl.alive:
+			var pp: Vector3 = pl.global_position
+			var al := clampf((pp - from).dot(dir), 0.0, length)
+			if _cylinder_hit(from, to, pp, 0.8 + 0.04 * al, 1.9) >= 0.0:
+				return "player"
+	for entry in battle.units_near_segment(from, to):
+		var u: Node3D = entry[0]
+		if u == shooter or not is_instance_valid(u) or not u.alive:
+			continue
+		if u.is_in_group("enemies") != enemy_side:
+			continue
+		var p: Vector3 = entry[1]
+		var along := clampf((p - from).dot(dir), 0.0, length)
+		if _cylinder_hit(from, to, p, float(u.hit_radius) + 0.1 + 0.035 * along, float(u.hit_height)) >= 0.0:
+			return "friend"
+	return ""
 
 
 # ---------------------------------------------------------------- drawing

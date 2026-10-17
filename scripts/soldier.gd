@@ -486,8 +486,10 @@ func _shoot() -> void:
 	var aim_point := target.global_position + Vector3.UP * 1.1
 	var tv: Vector3 = target.get("velocity") if target.get("velocity") != null else Vector3.ZERO
 	aim_point += tv * (muzzle.distance_to(aim_point) / BALL_SPEED)
-	# A comrade in the way? Steady men hold their fire; jumpy ones may not.
-	if battle.projectiles.line_blocked(muzzle, aim_point, self) and randf() < 0.25 + 0.7 * steadiness:
+	# A comrade in the way? They hold their fire (only now and then does a
+	# jumpy one let fly anyway); with you in the way, always.
+	var in_way: String = battle.projectiles.blocked_by(muzzle, aim_point, self)
+	if in_way == "player" or (in_way == "friend" and randf() > 0.05 * (1.0 - steadiness)):
 		shot_timer = randf_range(0.3, 0.7)
 		return
 	if randf() < misfire_chance:
@@ -505,7 +507,7 @@ func _shoot() -> void:
 	reload_left = reload_time * randf_range(0.9, 1.15)
 	_ram_sound_t = 1.5
 	play_oneshot("fire", 0.25)
-	battle.spawn_smoke(muzzle, 1.0)
+	battle.spawn_smoke(muzzle, 1.0, dir)
 	battle.spawn_flash(muzzle)
 	battle.play_sound("musket", muzzle, -2.0)
 	# A real ball: smoothbores scatter, nerves make it worse, and a miss flies

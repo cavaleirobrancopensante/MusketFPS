@@ -146,7 +146,7 @@ func fire_at(aim: Vector3, canister_range := 28.0) -> bool:
 	battle.play_sound("cannon", muzzle, 6.0)
 	battle.spawn_flash(muzzle, 3.0)
 	for i in 3:
-		battle.spawn_smoke(muzzle + Vector3(randf_range(-0.6, 0.6), randf_range(0, 0.6), randf_range(-1.2, 0.2)), 2.4)
+		battle.spawn_smoke(muzzle + Vector3(randf_range(-0.6, 0.6), randf_range(0, 0.6), randf_range(-1.2, 0.2)), 2.4, -global_transform.basis.z)
 	battle.spawn_flash(barrel.global_transform * VENT, 0.6)
 	var tw := barrel.create_tween()
 	tw.tween_property(barrel, "position:z", 0.45, 0.08)

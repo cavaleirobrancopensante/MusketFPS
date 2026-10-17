@@ -80,6 +80,8 @@ func try_fire(aim: Vector3) -> bool:
 	var muzzle: Vector3 = crew.barrel.global_transform * Vector3(0, 0, crew.MUZZLE_Z)
 	if not field.terrain.clear_line(muzzle + Vector3.UP * 0.3, aim + Vector3.UP * 0.6):
 		return false
+	if battle.projectiles.line_blocked(muzzle, aim, self):
+		return false # (our own men in front of the muzzle)
 	reg.fired()
 	return crew.fire_at(aim, 30.0)
 
