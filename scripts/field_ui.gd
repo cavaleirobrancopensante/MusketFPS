@@ -155,6 +155,7 @@ func close() -> void:
 	battle.player.camera.current = true
 	battle.hud.visible = true
 	battle.hud.process_mode = Node.PROCESS_MODE_INHERIT
+	battle.hud.message_time = minf(battle.hud.message_time, 1.5) # (nothing stale waiting below)
 	if field.env != null:
 		field.env.fog_density = 0.0022
 		field.env.fog_height_density = 0.0015

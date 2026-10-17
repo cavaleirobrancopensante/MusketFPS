@@ -539,7 +539,7 @@ func _build_river(parent: Node3D, body: StaticBody3D) -> void:
 	parent.add_child(sea)
 	# The bridge: a stone deck on three piers, low parapets.
 	var zc := river_z(BRIDGE_X)
-	var stone := Color(0.55, 0.53, 0.48)
+	var stone := Color(0.46, 0.44, 0.4)
 	var bridge := Node3D.new()
 	bridge.position = Vector3(BRIDGE_X, 0, zc)
 	parent.add_child(bridge)
