@@ -113,12 +113,16 @@ The plan was:
 - Mixed lines in battle: pikes in front, muskets behind, archers on the
   flanks.
 
-### M4: The stash
+### M4: The stash (done)
 
 - Find the nest (scouting, rumours from villages).
-- The assault: a set-piece battle against a fortified lizard nest.
-- Recovering the stash: muskets, powder, the ship's guns, which become
-  usable in battle (we already have cannons on the beach).
+- Every nest can be besieged a day at a time (the garrison starves and
+  deserts, the stakes fall, they may sally at night) and stormed: a
+  palisade, a gate to batter down, javelin throwers on platforms, sallies
+  in waves, defenders holding inside.
+- Storming the stash nest recovers the ship's stores: muskets, cartridges,
+  rum and the two guns, which then march with you and fight with crews.
+- A burned nest sends out no more warbands.
 
 ### M5: The land's powers
 

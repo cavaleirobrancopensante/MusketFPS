@@ -237,6 +237,12 @@ func _brain(delta: float) -> void:
 	var to_slot := _seen_slot - global_position
 	to_slot.y = 0.0
 	var gap := to_slot.length()
+	if battle.nest != null and gap > 0.35:
+		# His place is across the stakes: round by an opening.
+		var via: Vector3 = battle.nest.route(global_position, _seen_slot) - global_position
+		via.y = 0.0
+		if via.length() > 0.05 and via.length() < gap - 0.05:
+			to_slot = via.normalized() * minf(gap, maxf(via.length(), 1.0))
 	var v := Vector3.ZERO
 	if gap > 0.35:
 		var spd := SPEED * pace * (1.4 if gap > 6.0 else 1.0)
@@ -389,7 +395,16 @@ func _charge(delta: float) -> bool:
 		return true
 
 	var push: Vector3 = battle.separation(self, battle.soldiers, 1.2)
-	velocity = to_f.normalized() * SPEED * 1.25 * pace + push * 2.0
+	var way := to_f.normalized()
+	if battle.nest != null:
+		# Round by the gate or a breach; to the gate to hack at it if it's shut.
+		var r: Vector3 = battle.nest.route(global_position, foe.global_position) - global_position
+		r.y = 0.0
+		if r.length() > 0.4:
+			way = r.normalized()
+		elif r.length() <= 0.4:
+			way = Vector3.ZERO
+	velocity = way * SPEED * 1.25 * pace + push * 2.0
 	face_toward(to_f)
 	set_base_anim("walk")
 	_move(delta)

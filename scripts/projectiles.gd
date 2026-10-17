@@ -171,6 +171,9 @@ func _step(p: Dictionary, delta: float) -> bool:
 		nd.position = pos
 		if vel.length_squared() > 0.01:
 			nd.basis = Basis.looking_at(vel.normalized(), Vector3.UP if absf(vel.normalized().y) < 0.97 else Vector3.BACK)
+	if battle.nest != null and battle.nest.hit_structure(prev, pos, String(p["kind"])):
+		_spent(p, false)
+		return false
 	var done: Array = p.get("hit_list", [])
 	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done)
 	if not hit.is_empty():
@@ -273,6 +276,8 @@ func _sweep(a: Vector3, b: Vector3, shooter: Node3D, extra: float, exclude: Arra
 		var u: Node3D = entry[0]
 		if u == shooter or not u.alive or u in exclude:
 			continue
+		if shooter != null and is_instance_valid(shooter) and shooter.get("rig_kind") == "lizard" and u.get("rig_kind") == "lizard":
+			continue # (their javelins fly over their own)
 		var t := _cylinder_hit(a, b, entry[1], float(u.hit_radius) + extra, float(u.hit_height))
 		if t >= 0.0 and t < best_t:
 			best_t = t

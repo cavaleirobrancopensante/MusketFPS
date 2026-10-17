@@ -436,6 +436,8 @@ func _label_for(st: Dictionary, c: Vector3) -> void:
 	var l := Label3D.new()
 	var kind: String = st["kind"]
 	var what: String = {"village": "", "town": "", "city": "", "hold": "  (dwarf hold)", "nest": "  (lizard nest)"}[kind]
+	if kind == "nest" and World.nest_destroyed(int(st["id"])):
+		what = "  (burned)"
 	l.text = String(st["name"]) + what
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.fixed_size = true
@@ -712,6 +714,8 @@ func _process(delta: float) -> void:
 	if _rest_until > 0.0 and World.hours >= _rest_until:
 		World.waiting = false
 		_rest_until = -1.0
+		if _siege_id >= 0:
+			_siege_day_done()
 	if not _chase.is_empty() and World.moving():
 		_chase_t -= delta
 		if _chase_t <= 0.0:
@@ -1030,12 +1034,8 @@ func _visit(st: Dictionary) -> void:
 	var buttons: Array = []
 	var id := int(st["id"])
 	if kind == "nest":
-		title = "%s, a lizard nest" % st["name"]
-		text = "Mounds of packed mud, a ring of bone stakes, and hundreds of them."
-		if id == World.gen.stash_nest:
-			text += "\n\n[color=#f0c060]Through the stakes you can see crates with the %s's mark, the ship's guns, powder kegs. Your stores are here.[/color] You will need a far bigger force to take them back." % Lore.SHIP
-		buttons.append(["LEAVE", _popup_close])
-		_scene("nest")
+		_visit_nest(st)
+		return
 	elif World.is_raided(id):
 		text = "Burned. The lizards have been here; the people who are left have nothing to sell."
 		buttons.append(["LEAVE", _popup_close])
@@ -1094,6 +1094,114 @@ func _visit(st: Dictionary) -> void:
 
 
 var _rest_until := -1.0
+var _siege_id := -1 # the nest you're besieging (a day's siege is running)
+
+
+## Before a lizard nest: what you can see of it, and what you can do. Burn
+## it by storming it, or besiege it first (a day at a time): hunger and your
+## guns thin them and break the stakes, but at night they may sally out.
+func _visit_nest(st: Dictionary) -> void:
+	var id := int(st["id"])
+	var title := "%s, a lizard nest" % st["name"]
+	var buttons: Array = []
+	if World.nest_destroyed(id):
+		_scene("burned")
+		_popup_open(title, "Burned-out mounds and toppled stakes. Nothing moves here now.", [["LEAVE", _popup_close]])
+		return
+	var n := World.nest(id)
+	var g := int(n["garrison"])
+	var walls := float(n["walls"])
+	var text := "Mounds of packed mud behind a ring of sharpened stakes lashed with bone, one gate of logs. "
+	text += "You count about [b]%d[/b] of them, " % (int(round(g / 5.0)) * 5)
+	if walls > 0.85:
+		text += "behind a palisade that stands whole."
+	elif walls > 0.5:
+		text += "behind a palisade starting to sag."
+	elif walls > 0.2:
+		text += "behind a broken palisade: there are gaps you could get through."
+	else:
+		text += "behind what's left of the stakes: it's wide open."
+	var days := int(n["siege_days"])
+	if days > 0:
+		text += "\n\nDay %d of the siege. They're hungry, and they're fewer." % days
+	if id == World.gen.stash_nest and not Company.stash.is_empty():
+		text += "\n\n[color=#f0c060]Through the stakes you can see crates with the %s's mark, the ship's guns, powder kegs. Your stores are here.[/color]" % Lore.SHIP
+	var fit := Company.fit_men().size()
+	text += "\n\nYou have %d fit men%s." % [fit, " and %d guns" % Company.guns if Company.guns > 0 else ", and no guns to batter the gate"]
+	text += "\n\n[color=#9aa3b8]ASSAULT: storm it now: break the gate (guns, grenades, axes) while the garrison sallies out at you.\nBESIEGE: camp before it for a day. Hunger thins them%s, but at night they may come out at you.[/color]" % (" and your guns batter the stakes" if Company.guns > 0 else "")
+	buttons.append(["PLAN", _plan_assault.bind(st)])
+	buttons.append(["ASSAULT", _assault.bind(st)])
+	buttons.append(["BESIEGE A DAY", _besiege.bind(st)])
+	buttons.append(["LEAVE", func():
+		if int(World.nest(id)["siege_days"]) > 0:
+			World.lift_siege(id)
+			_push_toast("You lift the siege.")
+		_popup_close()])
+	_scene("nest")
+	_popup_open(title, text, buttons)
+
+
+func _set_assault(st: Dictionary) -> void:
+	var id := int(st["id"])
+	var n := World.nest(id)
+	Company.next_battle = {"enemy": int(n["garrison"]), "terrain": World.gen.t(int(st["x"]), int(st["y"])), "party": -1,
+		"ambush": false, "enemy_kind": "lizards", "assault": id, "walls": float(n["walls"]),
+		"stash": id == World.gen.stash_nest and not Company.stash.is_empty(), "nest_name": String(st["name"])}
+	Company.results_unseen = false
+
+
+func _assault(st: Dictionary) -> void:
+	_popup_close()
+	if _test:
+		print("  MAPTEST: assault on ", st["name"], " (counted as won)")
+		World.nest_fought(int(st["id"]), int(World.nest(int(st["id"]))["garrison"]), true)
+		return
+	_set_assault(st)
+	_go(BATTLE)
+
+
+func _plan_assault(st: Dictionary) -> void:
+	_popup_close()
+	_set_assault(st)
+	Company.next_battle["planning"] = true
+	_go(PLAN)
+
+
+## A day's siege: time passes (food, water) and at its end _siege_day_done().
+func _besiege(st: Dictionary) -> void:
+	_popup_close()
+	_siege_id = int(st["id"])
+	World.waiting = true
+	_rest_until = World.hours + 24.0
+	_push_toast("You dig in before %s." % st["name"])
+
+
+func _siege_day_done() -> void:
+	var id := _siege_id
+	_siege_id = -1
+	var st := World.settlement(id)
+	var r := World.siege_day(id, Company.guns)
+	var text := "A day before %s. Hunger%s cost them about %d." % [st["name"], " and your guns" if Company.guns > 0 else "", int(r["lost"])]
+	if float(r["walls"]) > 0.06:
+		text += " The stakes are coming down."
+	if int(r["sortie"]) > 0:
+		# They come out in the night: fought like a camp attack, the watch up and ready.
+		var size := int(r["sortie"])
+		Company.next_battle = {"enemy": size, "terrain": World.gen.t(int(st["x"]), int(st["y"])), "party": -1, "ambush": false,
+			"enemy_kind": "lizards", "camp": true, "spotted": true, "night": true, "watch": [], "sortie": id}
+		Company.results_unseen = false
+		text += "\n\n[b]In the night they sally out at your lines: %d of them![/b]" % size
+		_scene("camp_attack", {"time": "night"})
+		_popup_open("A sortie!", text, [["STAND TO!", func():
+			_popup_close()
+			if _test:
+				World.nest_fought(id, size, false)
+				print("  MAPTEST: sortie of ", size, " (counted as won)")
+				return
+			_go(BATTLE)]])
+		return
+	_scene("nest")
+	_popup_open("The siege", text, [["GO ON", func(): _visit_nest(st)]])
 
 
 ## Meeting a party that isn't hostile.
@@ -1408,6 +1516,27 @@ func _apply_battle_result() -> void:
 		return
 	var id := int(Company.next_battle["party"])
 	var r: Dictionary = Company.last_result
+	var nb: Dictionary = Company.next_battle
+	if int(nb.get("assault", -1)) >= 0 or int(nb.get("sortie", -1)) >= 0:
+		var nid := int(nb.get("assault", nb.get("sortie", -1)))
+		var won := bool(r.get("won", false))
+		var assault := int(nb.get("assault", -1)) >= 0
+		if assault:
+			World.nest_fought(nid, int(r.get("slain", 0)), won)
+			_push_toast("%s burns!" % World.settlement(nid)["name"] if won else "The assault is thrown back.")
+		else:
+			# A sortie: the dead are gone; if they won, the rest go back in.
+			World.nest_fought(nid, 0, false, 0 if won else maxi(0, int(nb["enemy"]) - int(r.get("slain", 0))))
+			_push_toast("The sortie is beaten off." if won else "They drive you from your lines.")
+			if not won:
+				World.lift_siege(nid)
+		if not won:
+			var s := World.settlement(nid)
+			World.pos += (World.pos - Vector2(s["x"], s["y"])).normalized() * 5.0
+		Company.next_battle = {}
+		Company.save()
+		World.save()
+		return
 	var p := World.party_by_id(id)
 	if bool(r.get("won", false)):
 		World.remove_party(id)
@@ -1434,6 +1563,22 @@ func _run_test(delta: float) -> void:
 		print("  POPUP: ", _popup_title.text, "  |  ", _popup_text.text.substr(0, 90).replace("\n", " "))
 		var n := _popup_buttons.get_child_count()
 		var last: Button = _popup_buttons.get_child(n - 1)
+		var besiege: Button = null
+		for b in _popup_buttons.get_children():
+			if b is Button and b.text == "BESIEGE A DAY":
+				besiege = b
+		if besiege != null:
+			# At the nest: sit down before it for a day, then go.
+			if int(get_meta("sieged", 0)) == 0:
+				set_meta("sieged", 1)
+				print("MAPTEST: besieging ", _popup_title.text)
+				besiege.emit_signal("pressed")
+			else:
+				print("MAPTEST: leaving the siege; nest now ", World.nest(int(World.gen.stash_nest)))
+				last.emit_signal("pressed")
+				print("MAPTEST END at the nest ", World.clock())
+				get_tree().quit()
+			return
 		if _popup_title.text.ends_with("!") and n > 1:
 			print("  (would fight; slipping away for the test)")
 			_popup_buttons.get_child(n - 1).emit_signal("pressed") # slip away
@@ -1458,7 +1603,7 @@ func _run_test(delta: float) -> void:
 						if best == null or Vector2(st["x"], st["y"]).distance_to(World.pos) < Vector2(best["x"], best["y"]).distance_to(World.pos):
 							best = st
 				print("MAPTEST: march to ", best["name"], " ok ", World.go_to(Vector2i(best["x"], best["y"]), {"kind": "settlement", "id": int(best["id"])}))
-			1, 2, 3:
+			1, 2, 3, 4, 5, 6, 7, 8:
 				var nest: Dictionary = World.settlement(World.gen.stash_nest)
 				print("MAPTEST: ", World.clock(), " at ", World.cell(), " -> stash nest ", nest["name"])
 				World.go_to(Vector2i(nest["x"], nest["y"]), {"kind": "settlement", "id": int(nest["id"])})

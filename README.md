@@ -357,6 +357,36 @@ lead (towns and holds), bows, spears, crossbows, padded jacks and kettle
 hats (towns), war bows (Vellish towns), and powder and dwarf crossbows (dwarf
 holds). Your Trade skill lowers every price.
 
+### Lizard nests: sieges and assaults
+
+Walk up to any lizard nest on the map and you get its measure: a guess at
+the garrison, how sound the stakes are, and the choices **PLAN**,
+**ASSAULT**, **BESIEGE A DAY** and **LEAVE**.
+
+- **Besieging** costs a day each time. Shut in, the garrison loses lizards
+  to hunger and desertion, and the stakes rot and are pulled down (more
+  breaches when you storm it). They may **sally at night**: a camp battle in
+  the dark. A besieged nest sends out no warbands. Walk away and it regrows.
+- **The assault** is its own battle. The nest stands 46 m in front of your
+  line: a ring of leaning stakes on a mud bank with one log gate facing
+  you. Nobody walks through the stakes; everyone goes round by the gate (once
+  it's down) or a breach.
+  - **The gate** has hit points (shown on the status strip). Round shot
+    smashes it, grenades blow chunks out of it, and men within reach hack at
+    it (you count double). Musket balls barely mark it.
+  - **The garrison** splits: javelin throwers on platforms behind the
+    stakes, defenders holding inside until the gate falls or your men reach
+    the stakes, and sallies that burst out of the gate in waves (the next
+    one comes when the last is spent or the gate starts to give).
+  - **Your guns** (if you have them) stand on the wings with their crews:
+    they fire canister and round shot at what comes out, and batter the
+    gate when nothing does.
+  - Win when every lizard is dead and no sally is left to come. The nest
+    burns and sends out no more warbands; you get pay and plunder.
+- **The stash nest** holds the ship's stores. Storm it and you recover
+  muskets, cartridges, rum and **the two guns**, which march with you from then
+  on and fight in every battle.
+
 ### Your character sheet (YOU)
 
 Opened with **YOU** on the map, in camp and on the Company screen.
@@ -712,6 +742,7 @@ the crew down and it falls silent.
   while the crew works) fires it at the lizard nearest your line of sight,
   or the ground you're looking at. Canister close in, round shot further out.
 - **Skirmish**: the mixed company against three waves.
+- **Nest assault**: twenty men and two guns against a fortified nest of 50.
 - **Stress test**: 50 against 200, with a frame counter.
 
 ### Performance: big battles on a phone
@@ -789,5 +820,6 @@ See [ROADMAP.md](ROADMAP.md): castaways in a huge unknown land, a
 Warband-style map under fog of war, lizards, two human nations at war,
 dwarves, and the edge your muskets give you. Done: M0, M1, projectiles, kit
 and logistics, the shipwreck prologue, the first playable map, settlements,
-and M3 (native spearmen, archers and crossbowmen, powder and lead). Next: the
-stash (M4).
+M3 (native spearmen, archers and crossbowmen, powder and lead) and M4 (nest
+sieges and assaults, the stash and the ship's guns). Next: the land's powers
+(M5).

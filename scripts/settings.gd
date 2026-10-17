@@ -21,6 +21,10 @@ var mixed := false
 ## sabre, bow, crossbow, grenades), lizards sent on demand, no dying.
 var playground := false
 
+## A nest assault outside the campaign (Tests): the mixed company and two
+## guns against a fortified nest.
+var siege_test := false
+
 ## The save slot in use (1..SLOTS); remembered for CONTINUE.
 var slot := 1
 
