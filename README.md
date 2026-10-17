@@ -729,6 +729,7 @@ the crew down and it falls silent.
 
 **Tests** opens a list of fights outside the campaign:
 
+- **Field battle**: Total War with you on foot in it (see below).
 - **Weapon range**: you alone with every weapon (musket, bayonet, pistol,
   sabre, **bow**, **crossbow**, and 99 grenades), and you can't die. Down the
   left: +1 TARGET and +5 TARGETS (lizards that stand still at 12 to 40 m),
@@ -744,6 +745,82 @@ the crew down and it falls silent.
 - **Skirmish**: the mixed company against three waves.
 - **Nest assault**: twenty men and two guns against a fortified nest of 50.
 - **Stress test**: 50 against 200, with a frame counter.
+
+### Field battle: Total War on a phone (Tests)
+
+A setup screen first: the **battlefield** (open field, hills, river crossing,
+village, woods), **men in a regiment** (12, 20 or 30), **your army** (how
+many regiments of musketeers, pikemen, bowmen, crossbowmen, cavalry and
+cannon, on top of your own company of musketeers, which you lead) and **the
+enemy**: a lizard warband (warriors, javelin throwers, brutes, raptor
+riders) or a rival army in red coats with the same kinds as yours. The count
+at the bottom warns when it gets big for a phone.
+
+**Deployment.** The battle opens paused in the command view. Tap a regiment
+(or its card) and tap or drag where it should stand in your half; BEGIN THE
+BATTLE when you're ready.
+
+**You** fight in first person with your company, with the usual orders
+(FOLLOW, HOLD, CHARGE, AT WILL, VOLLEY: they're your company's). **COMMAND**
+(top left) lifts you into the command view:
+
+- **Time**: PAUSE, SLOW (a quarter speed) or PLAY.
+- **Your regiments**: a card each along the bottom (what they are, men
+  left, nerve, WAVERING / ROUTING / FIGHTING). Tap a card, or the regiment on
+  the field; ALL takes every one. Each block is drawn on the ground in its
+  side's colour, with a banner.
+- **Orders**: tap the ground to march there (in column for a long march,
+  forming line at the end; round houses and through the bridge or the ford);
+  drag to march and face the way you dragged; tap an enemy regiment to
+  attack it (shooters close to their range and fire, blades and horse close
+  and charge). Buttons: HALT, CHARGE, HOLD FIRE / FIRE AT WILL, VOLLEY, RUN
+  (double time), FALL BACK, and FOLLOW ME for your own company.
+- **Camera**: drag with one finger (nothing selected), two fingers to pan,
+  pinch to zoom, twist to turn; or the + − ⟲ ⟳ buttons.
+- **Alerts** at the top left: a regiment wavering, breaking, hit from
+  behind, or enemy horse charging one of yours. With **AUTO-PAUSE** on, the
+  important ones open the command view, paused, wherever you are.
+- **TO YOUR MEN** goes back down to first person. If you fall, you keep
+  commanding from above.
+
+How it fights:
+
+- **Regiments** (regiment.gd) own the plan; their men own their feet and
+  blades. A man keeps his slot in the block, shoots at a man of the regiment
+  his officers point at (so fire spreads along their line), and up close
+  parries, thrusts and gives ground like any of your company.
+- **Muskets** fire at 60 m, **bows** at 78 m (lofting over their own line),
+  **crossbows** at 66 m; shots stop in hills and walls, and a regiment that
+  can't see its target moves closer.
+- **Pikes** stand braced when they're not moving: horse charging their front
+  is stopped on the points, and every pike thrust hurts a horse.
+- **Cavalry** walks in formation, trots to close and charges at a gallop:
+  a fast charge rides men down, knocks them flying and shakes their
+  regiment; then the riders lose their speed and cut, and if the melee
+  drags on they pull out, wheel and charge again.
+- **Cannon**: a battery of two guns with crews, round shot to 240 m, canister
+  close in; hits thin the crew and slow the loading; overrun, it falls silent.
+- **Lizards**: warriors come on in a mob, javelin throwers stand off at 30 m,
+  brutes (half again as big, three times as tough) knock men flat, raptor
+  riders go round the flanks for your guns and shooters.
+- **Morale** decides it: losses, a melee it's losing, a charge into its
+  flank or rear, horse crashing in, a neighbour breaking. Near you, your
+  regiments steady. Under 40% a regiment wavers (slower, shoots worse);
+  broken, it runs for its own edge of the field, and rallies if nobody chases
+  it; a regiment cut to a quarter never comes back. The battle is won when
+  every enemy regiment is running or gone.
+- **The enemy's general** (field.gd): lizards come straight on with their
+  skirmishers in front; a rival army advances its line to musket range,
+  pikes going for your horse, its own horse round your flanks.
+- **The ground** (field_terrain.gd) is a heightmap with a nav grid: deep
+  water and houses block, the ford and woods slow, uphill is slower.
+  Regiments find their way with Godot's AStarGrid2D; men slide along walls.
+- **Far sprites** for every kind (pikemen with pikes, red coats, horse and
+  rider, raptors, brutes) are rendered from the 3D models at the start of
+  the battle (impostor.gd), seen from a little above for the command view.
+
+`-- --fieldtest[=map] [--humans] [--fieldsize=N]` plays a field battle with
+the computer on both sides and reports every ten seconds (headless).
 
 ### Performance: big battles on a phone
 

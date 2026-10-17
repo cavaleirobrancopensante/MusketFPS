@@ -159,6 +159,23 @@ exist.
 - Enemy variety: lizard skirmishers (javelins), shield brutes, raptor riders,
   shamans; human pikes, archers, knights; dwarf crossbows and axes.
 
+### The Total War layer (in Tests, not yet in the campaign)
+
+The **Field battle** test is the start of it: regiments (muskets, pikes,
+bows, crossbows, cavalry, cannon; lizard warriors, javelin throwers, brutes,
+raptor riders) on five maps (open field, hills, a river with a bridge and a
+ford, a village, woods), morale and rout on both sides, deployment, an
+enemy general, and the command view (slowed or paused time, unit cards,
+tap and drag orders, auto-pause) beside first person. Next, when it feels
+right on a phone:
+
+- Bring it into the campaign: big battles when your company fights beside
+  a nation's army (M5), with you commanding the allied regiments.
+- Formations (line, column, square against horse), skirmish order, and
+  dismounting dragoons.
+- Riding yourself: you on a horse, leading the cavalry.
+- Terrain on the campaign map deciding the battle map.
+
 ### M9: Polish and release
 
 - Music, UI and touch polish, balance, Android export.

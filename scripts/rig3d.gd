@@ -125,6 +125,15 @@ var gear := {}
 var pack := {}
 # Townsfolk ("civilian"): their own clothes, no musket or pack.
 var cloth := Color(0.5, 0.42, 0.32)
+## A field battle's enemy wears another army's coat (null: the regulation blue).
+var coat_override = null
+## A trooper in the saddle (cavalry): legs astride, sabre or cleaver up.
+var seated := false
+## Mounts (kind "horse" or "raptor"): saddle cloth colour.
+var saddle_col := Color(0.16, 0.24, 0.55)
+var _mlegs: Array = [] # [upper id, lower id, hoof id, attach Vector3, phase offset]
+var _neck: Node3D
+var _mtail: Array = []
 var trousers := Color(0.32, 0.27, 0.22)
 var female := false
 var dwarf := false
@@ -192,6 +201,10 @@ func _ready() -> void:
 	if kind == "lizard":
 		_build_lizard()
 		scale = Vector3.ONE * 1.12
+	elif kind == "horse":
+		_build_horse()
+	elif kind == "raptor":
+		_build_raptor()
 	else:
 		_build_soldier()
 	_update(0.0, true)
@@ -214,7 +227,7 @@ func _exit_tree() -> void:
 
 
 func draw_enabled() -> bool:
-	return visible and is_inside_tree()
+	return is_inside_tree() and is_visible_in_tree()
 
 
 ## Re-pose and redraw at once (after being hidden as a far stand-in).
@@ -285,6 +298,9 @@ func _build_soldier() -> void:
 		weapon = "none"
 	var coat := COAT_OFFICER if officer and torso == "officer_coat" else COAT
 	var cuff := RED if officer and torso == "officer_coat" else WHITE
+	if coat_override != null and torso in ["coat", "buffcoat"]:
+		coat = coat_override
+		torso = "coat"
 	var belt := WHITE
 	var civ := kind == "civilian"
 	if civ:
@@ -395,6 +411,8 @@ func _build_soldier() -> void:
 			_build_pistol()
 		if String(g.get("sword", "saber")) != "":
 			_build_saber(String(g.get("sword", "saber")))
+	elif String(g.get("sword", "")) != "":
+		_build_saber(String(g["sword"])) # a trooper's sabre
 	if civ:
 		bayonet_on = false
 	elif not officer:
@@ -785,7 +803,7 @@ func _build_lizard() -> void:
 # ---------------------------------------------------------------- animation
 
 func _process(delta: float) -> void:
-	if not visible:
+	if not visible or (seated and not is_visible_in_tree()):
 		return
 	if _dead:
 		# Keep drawing while the body falls, then the cache stays as it is.
@@ -872,11 +890,17 @@ func _update(delta: float, snap: bool) -> void:
 	for id in _fp_hide:
 		_p_vis[id] = show_head
 
+	if kind == "horse" or kind == "raptor":
+		_update_mount(delta)
+		return
 	if kind == "lizard":
 		_update_lizard(delta, kh)
 	else:
 		_update_soldier(delta, k, kh)
-	_update_legs(delta)
+	if seated:
+		_seated_legs()
+	else:
+		_update_legs(delta)
 	# Asleep on his bedroll: the whole body tips back about the feet to lie
 	# flat (head away from where he faces), then rolls up again when he wakes.
 	var want_lie := 1.0 if anim == "sleep" else 0.0
@@ -1069,6 +1093,11 @@ func _npc_pose() -> void:
 	t_hand_l = null
 	t_jaw = 0.0
 	var swing := sin(_walk_phase)
+	if kind == "horse" or kind == "raptor":
+		return
+	if seated and kind != "lizard":
+		_rider_pose()
+		return
 	if kind == "lizard":
 		t_lean = 0.5
 		match anim:
@@ -1391,3 +1420,183 @@ func die() -> void:
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(body, "rotation:x", PI * 0.47, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(body, "position:y", 0.12, 0.6)
+
+
+# ---------------------------------------------------------------- mounts and riders
+# Cavalry (field battles): a horse or a riding raptor is its own rig (kind
+# "horse" / "raptor"), and the trooper is a second rig sitting on its body
+# node (`seated`), so he turns, bobs and falls with it.
+
+const BAY := Color(0.38, 0.23, 0.13)
+const BAY_DARK := Color(0.2, 0.12, 0.07)
+const RAPTOR := Color(0.33, 0.4, 0.2)
+const RAPTOR_DARK := Color(0.2, 0.25, 0.12)
+const RAPTOR_STRIPE := Color(0.5, 0.36, 0.16)
+## Where the rider's rig stands on the mount's body (his hips on the saddle).
+const SADDLE_HORSE := Vector3(0, 0.8, 0.05)
+const SADDLE_RAPTOR := Vector3(0, 0.74, 0.1)
+
+
+func _build_horse() -> void:
+	saddle_col = gear.get("saddle_col", saddle_col)
+	var coat := BAY.lerp(Color(0.22, 0.16, 0.12), randf() * 0.6)
+	if randf() < 0.15:
+		coat = Color(0.62, 0.6, 0.56) # a grey
+	var dark := coat.darkened(0.45)
+	_part(body, _box_mesh(Vector3(0.56, 0.62, 1.55)), coat, Vector3(0, 1.3, 0.0)) # barrel
+	_part(body, _box_mesh(Vector3(0.5, 0.6, 0.5)), coat, Vector3(0, 1.36, -0.72)) # chest
+	_part(body, _box_mesh(Vector3(0.54, 0.56, 0.5)), coat, Vector3(0, 1.36, 0.66)) # quarters
+	# Saddle, cloth, girth.
+	_part(body, _box_mesh(Vector3(0.66, 0.06, 0.78)), saddle_col, Vector3(0, 1.63, 0.06))
+	_part(body, _box_mesh(Vector3(0.68, 0.035, 0.8)), GOLD, Vector3(0, 1.6, 0.06), Vector3.ZERO, true)
+	_part(body, _box_mesh(Vector3(0.4, 0.12, 0.56)), LEATHER, Vector3(0, 1.7, 0.04))
+	_part(body, _box_mesh(Vector3(0.6, 0.08, 0.1)), LEATHER, Vector3(0, 1.3, -0.1), Vector3.ZERO, true)
+	# Neck and head on their own node (it nods as he goes).
+	_neck = Node3D.new()
+	_neck.position = Vector3(0, 1.5, -0.86)
+	body.add_child(_neck)
+	_part(_neck, _box_mesh(Vector3(0.3, 0.42, 0.85)), coat, Vector3(0, 0.3, -0.18), Vector3(55, 0, 0))
+	_part(_neck, _box_mesh(Vector3(0.08, 0.2, 0.8)), dark, Vector3(0, 0.46, 0.0), Vector3(55, 0, 0)) # mane
+	_part(_neck, _box_mesh(Vector3(0.24, 0.26, 0.62)), coat, Vector3(0, 0.62, -0.62), Vector3(-25, 0, 0)) # head
+	_part(_neck, _box_mesh(Vector3(0.18, 0.18, 0.22)), dark, Vector3(0, 0.5, -0.9), Vector3(-25, 0, 0)) # muzzle
+	_part(_neck, _box_mesh(Vector3(0.05, 0.12, 0.05)), coat, Vector3(0.08, 0.86, -0.42), Vector3(-10, 0, 0)) # ears
+	_part(_neck, _box_mesh(Vector3(0.05, 0.12, 0.05)), coat, Vector3(-0.08, 0.86, -0.42), Vector3(-10, 0, 0))
+	_part(_neck, _box_mesh(Vector3(0.26, 0.03, 0.03)), BLACK, Vector3(0, 0.6, -0.78), Vector3.ZERO, true) # bridle
+	_part(_neck, _box_mesh(Vector3(0.04, 0.04, 0.04)), BLACK, Vector3(0.12, 0.72, -0.56), Vector3.ZERO, true) # eye
+	_part(_neck, _box_mesh(Vector3(0.04, 0.04, 0.04)), BLACK, Vector3(-0.12, 0.72, -0.56), Vector3.ZERO, true)
+	for i in 3:
+		_mtail.append(_part(body, _box_mesh(Vector3(0.12 - i * 0.02, 0.12, 1.0)), dark, Vector3.ZERO))
+	# Legs: forearm/cannon in front, gaskin/cannon behind; trot pairs.
+	var legs := [[Vector3(0.17, 1.12, -0.7), 0.0], [Vector3(-0.17, 1.12, -0.7), PI], [Vector3(0.17, 1.15, 0.68), PI], [Vector3(-0.17, 1.15, 0.68), 0.0]]
+	for l in legs:
+		var up := _part(body, _box_mesh(Vector3(0.15, 0.15, 1.0)), coat, Vector3.ZERO)
+		var lo := _part(body, _box_mesh(Vector3(0.09, 0.09, 1.0)), dark if randf() < 0.5 else coat.darkened(0.15), Vector3.ZERO)
+		var hoof := _part(body, _box_mesh(Vector3(0.13, 0.08, 0.15)), BLACK, Vector3.ZERO)
+		_mlegs.append([up, lo, hoof, l[0], l[1]])
+
+
+func _build_raptor() -> void:
+	saddle_col = gear.get("saddle_col", saddle_col)
+	var hide := RAPTOR.lerp(Color(0.4, 0.36, 0.18), randf() * 0.5)
+	_part(body, _box_mesh(Vector3(0.52, 0.58, 1.3)), hide, Vector3(0, 1.35, 0.0), Vector3(-6, 0, 0))
+	_part(body, _box_mesh(Vector3(0.4, 0.3, 0.9)), BELLY, Vector3(0, 1.1, -0.05), Vector3(-6, 0, 0))
+	for i in 4:
+		_part(body, _box_mesh(Vector3(0.54, 0.05, 0.12)), RAPTOR_STRIPE, Vector3(0, 1.62, -0.4 + i * 0.28), Vector3(-6, 0, 0), true)
+	_part(body, _box_mesh(Vector3(0.6, 0.06, 0.62)), saddle_col, Vector3(0, 1.66, 0.12))
+	_part(body, _box_mesh(Vector3(0.4, 0.12, 0.46)), BONE.darkened(0.3), Vector3(0, 1.73, 0.12))
+	_neck = Node3D.new()
+	_neck.position = Vector3(0, 1.5, -0.62)
+	body.add_child(_neck)
+	_part(_neck, _box_mesh(Vector3(0.24, 0.26, 0.7)), hide, Vector3(0, 0.22, -0.2), Vector3(45, 0, 0))
+	_part(_neck, _box_mesh(Vector3(0.28, 0.26, 0.5)), hide, Vector3(0, 0.5, -0.5), Vector3(-8, 0, 0)) # head
+	_part(_neck, _box_mesh(Vector3(0.2, 0.08, 0.42)), RAPTOR_DARK, Vector3(0, 0.36, -0.62), Vector3(-4, 0, 0)) # jaw
+	for i in 4:
+		_part(_neck, _box_mesh(Vector3(0.16, 0.025, 0.02)), BONE, Vector3(0, 0.42, -0.5 - i * 0.08), Vector3.ZERO, true)
+	_part(_neck, _box_mesh(Vector3(0.05, 0.05, 0.05)), EYE, Vector3(0.13, 0.58, -0.56), Vector3.ZERO, true)
+	_part(_neck, _box_mesh(Vector3(0.05, 0.05, 0.05)), EYE, Vector3(-0.13, 0.58, -0.56), Vector3.ZERO, true)
+	for i in 3:
+		_part(_neck, _box_mesh(Vector3(0.04, 0.16, 0.06)), CREST, Vector3(0, 0.7, -0.4 + i * 0.12), Vector3(-30, 0, 0))
+	# Little clawed arms.
+	_part(body, _box_mesh(Vector3(0.07, 0.07, 0.34)), hide, Vector3(0.22, 1.2, -0.6), Vector3(40, 0, 0))
+	_part(body, _box_mesh(Vector3(0.07, 0.07, 0.34)), hide, Vector3(-0.22, 1.2, -0.6), Vector3(40, 0, 0))
+	for i in 5:
+		var w := 0.3 - i * 0.05
+		_mtail.append(_part(body, _box_mesh(Vector3(w, w, 1.0)), hide.darkened(0.1 * (i % 2)), Vector3.ZERO))
+	# Two big running legs: thigh, shin, a long foot with a sickle claw.
+	for side in [1.0, -1.0]:
+		var thigh := _part(body, _box_mesh(Vector3(0.24, 0.24, 1.0)), hide, Vector3.ZERO)
+		var shin := _part(body, _box_mesh(Vector3(0.13, 0.13, 1.0)), RAPTOR_DARK, Vector3.ZERO)
+		var foot := _part(body, _box_mesh(Vector3(0.16, 0.08, 0.36)), RAPTOR_DARK, Vector3.ZERO)
+		_mlegs.append([thigh, shin, foot, Vector3(side * 0.24, 1.22, 0.18), 0.0 if side > 0.0 else PI])
+
+
+func _update_mount(delta: float) -> void:
+	var raptor := kind == "raptor"
+	var spd := move_speed
+	var gallop := spd > 6.5
+	_walk_phase += delta * (2.4 + spd * (0.75 if not raptor else 1.0))
+	var amp := clampf(spd / 7.0, 0.0, 1.0)
+	body.position.y = absf(sin(_walk_phase)) * amp * 0.09 - (0.05 if anim == "rear" else 0.0)
+	body.rotation.x = 0.0 if anim != "rear" else -0.35
+	if _neck != null:
+		_neck.rotation.x = sin(_walk_phase * 2.0) * amp * 0.08 + (0.25 if gallop else 0.0)
+	# Tail.
+	var base := Vector3(0, 1.55, 0.92) if not raptor else Vector3(0, 1.4, 0.62)
+	var dir := Vector3(0, -0.8, 0.5).normalized() if not raptor else Vector3(0, -0.1, 1).normalized()
+	var sway := sin(anim_time * 7.0 + _walk_phase) * (0.15 + amp * 0.3)
+	for i in _mtail.size():
+		var seg_dir := Basis(Vector3.UP, sway * 0.2 * (i + 1)) * dir
+		var end := base + seg_dir * (0.3 if not raptor else 0.38)
+		_place_segment(_mtail[i], base, end)
+		base = end
+		if not raptor:
+			dir = (dir + Vector3(0, -0.3, 0)).normalized()
+		else:
+			dir = (dir + Vector3(0, -0.06, 0)).normalized()
+	for l in _mlegs:
+		var top: Vector3 = l[3]
+		var off: float = l[4]
+		if gallop and not raptor:
+			off = 0.0 if top.z < 0.0 else PI # front pair together, back pair together
+			off += 0.4 if top.x > 0.0 else 0.0
+		var ph := _walk_phase + off
+		var swing := sin(ph) * amp * (0.5 if not raptor else 0.7)
+		var lift := maxf(0.0, cos(ph)) * amp
+		if raptor:
+			var rot := Basis(Vector3.RIGHT, swing)
+			var knee := top + rot * Vector3(0, -0.62, -0.42).normalized() * 0.55
+			var ank := knee + rot * Basis(Vector3.RIGHT, -lift * 0.9) * Vector3(0, -0.78, 0.62).normalized() * 0.62
+			ank.y = maxf(ank.y, 0.06 + lift * 0.25)
+			_place_segment(l[0], top, knee)
+			_place_segment(l[1], knee, ank)
+			_set_pos(l[2], ank + Vector3(0, -0.02, -0.16))
+		else:
+			var knee2 := top + Basis(Vector3.RIGHT, swing) * Vector3.DOWN * 0.55
+			var bend := lift * (1.2 if top.z < 0.0 else -0.9)
+			var hoof := knee2 + Basis(Vector3.RIGHT, swing + bend) * Vector3.DOWN * 0.55
+			hoof.y = maxf(hoof.y, 0.04)
+			_place_segment(l[0], top, knee2)
+			_place_segment(l[1], knee2, hoof)
+			_set_pos(l[2], hoof + Vector3(0, 0.0, -0.02))
+
+
+## In the saddle: knees forward and out round the barrel, feet in the irons.
+func _seated_legs() -> void:
+	var liz := kind == "lizard"
+	spine.position.y = _hip_y
+	for side in ["l", "r"]:
+		var sx := (_hip_x if not liz else 0.2) * (-1.0 if side == "l" else 1.0)
+		var hip := Vector3(sx, _hip_y, 0.0)
+		var knee := Vector3(sx * 2.4, _hip_y - 0.18, -0.36)
+		var ankle := Vector3(sx * 2.5, _hip_y - 0.62, -0.18)
+		_place_segment(_leg[side + "_thigh"], hip, knee)
+		_place_segment(_leg[side + "_shin"], knee, ankle)
+		_set_pos(_leg[side + "_foot"], ankle + Vector3(0, -0.02, -0.06))
+
+
+## A trooper's sabre: sloped at the shoulder walking, levelled in the
+## charge, raised and brought down in a cut. Left hand on the reins.
+func _rider_pose() -> void:
+	t_lean = 0.0
+	t_hand_l = Vector3(-0.1, 0.98, -0.36)
+	match anim:
+		"charge":
+			t_grip = Vector3(0.28, 1.32, -0.42)
+			t_dir = Vector3(0, 0.08, -1)
+			t_lean = 0.3
+		"windup":
+			t_grip = Vector3(0.36, 1.85, 0.08)
+			t_dir = Vector3(0.2, 0.7, 0.8)
+			t_lean = -0.1
+			pose_rate = 12.0
+		"strike":
+			t_grip = Vector3(0.42, 0.95, -0.6)
+			t_dir = Vector3(0.1, -0.7, -0.9)
+			t_lean = 0.35
+			pose_rate = 30.0
+		"block":
+			t_grip = Vector3(0.3, 1.6, -0.35)
+			t_dir = Vector3(-1, 0.3, -0.2)
+		_:
+			t_grip = Vector3(0.26, 1.12, -0.12)
+			t_dir = Vector3(0.05, 1, 0.35)

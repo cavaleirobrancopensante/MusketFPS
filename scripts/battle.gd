@@ -13,6 +13,7 @@ const HudScript := preload("res://scripts/hud.gd")
 const Look := preload("res://scripts/look.gd")
 const GunCrew := preload("res://scripts/gun_crew.gd")
 const NestScript := preload("res://scripts/nest_assault.gd")
+const FieldScript := preload("res://scripts/field.gd")
 const SpriteFactory := preload("res://scripts/sprite_factory.gd")
 const SoundFactory := preload("res://scripts/sound_factory.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
@@ -101,6 +102,7 @@ var story_phase := "" # line -> captain_down -> retreat -> escaped
 var objective := {} # {"label": String, "pos": Vector3} for the HUD marker
 ## Storming a lizard nest (nest_assault.gd), or null in an open battle.
 var nest = null
+var field = null # a field battle (Tests > Field battle): see field.gd
 var _commanding := true # you give the orders (in the prologue, not at first)
 var _phase_t := 0.0
 var _volley_cd := 0.0
@@ -137,6 +139,10 @@ func _ready() -> void:
 	await Loading.step(f[1], "Tuning the drums, priming the pans...")
 	sounds = SoundFactory.cached()
 	await Loading.step(f[2], "The ground, the sky, the trees...")
+	if not Settings.field.is_empty() and not Company.active:
+		field = FieldScript.new()
+		add_child(field)
+		field.setup(self, Settings.field)
 	_build_world()
 	await Loading.step(f[3], "Mustering the company...")
 
@@ -163,6 +169,8 @@ func _ready() -> void:
 			s.frames = soldier_frames
 			s.record = rec
 			soldiers.append(s)
+	elif field != null:
+		waves = [] # (field.gd musters both armies)
 	elif Settings.playground:
 		waves = [] # nobody comes until you send for them
 	elif Settings.mixed:
@@ -217,6 +225,10 @@ func _ready() -> void:
 		_setup_camp()
 	_setup_assault()
 	_deploy_guns()
+	if field != null:
+		await field.make_sprites()
+		field.spawn_armies()
+		game_state = "field"
 
 	await Loading.step(f[4], "Fall in!")
 	var layer := CanvasLayer.new()
@@ -225,6 +237,14 @@ func _ready() -> void:
 	hud.battle = self
 	hud.player = player
 	layer.add_child(hud)
+	if field != null:
+		var top := CanvasLayer.new()
+		top.layer = 5
+		top.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(top)
+		var ui = preload("res://scripts/field_ui.gd").new()
+		top.add_child(ui)
+		ui.setup(field)
 	if prologue:
 		state_timer = 11.0
 		say("", "%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs." % [Lore.BEACH, Lore.SHIP], 5.5)
@@ -260,6 +280,9 @@ func _not_yours() -> bool:
 
 
 func order_follow() -> void:
+	if field != null:
+		field.player_order("follow")
+		return
 	if _not_yours():
 		return
 	order = Order.FOLLOW
@@ -270,6 +293,9 @@ func order_follow() -> void:
 ## Break ranks: every man picks his own fight (see soldier.gd). With no
 ## enemies left they regroup on you as if following.
 func order_charge() -> void:
+	if field != null:
+		field.player_order("charge")
+		return
 	if _not_yours():
 		return
 	order = Order.CHARGE
@@ -277,6 +303,9 @@ func order_charge() -> void:
 
 
 func order_hold() -> void:
+	if field != null:
+		field.player_order("hold")
+		return
 	if _not_yours():
 		return
 	order = Order.HOLD
@@ -285,6 +314,9 @@ func order_hold() -> void:
 
 
 func toggle_fire_mode() -> void:
+	if field != null:
+		field.player_order("fire")
+		return
 	if _not_yours():
 		return
 	if fire_mode == FireMode.ON_COMMAND:
@@ -296,6 +328,9 @@ func toggle_fire_mode() -> void:
 
 
 func order_volley() -> void:
+	if field != null:
+		field.player_order("volley")
+		return
 	if _not_yours():
 		return
 	_volley()
@@ -316,6 +351,8 @@ func wave_count() -> int:
 
 ## The HUD's status line.
 func status_line() -> String:
+	if field != null:
+		return field.status_line()
 	if Settings.playground:
 		return "Weapon range   Lizards %d   Your kills %d" % [enemies.size(), player.kills]
 	var tail := "Company %d   Loaded %d" % [soldiers.size(), loaded_count()]
@@ -333,6 +370,8 @@ func status_line() -> String:
 
 
 func is_at_will() -> bool:
+	if field != null and field.player_reg != null:
+		return field.player_reg.fire_at_will
 	return fire_mode == FireMode.AT_WILL
 
 
@@ -965,7 +1004,7 @@ func _physics_process(_delta: float) -> void:
 	_rebuild_grid()
 	_looting_prev = _looting_now
 	_looting_now = 0
-	if order != Order.HOLD and player.alive:
+	if order != Order.HOLD and player.alive and field == null:
 		var p: Vector3 = player.global_position
 		var pf := _player_forward()
 		if rad_to_deg(pf.angle_to(line_forward)) > REALIGN_ANGLE:
@@ -1468,6 +1507,9 @@ func _sergeant_name() -> String:
 
 
 func _on_player_died() -> void:
+	if field != null:
+		field.on_player_down()
+		return
 	if _autotest:
 		print("  player fell: phase %s, %.0f m from the path" % [story_phase, player.global_position.distance_to(RETREAT_POINT)])
 	objective = {}
@@ -1612,6 +1654,12 @@ func spawn_puff(pos: Vector3, color: Color, size: float) -> void:
 
 ## A grenade going off: everyone near it is hurt (friend or foe), closer
 ## means worse; lizardmen are thrown back, and the blast shakes your view.
+## Height of whatever a shot would hit at `p` (the ground, or a roof in a
+## field battle's village); 0 on the flat battlefields.
+func ground_y(p: Vector3) -> float:
+	return 0.0 if field == null else field.terrain.solid_y(p)
+
+
 func explode(pos: Vector3, radius: float, kill_radius: float, shooter: Node3D) -> void:
 	play_sound("boom", pos, 4.0)
 	if nest != null:
@@ -1703,6 +1751,12 @@ func _build_world() -> void:
 	if prologue:
 		env.fog_density = 0.009
 		env.fog_light_color = Color(0.78, 0.8, 0.78)
+	if field != null:
+		env.fog_density = 0.0022
+		env.fog_height_density = 0.0015
+		field.env = env
+		field.build_world(self)
+		return
 
 	# Ground: flat where you fight (collision), painted with grass, earth and
 	# bare patches.

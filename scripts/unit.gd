@@ -53,6 +53,8 @@ var rig_look := "" # draw with this rig kind instead of rig_kind (the captain)
 var rig_gear := {} # his kit and pack, for the 3D model (see rig3d.gd)
 var rig_pack := {}
 var invulnerable := false # story characters until their moment comes
+var rig_coat = null # another army's coat (field battles)
+var sprite_kind := "" # the far stand-in's sprite kind, if not rig_kind
 ## Thinking is time-sliced: a unit decides every `think_every` physics frames
 ## (with the time that passed), each on its own beat so the work spreads out
 ## evenly; walking happens every rendered frame in _process, so it still
@@ -75,10 +77,10 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	# shape on every one of hundreds of moving bodies costs every frame.
 
 	# The sprite is the far stand-in.
-	_sprite_h = sprite_height_m
+	_sprite_h = float(get_meta("sprite_cell", sprite_height_m))
 	sprite_node = Node3D.new()
 	add_child(sprite_node)
-	battle.batcher.add_sprite(rig_kind, self)
+	battle.batcher.add_sprite(sprite_kind if sprite_kind != "" else rig_kind, self)
 	_update_sprite_frame()
 	_think_skip = randi() % 4
 	_standin_skip = randi() % 6
@@ -87,6 +89,7 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	rig.kind = rig_look if rig_look != "" else rig_kind
 	rig.gear = rig_gear
 	rig.pack = rig_pack
+	rig.coat_override = rig_coat
 	add_child(rig)
 	visual = rig
 	_visual_scale = visual.scale
@@ -94,7 +97,7 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 
 func _exit_tree() -> void:
 	if battle != null and battle.batcher != null:
-		battle.batcher.remove_sprite(rig_kind, self)
+		battle.batcher.remove_sprite(sprite_kind if sprite_kind != "" else rig_kind, self)
 
 
 ## Units never collide with anything (they steer around each other), so
@@ -162,7 +165,11 @@ func _process(delta: float) -> void:
 	if not alive:
 		return
 	if _moving:
-		position += Vector3(velocity.x, 0.0, velocity.z) * delta * _move_f
+		var dv := Vector3(velocity.x, 0.0, velocity.z) * delta * _move_f
+		if battle.field != null:
+			position = battle.field.terrain.step(position, dv)
+		else:
+			position += dv
 	anim_time += delta * tempo
 	if _oneshot_left > 0.0:
 		_oneshot_left -= delta

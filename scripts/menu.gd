@@ -37,6 +37,29 @@ func _ready() -> void:
 		Company.new_campaign()
 		get_tree().change_scene_to_file.call_deferred(INTRO)
 		return
+	for a in args:
+		if a.begins_with("--field"):
+			# `-- --field[=map]` (a field battle, you on foot) or
+			# `-- --fieldtest[=map]` (both generals are the computer).
+			var map := "flat"
+			if "=" in a:
+				map = a.split("=")[1]
+			var foe_army := "humans" if "--humans" in args else "lizards"
+			var fsize := 16
+			for b in args:
+				if b.begins_with("--fieldsize="):
+					fsize = int(b.substr(12))
+			Settings.field = {"map": map, "size": fsize, "foe_army": foe_army,
+				"you": {"musket": 2, "pike": 1, "bow": 1, "xbow": 0, "cav": 1, "gun": 1},
+				"foe": {"liz_warrior": 3, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1} if foe_army == "lizards" else {"musket": 3, "pike": 1, "bow": 1, "cav": 1, "gun": 1}}
+			Settings.stress = false
+			Settings.mixed = false
+			Settings.playground = false
+			Settings.siege_test = false
+			Company.active = false
+			Settings.slot = 99
+			get_tree().change_scene_to_file.call_deferred(BATTLE)
+			return
 	if "--maptest" in args:
 		# Headless check of the map: a new campaign straight after the beach.
 		Company.new_campaign()
@@ -245,6 +268,7 @@ func _on_continue() -> void:
 	Settings.stress = false
 	Settings.mixed = false
 	Settings.siege_test = false
+	Settings.field = {}
 	Settings.playground = false
 	Settings.save_prefs()
 	World.is_ready = false # load this slot's land fresh
@@ -340,6 +364,7 @@ func _on_slot(i: int) -> void:
 		Settings.stress = false
 		Settings.mixed = false
 		Settings.siege_test = false
+		Settings.field = {}
 		Settings.playground = false
 		Settings.save_prefs()
 		Settings.delete_slot(i)
@@ -382,6 +407,7 @@ func _build_tests() -> void:
 	v.add_child(UI.heading("Tests", 34))
 	for t in [
 		["Weapon range", "You alone with every weapon: musket, bayonet, pistol, sabre, bow, crossbow and grenades. Send targets or charging lizards when you like. You can't die.", _on_playground],
+		["Field battle", "Total War on foot: pick the ground and both armies (muskets, pikes, bows, crossbows, cavalry, cannon; lizards or a rival army), lead your company and command the rest from above.", _on_field],
 		["Skirmish", "A mixed company of muskets, spears, bows and crossbows against three waves.", _on_skirmish],
 		["Nest assault", "The mixed company and two guns against a lizard nest: break the gate, beat off the sallies, storm it.", _on_siege_test],
 		["Stress test", "50 musketeers against 200 lizardmen, with a frame counter, to see what your phone can take.", _on_stress],
@@ -415,6 +441,7 @@ func _on_playground() -> void:
 	Settings.stress = false
 	Settings.mixed = false
 	Settings.siege_test = false
+	Settings.field = {}
 	Settings.playground = true
 	Company.active = false
 	Loading.change(BATTLE)
@@ -426,8 +453,14 @@ func _on_siege_test() -> void:
 	Settings.playground = false
 	Settings.mixed = true
 	Settings.siege_test = true
+	Settings.field = {}
 	Company.active = false
 	Loading.change(BATTLE)
+
+
+func _on_field() -> void:
+	Settings.third_person = _tp_check.button_pressed
+	get_tree().change_scene_to_file("res://scenes/field_setup.tscn")
 
 
 func _on_skirmish() -> void:
@@ -436,6 +469,7 @@ func _on_skirmish() -> void:
 	Settings.playground = false
 	Settings.mixed = true
 	Settings.siege_test = false
+	Settings.field = {}
 	Company.active = false
 	Loading.change(BATTLE)
 
@@ -444,6 +478,7 @@ func _on_stress() -> void:
 	Settings.third_person = _tp_check.button_pressed
 	Settings.mixed = false
 	Settings.siege_test = false
+	Settings.field = {}
 	Settings.playground = false
 	Settings.stress = true
 	Company.active = false
