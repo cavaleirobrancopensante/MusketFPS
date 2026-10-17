@@ -140,6 +140,7 @@ func _ready() -> void:
 	World.day_passed.connect(_on_day)
 	World.news.connect(func(t): _push_toast(t))
 	World.encounter.connect(_on_encounter)
+	World.fight_near.connect(_on_fight_near)
 	World.arrived.connect(_on_arrived)
 	World.dusk.connect(_on_dusk)
 	World.dawn.connect(func(): _push_toast("Dawn. The company breaks camp." + (" On the march again." if World.moving() else "")))
@@ -1426,6 +1427,45 @@ func _on_scouts_back(r: Dictionary) -> void:
 	_popup_open("The scouts are back", t, [["CARRY ON", _popup_close]], false)
 
 
+## A nation's patrol is about to fight close by (a warband, or the other
+## nation's men): join them, and their regiments fight beside yours (theirs
+## to lead until you give them an order), or stay out of it.
+func _on_fight_near(friend: Dictionary, foe: Dictionary) -> void:
+	var ff := String(friend["faction"])
+	var fname: String = Lore.FACTIONS[ff]["name"]
+	var foe_humans: bool = foe["faction"] != "lizards"
+	var lvl_f := World.intel_level(friend)
+	var lvl_e := World.intel_level(foe)
+	var n_f := "%d" % int(friend["size"]) if lvl_f >= 2 else World.rough_count(friend)
+	var n_e := "%d" % int(foe["size"]) if lvl_e >= 2 else World.rough_count(foe)
+	var text := "Ahead of you %s men of %s are about to fight %s %s." % [n_f, fname, n_e,
+		("men of %s" % Lore.FACTIONS[foe["faction"]]["name"]) if foe_humans else "lizards of a warband"]
+	if lvl_e >= 3:
+		text += "\n\n[color=#c9a14a]The enemy: %s.[/color]" % World.comp_text(World.party_comp(foe))
+	text += "\n\nJoin them and their regiments fight beside yours: you can command them from the command view, and they follow their own officers until you do. %s would remember the help." % Lore.FACTIONS[ff]["short"]
+	if foe_humans:
+		text += "\n[color=#f08060]%s would remember it too.[/color]" % Lore.FACTIONS[foe["faction"]]["short"]
+	var buttons: Array = [["JOIN %s" % String(Lore.FACTIONS[ff]["short"]).to_upper(), _join_fight.bind(friend, foe)],
+		["STAY OUT", _popup_close]]
+	_scene("patrol", {"faction": ff})
+	_popup_open("A fight ahead!", text, buttons)
+	if _test:
+		print("  MAPTEST: a fight near: %s against %s (stayed out)" % [World.party_name(friend), World.party_name(foe)])
+		_popup_close()
+
+
+func _join_fight(friend: Dictionary, foe: Dictionary) -> void:
+	_popup_close()
+	var ff := String(friend["faction"])
+	Company.change_standing(ff, 15)
+	if foe["faction"] != "lizards":
+		Company.change_standing(String(foe["faction"]), -25)
+	_set_battle(foe, false)
+	Company.next_battle["allies"] = {"faction": ff, "comp": World.party_comp(friend), "party": int(friend["id"]),
+		"size": int(friend["size"])}
+	_go(BATTLE)
+
+
 ## A hostile party (a lizard warband, or a patrol of a nation you've made an
 ## enemy of) has caught you.
 func _on_encounter(p: Dictionary) -> void:
@@ -1590,6 +1630,18 @@ func _apply_battle_result() -> void:
 	var p := World.party_by_id(id)
 	if nb.has("standing_note"):
 		_push_toast(String(nb["standing_note"]))
+	var al: Dictionary = nb.get("allies", {})
+	if not al.is_empty():
+		var fp := World.party_by_id(int(al["party"]))
+		if not fp.is_empty():
+			var left := int(r.get("allies_left", 0))
+			if left <= 1:
+				World.remove_party(int(al["party"]))
+			else:
+				fp["size"] = left
+		if bool(r.get("won", false)):
+			Company.change_standing(String(al["faction"]), 10)
+			_push_toast("%s will remember you stood with them." % Lore.FACTIONS[al["faction"]]["name"])
 	if bool(r.get("won", false)):
 		World.remove_party(id)
 		_push_toast("The warband is destroyed." if String(nb.get("enemy_kind", "lizards")) == "lizards" else "They're beaten: the survivors scatter.")

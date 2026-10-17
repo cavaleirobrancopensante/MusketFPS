@@ -50,7 +50,19 @@ static func make(b, f, s: int, m: String):
 	me.side = s
 	me.mount = m
 	me.frames = b.soldier_frames if m == "horse" else b.lizard_frames
+	# Whose horse: the enemy's (their coat), a nation riding with you (its
+	# coat), or yours.
+	if s == 1:
+		me.coat = f.foe_coat
+		me.nation_look = String(f.nation) != ""
+	elif f._making_allied:
+		me.coat = f.ally_coat
+		me.nation_look = true
 	return me
+
+
+var coat = null # (null: ours)
+var nation_look := false
 
 
 func _ready() -> void:
@@ -69,17 +81,17 @@ func _ready() -> void:
 	think_every = 2
 	if sprite_kind == "":
 		sprite_kind = "soldier" if mount == "horse" else "lizard"
-	rig_gear = {"saddle_col": field.foe_coat if side == 1 and mount == "horse" else (Color(0.16, 0.24, 0.55) if mount == "horse" else Color(0.5, 0.36, 0.2))}
+	rig_gear = {"saddle_col": coat if coat != null and mount == "horse" else (Color(0.16, 0.24, 0.55) if mount == "horse" else Color(0.5, 0.36, 0.2))}
 	_setup_body(4 if side == 0 else 2, 0.75, 2.7, 2.9)
 	rider = Rig3D.new()
 	rider.seated = true
 	if mount == "horse":
 		rider.kind = "soldier"
-		rider.gear = {"head": ("kettle_hat" if field.nation != "" else "tricorne") if side == 1 else "shako", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"}
+		rider.gear = {"head": "kettle_hat" if nation_look else ("tricorne" if side == 1 else "shako"), "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"}
 		rider.pack = {"rations": 0, "water": 0, "ammo": 0}
 		rider.hand_item = "saber"
-		if side == 1:
-			rider.coat_override = field.foe_coat
+		if coat != null:
+			rider.coat_override = coat
 		rider.position = Rig3D.SADDLE_HORSE
 	else:
 		rider.kind = "lizard"

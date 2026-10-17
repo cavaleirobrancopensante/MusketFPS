@@ -63,6 +63,7 @@ var ai_t := 0.0
 var _charge_t := 0.0
 var _hurt_acc := 0.0
 var selected := false
+var allied := false # a nation's regiment fighting beside you (its general is field.gd's, until you give it an order)
 var hold_fast := false # a nest's garrison: stays at its post (field.gd's general leaves it)
 var covered := false # ...behind the stakes, where nobody can shoot it
 var _arrive_t := 0.0

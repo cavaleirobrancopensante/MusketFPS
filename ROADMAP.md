@@ -130,6 +130,11 @@ The plan was:
   armies and a war front that moves.
 - **Dwarves:** holds in the mountains; the best smiths in the land.
 - Relations and reputation; contracts; joining a side, or playing both.
+  Started: standing with each nation (attack their men and they turn on
+  you; their patrols hunt you), human parties as field battles, and joining
+  a nation's patrol in its fight (its regiments beside yours, yours to
+  command when you choose). Next: contracts and pay for fighting under a
+  nation, lords and armies bigger than a patrol, formations.
 - **Teaching gunpowder:** a deal with real consequences. A faction you teach
   fields musketeers of its own, and may later turn them on you.
 

@@ -29,7 +29,7 @@ func _ready() -> void:
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	#   -- --autotest --camp [--spotted]  attacked in the night camp
 	#   -- --autotest --assault [--walls=W]  storming a nest
-	#   -- --autotest --patrol [--vell]   against a nation's patrol
+	#   -- --autotest --patrol [--vell] [--allied]  against a nation's patrol (or beside it)
 	var args := OS.get_cmdline_user_args()
 	for a in ["--intro", "--intro-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
 		if a in args:
@@ -144,6 +144,12 @@ func _ready() -> void:
 			var pp := {"kind": "patrol", "faction": fac, "size": 20, "id": 0}
 			Company.next_battle = {"enemy": 20, "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "humans",
 				"faction": fac, "comp": World.party_comp(pp), "map": "flat", "party_name": "Test patrol"}
+			if "--allied" in args:
+				# ...or beside one, against a warband: -- --autotest --patrol --allied
+				var wb := {"kind": "warband", "faction": "lizards", "size": 34, "id": 1}
+				Company.next_battle = {"enemy": 34, "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "lizards",
+					"faction": "lizards", "comp": World.party_comp(wb), "map": "flat", "party_name": "Test warband",
+					"allies": {"faction": fac, "comp": World.party_comp(pp), "party": -1, "size": 20}}
 		elif "--assault" in args:
 			# Storming a nest: -- --autotest --assault [--walls=0.5]
 			Company.new_campaign()
