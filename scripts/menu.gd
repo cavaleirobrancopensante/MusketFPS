@@ -88,6 +88,30 @@ func _ready() -> void:
 				World._sieges_tick()
 			print("SIEGE ", tw["name"], " now ", tw["faction"], " besieged ", not World.siege_of(int(tw["id"])).is_empty(), " owner ", World.places[int(tw["id"])].get("owner", "-"))
 		print("SIEGE news: ", World.log.slice(-6))
+		# A truce, and an army marching with you.
+		World.war["next_truce"] = World.hours
+		World._war_tick()
+		var pa: Dictionary = {}
+		var pv: Dictionary = {}
+		for p in World.parties:
+			if p["kind"] == "army" and p["faction"] == "aurest" and pa.is_empty():
+				pa = p
+			if p["kind"] == "army" and p["faction"] == "vell" and pv.is_empty():
+				pv = p
+		print("SIEGE truce ", World.truce(), " aurest vs vell hostile: ", World._hostile(pa, pv))
+		World.war["truce_until"] = World.hours - 1.0
+		World._war_tick()
+		print("SIEGE truce after ", World.truce(), " hostile: ", World._hostile(pa, pv))
+		World.escort(pa, 4.0)
+		World.pos = Vector2(pa["x"], pa["y"]) + Vector2(12, 4)
+		while World.grid.is_point_solid(Vector2i(World.pos)):
+			World.pos += Vector2(1, 0)
+		for k in 30:
+			World._party_tick(pa, 0.5)
+		print("SIEGE escort: ", World.escorting().get("id", -1) == pa["id"], " now ", snappedf(Vector2(pa["x"], pa["y"]).distance_to(World.pos), 0.1), " cells from you")
+		World.hours += 24.0 * 5.0
+		World._party_tick(pa, 0.5)
+		print("SIEGE escort after 5 days: ", World.escorting().is_empty())
 		# And the war left to itself for 40 days (nobody watching).
 		World.new_world(4321)
 		Company.active = false
@@ -193,6 +217,9 @@ func _ready() -> void:
 			var fit := Company.fit_men()
 			Company.next_battle = {"enemy": 18, "terrain": 3, "party": -1, "ambush": false, "camp": true,
 				"spotted": "--spotted" in args, "night": true, "watch": [int(fit[0]["id"]), int(fit[1]["id"])]}
+			if "--allied" in args:
+				# ...with a lord's army camped beside you.
+				Company.next_battle["allies"] = {"faction": "aurest", "comp": World.party_comp({"kind": "army", "size": 40}), "party": -1, "size": 40}
 		elif "--patrol" in args:
 			# A nation's patrol: -- --autotest --patrol [--vell]
 			Company.new_campaign()

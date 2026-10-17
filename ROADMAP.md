@@ -137,9 +137,10 @@ The plan was:
   burn the border and come back when beaten, each with his own account of
   you; contracts (three weeks' pay and a duty) under a lord; sieges of
   towns that change hands (the war front moves), which you can break or
-  help; the square against horse. Next: what a town under each banner
-  means for you (markets, recruits), peace and truces, and lords' armies
-  on campaign with you.
+  help; the square against horse; towns that shut their gates or raise
+  their prices by how their nation sees you; truces; a friendly lord's
+  army marching and fighting with you. Next: the dwarves (their holds,
+  trade and smiths), and teaching gunpowder.
 - **Teaching gunpowder:** a deal with real consequences. A faction you teach
   fields musketeers of its own, and may later turn them on you.
 

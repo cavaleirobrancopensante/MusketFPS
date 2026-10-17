@@ -61,6 +61,9 @@ var parties: Array = []
 ## "army" (party id or -1), "back_at" (hours: raising a new army), "relation"
 ## (to you, -100..100)}. See the lords section.
 var lords: Array = []
+## The war between Aurest and Vell: now and then a truce (no fighting
+## between them, armies go home, sieges are lifted) until truce_until.
+var war := {"truce_until": 0.0, "next_truce": 24.0 * 18.0}
 var next_party := 1
 var places := {} # settlement id -> {"raided": hours until, "known": bool}
 var grid: AStarGrid2D
@@ -87,6 +90,7 @@ func new_world(s: int) -> void:
 		places[int(st["id"])] = {"raided": 0.0, "known": false}
 	lords.clear()
 	_make_lords()
+	war = {"truce_until": 0.0, "next_truce": 24.0 * randf_range(14.0, 24.0)}
 	# The world doesn't wait for you: warbands are already out, caravans on the roads.
 	for i in 12:
 		_spawn_tick(true)
@@ -150,7 +154,7 @@ func save() -> void:
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
-		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords}
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
@@ -189,6 +193,7 @@ func load_world() -> bool:
 	night_march_day = int(data.get("night_march_day", -1))
 	scouts = data.get("scouts", [])
 	lords = data.get("lords", [])
+	war = data.get("war", {"truce_until": 0.0, "next_truce": hours + 24.0 * 18.0})
 	for l in lords:
 		for k in ["id", "home", "army", "relation"]:
 			l[k] = int(l[k])
@@ -585,6 +590,7 @@ func _note_water() -> void:
 
 func _midnight() -> void:
 	var notes: PackedStringArray = Company.pass_day(_day_water) if Company.active else PackedStringArray()
+	_war_tick()
 	_sieges_tick()
 	# Nests not under siege fill up again, and mend their stakes.
 	for st in gen.settlements:
@@ -1017,6 +1023,14 @@ func _spawn_tick(initial: bool) -> void:
 func _party_tick(p: Dictionary, dh: float) -> void:
 	if can_see(p):
 		p["seen_at"] = hours # you knew they were there (no ambush)
+	if float(p.get("escort_until", 0.0)) > 0.0:
+		if hours < float(p["escort_until"]):
+			_escort_tick(p, dh)
+			return
+		p.erase("escort_until")
+		p["path"] = []
+		var el := lord_of(p)
+		_tell("%s takes his leave and marches off." % (lord_short(el) if not el.is_empty() else "The army"), {"x": p["x"], "y": p["y"]})
 	if float(p["wait"]) > 0.0:
 		p["wait"] = float(p["wait"]) - dh
 		return
@@ -1061,7 +1075,10 @@ func _prey_for(p: Dictionary, me: Vector2) -> Dictionary:
 func _hostile(a: Dictionary, b: Dictionary) -> bool:
 	if a["faction"] == "lizards" or b["faction"] == "lizards":
 		return a["faction"] != b["faction"]
-	# Aurest and Vell are at war: their patrols and armies fight each other.
+	# Aurest and Vell are at war: their patrols and armies fight each other
+	# (not during a truce).
+	if truce():
+		return false
 	return a["kind"] in ["patrol", "army"] and b["kind"] in ["patrol", "army"] and a["faction"] != b["faction"]
 
 
@@ -1366,6 +1383,15 @@ func _raise_armies() -> void:
 func _army_errand(p: Dictionary, me: Vector2, home: Dictionary) -> void:
 	var f := String(p["faction"])
 	var choices: Array = []
+	if truce():
+		# A truce: back to their own lands.
+		choices = gen.settlements.filter(func(s): return s.get("faction", "") == f and s["kind"] in ["town", "city"])
+		if not choices.is_empty():
+			var back: Dictionary = choices.pick_random()
+			p["target"] = int(back["id"])
+			p["path"] = _route(me, Vector2(back["x"], back["y"]))
+		p["wait"] = 12.0 if (p["path"] as Array).is_empty() else 0.0
+		return
 	var relieve := _relief_target(p)
 	if not relieve.is_empty() and randf() < 0.75:
 		p["target"] = int(relieve["id"])
@@ -1488,6 +1514,8 @@ func _town_falls(st: Dictionary, p: Dictionary) -> void:
 	var was := String(st["faction"])
 	var to := String(p["faction"])
 	st["faction"] = to
+	if not pl.has("native"):
+		pl["native"] = was
 	pl["owner"] = to
 	pl.erase("siege_army")
 	p["wait"] = 24.0
@@ -1500,3 +1528,67 @@ func _town_falls(st: Dictionary, p: Dictionary) -> void:
 			var other: Array = gen.settlements.filter(func(s): return s.get("faction", "") == was and s["kind"] in ["city", "town"])
 			if not other.is_empty():
 				lo["home"] = int(other.pick_random()["id"])
+
+
+# ---------------------------------------------------------------- truces
+
+func truce() -> bool:
+	return hours < float(war.get("truce_until", 0.0))
+
+
+func _war_tick() -> void:
+	if truce():
+		return
+	if float(war.get("truce_until", 0.0)) > 0.0 and hours - float(war["truce_until"]) < 24.0:
+		var t := "The truce is over: %s and %s are at war again." % [Lore.FACTIONS["aurest"]["name"], Lore.FACTIONS["vell"]["name"]]
+		log.append("%s  %s" % [clock(), t])
+		news.emit(t)
+		war["truce_until"] = 0.0
+		return
+	if hours < float(war.get("next_truce", 0.0)):
+		return
+	var days := randi_range(6, 12)
+	war["truce_until"] = hours + 24.0 * days
+	war["next_truce"] = war["truce_until"] + 24.0 * randf_range(16.0, 28.0)
+	# Sieges are lifted; armies go home.
+	for st in gen.settlements:
+		places[int(st["id"])].erase("siege_army")
+	for p in parties:
+		if p["kind"] == "army" and float(p.get("escort_until", 0.0)) <= 0.0:
+			p["wait"] = 0.0
+			p["path"] = []
+			p["target"] = -1
+	var t2 := "Heralds ride between the camps: %s and %s agree a truce for %d days." % [Lore.FACTIONS["aurest"]["name"], Lore.FACTIONS["vell"]["name"], days]
+	log.append("%s  %s" % [clock(), t2])
+	news.emit(t2)
+
+
+# ---------------------------------------------------------------- an army marching with you
+
+## A friendly lord's army marches with the company for a few days (map.gd):
+## it keeps close, camps with you, and fights beside you in any battle.
+func escort(p: Dictionary, days: float) -> void:
+	p["escort_until"] = hours + 24.0 * days
+	p["wait"] = 0.0
+	p["target"] = -1
+	p["path"] = []
+
+
+func escorting() -> Dictionary:
+	for p in parties:
+		if float(p.get("escort_until", 0.0)) > hours:
+			return p
+	return {}
+
+
+func _escort_tick(p: Dictionary, dh: float) -> void:
+	var me := Vector2(float(p["x"]), float(p["y"]))
+	var d := me.distance_to(pos)
+	p["chase"] = float(p.get("chase", 0.0)) - dh
+	if d > 1.6 and (float(p["chase"]) <= 0.0 or (p["path"] as Array).is_empty()):
+		p["chase"] = 0.5
+		p["path"] = _route(me, pos + (me - pos).normalized() * 1.0)
+	elif d <= 1.6:
+		p["path"] = []
+	if not (p["path"] as Array).is_empty():
+		_move_party(p, dh * 1.3) # (it hurries to keep up)

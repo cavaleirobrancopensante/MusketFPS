@@ -693,6 +693,10 @@ static func _ask_join(p: Dictionary, s: Dictionary, roll: int, trust: int, words
 		score += 5
 	if words:
 		score += 5
+	# What their lords think of you counts too.
+	var town_f := String(World.gen.settlements[int(p["sid"])].get("faction", ""))
+	if Company.standing.has(town_f):
+		score += clampi(int(Company.standing[town_f]) / 2, -20, 15)
 	if score >= 0:
 		r["see"] = ["{nm} looks at your men, at the musket, at the road. Then {he} nods once.", "{nm} says something to a neighbour, fetches {his} weapon from the doorway and comes to stand by you.", "{nm} clasps your forearm, soldier-fashion."][roll % 3]
 		r["say"] = ["yes", "i", "go", "fight", "we"]
