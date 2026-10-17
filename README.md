@@ -136,7 +136,20 @@ with every seed.
   side a little, since they're at war. Fall to hostile and the nation's
   patrols hunt you like warbands. No bounty on men: their kit and purses go
   on the loot pile.
-- **Joining a fight.** When a nation's patrol is about to fight close by
+- **Lords.** Each nation has three lords (Count Aldric de Valtier,
+  Margrave Konrad von Kelstad...), each with a seat in one of its cities or
+  towns. A lord raises an army there (40 to 70 men, more as the war goes
+  on: spearmen, crossbows, archers and his household horse) and marches it
+  to war: he burns the other nation's villages near the border and lays
+  waste round its towns, and hunts warbands and enemy patrols on the way.
+  Beaten, he gets away with his household and raises another army in a
+  week or so. Each lord keeps his own account of you besides his nation's
+  standing: fight beside him and he warms to you (he'll greet you by name);
+  attack his army and he swears to see you hanged, and his army hunts you.
+  **LORDS** on the map lists them all: where you stand with each nation and
+  lord, and what you know of their armies. Their armies show gold on the
+  map; anyone out to get you shows red.
+- **Joining a fight.** When a nation's patrol or a lord's army is about to fight close by
   (a warband, or the other nation's men) and it isn't your enemy, the clock
   stops: **JOIN** them and their regiments deploy in your line, following
   their own officers until you give them an order from the command view
@@ -989,8 +1002,8 @@ skirmish with a mixed company (muskets, spears, bows, crossbows), or `--tp` for
 third person. `--camp` (add `--spotted` for the watch seeing them) is
 the night camp attacked, and `--assault` (with `--walls=0.3` for a broken
 palisade) storms a nest with two guns, `--patrol` (`--vell` for the
-other nation) fights a nation's patrol, and `--patrol --allied` fights a
-warband beside one; all start a fresh campaign after the prologue and
+other nation, `--army` for a lord's army of 60) fights a nation's patrol,
+and `--patrol --allied` fights a warband beside one; all start a fresh campaign after the prologue and
 then march on to more battles. `-- --company` opens the Company screen after the prologue,
 swaps kit, spends points, uses the wagon and marches six times without food
 to check hunger, desertion and mutiny. This catches script errors without a

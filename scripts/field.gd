@@ -372,10 +372,12 @@ func spawn_campaign() -> void:
 			theirs.append([k, false, take])
 			n -= take
 	_deploy(0, mine)
+	_name_households(nb)
 	if camp and not spotted:
 		_in_the_camp(theirs)
 	elif not theirs.is_empty():
 		_deploy(1, theirs)
+	_name_enemy_household(nb)
 	var p: Vector3 = player_reg.pos
 	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
@@ -1115,6 +1117,27 @@ func _finish(won: bool) -> void:
 	else:
 		battle.game_state = "won" if won else "lost"
 		battle.hud.show_restart()
+
+
+## A lord's horse is his household: named for him (his army's, or the one
+## you fight beside).
+func _name_households(nb: Dictionary) -> void:
+	var al := World.lord(int(nb.get("allies", {}).get("lord", -1)))
+	if not al.is_empty():
+		for r in regs:
+			if r.allied and r.kind == "cav":
+				r.title = "%s's household" % World.lord_short(al)
+				break
+
+
+func _name_enemy_household(nb: Dictionary) -> void:
+	var l := World.lord(int(nb.get("lord", -1)))
+	if l.is_empty():
+		return
+	for r in regs:
+		if r.side == 1 and r.kind == "cav":
+			r.title = "%s's household" % World.lord_short(l)
+			break
 
 
 ## How many of the nation's men who fought beside you are still standing.
