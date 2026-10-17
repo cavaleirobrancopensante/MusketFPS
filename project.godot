@@ -14,6 +14,7 @@ config/icon="res://icon.svg"
 
 Settings="*res://scripts/settings.gd"
 Lang="*res://scripts/lang.gd"
+RotateOverlay="*res://scripts/rotate_overlay.gd"
 Company="*res://scripts/company.gd"
 World="*res://scripts/world.gd"
 Music="*res://scripts/music.gd"
