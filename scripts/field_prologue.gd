@@ -46,7 +46,7 @@ var _volley_cd := 0.0
 var _javelin_done := false
 var _heard := false
 var _pursuit_t := 0.0
-var _side0 := 1 # men on your side at the start (for "the regiment is bleeding")
+var _side0 := 1 # men on your side at the start (for Lang.t("the regiment is bleeding"))
 var _wave3_t := -1.0
 
 
@@ -63,13 +63,13 @@ func spawn() -> void:
 	var you = field._make_reg(0, "musket", maxi(1, men.size()), Vector3(0, 0, LINE_Z), Vector3.FORWARD, true, men)
 	you.fire_at_will = false # the Major calls the volleys
 	left_reg = field._make_reg(0, "musket", SIDE_COMPANY, Vector3(-26.25, 0, LINE_Z), Vector3.FORWARD, false)
-	left_reg.title = "Left company"
+	left_reg.title = Lang.t("Left company")
 	right_reg = field._make_reg(0, "musket", SIDE_COMPANY, Vector3(26.25, 0, LINE_Z), Vector3.FORWARD, false)
-	right_reg.title = "Right company"
+	right_reg.title = Lang.t("Right company")
 	for sx in [-1.0, 1.0]:
 		# Two guns a battery, one in each embrasure either side of a company.
 		var b = field._make_reg(0, "gun", 2, Vector3(sx * 26.25, 0, GUN_Z), Vector3.FORWARD, false, [], 21.5)
-		b.title = "Left battery" if sx < 0.0 else "Right battery"
+		b.title = Lang.t("Left battery") if sx < 0.0 else Lang.t("Right battery")
 		batteries.append(b)
 	for r in field.regs:
 		r.order_hold()
@@ -116,18 +116,18 @@ func _wave(n: int) -> void:
 			_lizards("liz_warrior", 12, Vector3(-22, 0, FOREST_Z))
 			_lizards("liz_warrior", 12, Vector3(20, 0, FOREST_Z - 6.0))
 			_lizards("liz_skirm", 6, Vector3(0, 0, FOREST_Z + 12.0))
-			battle.hud.show_message("Here they come!", 2.5)
+			battle.hud.show_message(Lang.t("Here they come!"), 2.5)
 		2:
 			_lizards("liz_warrior", 14, Vector3(-30, 0, FOREST_Z))
 			_lizards("liz_warrior", 14, Vector3(8, 0, FOREST_Z - 4.0))
 			_lizards("liz_skirm", 10, Vector3(-10, 0, FOREST_Z + 14.0))
-			battle.hud.show_message("The second wave! Hold the line!", 2.5)
+			battle.hud.show_message(Lang.t("The second wave! Hold the line!"), 2.5)
 		3:
 			_lizards("liz_warrior", 16, Vector3(-28, 0, FOREST_Z))
 			_lizards("liz_brute", 5, Vector3(4, 0, FOREST_Z - 4.0))
 			_lizards("liz_warrior", 16, Vector3(30, 0, FOREST_Z))
 			_lizards("liz_raptor", 8, Vector3(70, 0, FOREST_Z + 6.0))
-			field.alert(null, "Brutes in the centre, raptor riders on the right!", true)
+			field.alert(null, Lang.t("Brutes in the centre, raptor riders on the right!"), true)
 
 
 func _lizards(kind: String, n: int, at: Vector3):
@@ -170,7 +170,7 @@ func _process(delta: float) -> void:
 			if phase_t > 9.0:
 				_begin_retreat()
 		"retreat":
-			battle.objective = {"label": "THE CLIFF PATH", "pos": RETREAT_POINT, "height": 5.4}
+			battle.objective = {"label": Lang.t("THE CLIFF PATH"), "pos": RETREAT_POINT, "height": 5.4}
 			_pursuit_t -= delta
 			if _pursuit_t <= 0.0:
 				_pursuit_t = PURSUIT_EVERY
@@ -179,7 +179,7 @@ func _process(delta: float) -> void:
 			if pl.alive and pl.global_position.distance_to(RETREAT_POINT) < 8.0:
 				_set_phase("escaped")
 				battle.objective = {}
-				battle.hud.show_message("Up the cliff path and into the fog. They don't follow.", 9999.0)
+				battle.hud.show_message(Lang.t("Up the cliff path and into the fog. They don't follow."), 9999.0)
 				field.over = "won"
 				battle.victory = true
 				battle._end_battle(true)
@@ -216,7 +216,7 @@ func _line(_delta: float) -> void:
 			_volley_cd = 4.0
 			you.fire_target = you.nearest_foe_reg
 			you.order_volley()
-			battle.hud.show_message("Harrow: Present... FIRE!", 1.2)
+			battle.hud.show_message(Lang.t("Harrow: Present... FIRE!"), 1.2)
 
 
 func _all_down() -> bool:
@@ -229,28 +229,28 @@ func _all_down() -> bool:
 ## battle.gd: the javelin found him.
 func captain_down() -> void:
 	_set_phase("captain_down")
-	battle.hud.show_message("%s is down!" % Lore.COMMANDER_SHORT, 3.0)
-	battle.say(battle._sergeant_name(), "The Major's hit! Ensign, to the Major!", 4.0)
+	battle.hud.show_message(Lang.t("%s is down!") % Lore.COMMANDER_SHORT, 3.0)
+	battle.say(battle._sergeant_name(), Lang.t("The Major's hit! Ensign, to the Major!"), 4.0)
 
 
 func _captain_down_tick() -> void:
 	var c = battle.captain
 	if c == null or _heard:
 		return
-	battle.objective = {"label": "THE MAJOR", "pos": c.global_position}
+	battle.objective = {"label": Lang.t("THE MAJOR"), "pos": c.global_position}
 	var pl = battle.player
 	if pl.alive and pl.global_position.distance_to(c.global_position) < 2.6:
 		_heard = true
 		battle.objective = {}
 		battle._lines.clear()
 		battle._line_t = 0.0
-		battle.say(Lore.COMMANDER, "Ensign... listen. You have the regiment. All of it: the companies, the guns.", 4.5)
-		battle.say(Lore.COMMANDER, "Hold them on the works while you can. When it breaks, and it will, take them up the cliff path. Keep them alive.", 6.0, _begin_command)
-		battle.say("", "%s is dead. You command the regiment." % Lore.COMMANDER_SHORT, 3.5)
+		battle.say(Lore.COMMANDER, Lang.t("Ensign... listen. You have the regiment. All of it: the companies, the guns."), 4.5)
+		battle.say(Lore.COMMANDER, Lang.t("Hold them on the works while you can. When it breaks, and it will, take them up the cliff path. Keep them alive."), 6.0, _begin_command)
+		battle.say("", Lang.t("%s is dead. You command the regiment.") % Lore.COMMANDER_SHORT, 3.5)
 	elif phase_t > 22.0:
 		_heard = true
 		battle.objective = {}
-		battle.say(battle._sergeant_name(), "He's gone, sir! The Major's dead. You have the regiment. Orders, sir!", 4.5, _begin_command)
+		battle.say(battle._sergeant_name(), Lang.t("He's gone, sir! The Major's dead. You have the regiment. Orders, sir!"), 4.5, _begin_command)
 
 
 ## The regiment is yours: up into the command view, paused, with a lesson.
@@ -259,14 +259,14 @@ func _begin_command() -> void:
 	battle._commanding = true
 	field.player_reg.fire_at_will = true
 	_wave3_t = 5.0
-	battle.hud.show_message("You command the regiment!", 3.0)
+	battle.hud.show_message(Lang.t("You command the regiment!"), 3.0)
 	if field.ui != null and battle.player.alive and not field.test_mode:
 		field.ui.lesson = [
-			"YOU HAVE THE REGIMENT",
-			"Your companies and the guns are on the cards along the bottom. Tap a card, or the regiment on the field, to select it (ALL takes every one).",
-			"Then tap the ground to march there, drag along the ground to form a line there, or tap an enemy to attack it.",
-			"Up here time runs slow (PAUSE stops it). TO YOUR MEN takes you back down; COMMAND at the top brings you up again.",
-			"In first person the cards are along the top: select one and tap the world to send it.",
+			Lang.t("YOU HAVE THE REGIMENT"),
+			Lang.t("Your companies and the guns are on the cards along the bottom. Tap a card, or the regiment on the field, to select it (ALL takes every one)."),
+			Lang.t("Then tap the ground to march there, drag along the ground to form a line there, or tap an enemy to attack it."),
+			Lang.t("Up here time runs slow (PAUSE stops it). TO YOUR MEN takes you back down; COMMAND at the top brings you up again."),
+			Lang.t("In first person the cards are along the top: select one and tap the world to send it."),
 		]
 		field.ui.open(true)
 		var right: Vector3 = field.player_reg.pos
@@ -284,8 +284,8 @@ func _collapse() -> void:
 	if left_reg != null and not left_reg.broken():
 		left_reg.morale = 0.0
 		left_reg._set_state("routing")
-	field.alert(left_reg, "The left is turned! They're over the earthworks!", true)
-	battle.say(battle._sergeant_name(), "Sir! The left's gone, they're round the end of the works!", 4.0)
+	field.alert(left_reg, Lang.t("The left is turned! They're over the earthworks!"), true)
+	battle.say(battle._sergeant_name(), Lang.t("Sir! The left's gone, they're round the end of the works!"), 4.0)
 
 
 ## Off the beach: every company that still stands for the cliff path, the
@@ -293,8 +293,8 @@ func _collapse() -> void:
 func _begin_retreat() -> void:
 	_set_phase("retreat")
 	_pursuit_t = 3.0
-	battle.say(battle._sergeant_name(), "The line's gone, sir. The cliff path, it's the only way off the beach!", 4.5)
-	battle.hud.show_message("Leave the guns! Along the beach to the cliff path!", 4.0)
+	battle.say(battle._sergeant_name(), Lang.t("The line's gone, sir. The cliff path, it's the only way off the beach!"), 4.5)
+	battle.hud.show_message(Lang.t("Leave the guns! Along the beach to the cliff path!"), 4.0)
 	for b in batteries:
 		b.fire_at_will = false
 		for g in b.members:
@@ -327,7 +327,7 @@ func flee_point(_u) -> Vector3:
 ## You fell: the story ends there.
 func player_down() -> void:
 	battle.objective = {}
-	battle.hud.show_message("You fall. Your men carry you from the beach.", 9999.0)
+	battle.hud.show_message(Lang.t("You fall. Your men carry you from the beach."), 9999.0)
 	field.over = "lost"
 	battle._end_battle(false)
 
@@ -338,16 +338,16 @@ func player_down() -> void:
 func _tutorial() -> void:
 	var b = battle
 	if phase == "line" and wave == 0:
-		b._hint("move", "MOVE: drag on the left of the screen.  LOOK: drag on the right.  Walk the earthworks while the guns are readied.", 11.0)
+		b._hint("move", Lang.t("MOVE: drag on the left of the screen.  LOOK: drag on the right.  Walk the earthworks while the guns are readied."), 11.0)
 	if wave >= 1 and phase == "line":
-		b._hint("fire", "FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys.", 12.0)
+		b._hint("fire", Lang.t("FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys."), 12.0)
 	if not b._hints.has("melee") and b.player.alive and b.nearest_enemy(b.player.global_position, 14.0) != null:
-		b._hint("melee", "BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing.", 12.0)
+		b._hint("melee", Lang.t("BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing."), 12.0)
 	if wave >= 2 and phase == "line":
-		b._hint("grenade", "GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men.", 8.0)
+		b._hint("grenade", Lang.t("GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men."), 8.0)
 	if phase == "captain_down":
-		b._hint("major", "Go to the Major: follow the gold marker.", 8.0)
+		b._hint("major", Lang.t("Go to the Major: follow the gold marker."), 8.0)
 	if phase == "command" and phase_t > 1.0:
-		b._hint("orders", "Your company: FOLLOW, HOLD, CHARGE, AT WILL and VOLLEY!  The rest: COMMAND (top) for the view from above, or tap a card along the top and then the world.", 14.0)
+		b._hint("orders", Lang.t("Your company: FOLLOW, HOLD, CHARGE, AT WILL and VOLLEY!  The rest: COMMAND (top) for the view from above, or tap a card along the top and then the world."), 14.0)
 	if phase == "retreat":
-		b._hint("retreat", "Lead them to the cliff path: your company follows you. The others are already running for it.", 10.0)
+		b._hint("retreat", Lang.t("Lead them to the cliff path: your company follows you. The others are already running for it."), 10.0)

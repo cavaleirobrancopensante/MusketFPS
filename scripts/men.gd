@@ -86,8 +86,8 @@ static func max_hp(m: Dictionary) -> float:
 static func morale_word(v: int) -> String:
 	for w in MORALE_WORDS:
 		if v >= int(w[0]):
-			return w[1]
-	return "Mutinous"
+			return Lang.t(w[1])
+	return Lang.t("Mutinous")
 
 
 static func add_morale(m: Dictionary, d: int) -> void:
@@ -116,15 +116,15 @@ static func combat_stats(m: Dictionary) -> Dictionary:
 static func conditions(m: Dictionary) -> PackedStringArray:
 	var out: PackedStringArray = []
 	if int(m["wounded_days"]) > 0:
-		out.append("wounded %dd" % int(m["wounded_days"]))
+		out.append(Lang.t("wounded %dd") % int(m["wounded_days"]))
 	if int(m["sick"]) > 0:
-		out.append("sick %dd" % int(m["sick"]))
+		out.append(Lang.t("sick %dd") % int(m["sick"]))
 	if int(m["thirst"]) > 0:
-		out.append("thirsty %dd" % int(m["thirst"]))
+		out.append(Lang.t("thirsty %dd") % int(m["thirst"]))
 	if int(m["hunger"]) > 0:
-		out.append("hungry %dd" % int(m["hunger"]))
+		out.append(Lang.t("hungry %dd") % int(m["hunger"]))
 	if int(m["health"]) < 100:
-		out.append("health %d" % int(m["health"]))
+		out.append(Lang.t("health %d") % int(m["health"]))
 	return out
 
 

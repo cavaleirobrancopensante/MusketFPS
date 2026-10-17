@@ -245,7 +245,7 @@ func day() -> int:
 
 func clock() -> String:
 	var hh := int(hours) % 24
-	return "Day %d, %02d:%02d" % [day(), hh, int(fmod(hours, 1.0) * 60.0)]
+	return Lang.t("Day %d, %02d:%02d") % [day(), hh, int(fmod(hours, 1.0) * 60.0)]
 
 
 func settlement(id: int) -> Dictionary:
@@ -308,7 +308,7 @@ func nest_fought(id: int, killed: int, won_assault: bool, returned := 0) -> void
 	if won_assault:
 		n["destroyed"] = true
 		n["garrison"] = 0
-		_tell("%s burns." % settlement(id)["name"], settlement(id))
+		_tell(Lang.t("%s burns.") % settlement(id)["name"], settlement(id))
 
 
 ## Lift the siege (you marched away): they recover from it.
@@ -691,7 +691,7 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 		for m in men:
 			if randf() < 0.7 or men.size() == 1:
 				Company.fallen.append({"name": m["name"], "rank": Company.RANKS[int(m["rank"])], "day": Company.day,
-					"battles": m["battles"], "kills": m["kills"], "cause": "lost scouting"})
+					"battles": m["battles"], "kills": m["kills"], "cause": Lang.t("lost scouting")})
 				Company.roster.erase(m)
 				report["lost"].append(Company.title(m))
 			else:
@@ -707,7 +707,7 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 	for st in gen.settlements:
 		if tgt.distance_to(Vector2(st["x"], st["y"])) < 24.0:
 			places[int(st["id"])]["known"] = true
-			report["found"].append("%s (%s%s)" % [st["name"], st["kind"], ", raided" if is_raided(int(st["id"])) else ""])
+			report["found"].append("%s (%s%s)" % [st["name"], Lang.t(st["kind"]), Lang.t(", raided") if is_raided(int(st["id"])) else ""])
 	for p in parties:
 		if tgt.distance_to(Vector2(p["x"], p["y"])) < 24.0:
 			report["parties"].append(party_label(p, 1)) # (scouts at a distance: a rough count)
@@ -898,7 +898,7 @@ static func comp_text(comp: Dictionary, sep := ", ") -> String:
 	for k in COMP_ORDER:
 		var c := int(comp.get(k, 0))
 		if c > 0:
-			parts.append("%d %s" % [c, COMP_NAMES[k][0 if c == 1 else 1]])
+			parts.append("%d %s" % [c, Lang.t(COMP_NAMES[k][0 if c == 1 else 1])])
 	return sep.join(parts)
 
 
@@ -943,7 +943,7 @@ func party_label(p: Dictionary, level := -1) -> String:
 		0:
 			return "%s (?)" % base
 		1:
-			return "%s (about %s)" % [base, rough_count(p)]
+			return Lang.t("%s (about %s)") % [base, rough_count(p)]
 		2:
 			return "%s (%d)" % [base, int(p["size"])]
 	var comp := party_comp(p)
@@ -954,14 +954,14 @@ func party_label(p: Dictionary, level := -1) -> String:
 
 func party_name(p: Dictionary) -> String:
 	var k: Dictionary = KINDS[p["kind"]]
-	var base: String = k["name"]
+	var base: String = Lang.t(k["name"])
 	if p["kind"] == "patrol":
-		base = "%s patrol" % Lore.FACTIONS[p["faction"]]["short"]
+		base = Lang.t("%s patrol") % Lore.FACTIONS[p["faction"]]["short"]
 	elif p["kind"] == "army":
 		var lord := lord_of(p)
-		base = "%s's army" % lord_short(lord) if not lord.is_empty() else "%s army" % Lore.FACTIONS[p["faction"]]["short"]
+		base = Lang.t("%s's army") % lord_short(lord) if not lord.is_empty() else Lang.t("%s army") % Lore.FACTIONS[p["faction"]]["short"]
 	elif p["kind"] == "caravan" or p["kind"] == "villagers":
-		base = "%s %s" % [Lore.FACTIONS[p["faction"]]["short"], String(k["name"]).to_lower()]
+		base = (Lang.t("%s caravan") if p["kind"] == "caravan" else Lang.t("%s villagers")) % Lore.FACTIONS[p["faction"]]["short"]
 	return "%s (%d)" % [base, int(p["size"])]
 
 
@@ -1030,7 +1030,7 @@ func _party_tick(p: Dictionary, dh: float) -> void:
 		p.erase("escort_until")
 		p["path"] = []
 		var el := lord_of(p)
-		_tell("%s takes his leave and marches off." % (lord_short(el) if not el.is_empty() else "The army"), {"x": p["x"], "y": p["y"]})
+		_tell(Lang.t("%s takes his leave and marches off.") % (lord_short(el) if not el.is_empty() else Lang.t("The army")), {"x": p["x"], "y": p["y"]})
 	if float(p["wait"]) > 0.0:
 		p["wait"] = float(p["wait"]) - dh
 		return
@@ -1094,7 +1094,7 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 		if p["kind"] == "warband" and tgt["kind"] == "village":
 			places[int(tgt["id"])]["raided"] = hours + 96.0
 			p["wait"] = 6.0
-			_tell("%s is raided by lizards!" % tgt["name"], tgt)
+			_tell(Lang.t("%s is raided by lizards!") % tgt["name"], tgt)
 			return
 		if p["kind"] in ["villagers", "caravan", "traders"] and tgt["id"] == p["home"]:
 			parties.erase(p) # home again
@@ -1214,7 +1214,7 @@ func _fights() -> bool:
 			win["size"] = maxi(2, int(win["size"]) - int(float(lose["size"]) * 0.5))
 			win["path"] = []
 			parties.erase(lose)
-			_tell("%s destroyed %s." % [party_name(win).split(" (")[0], party_name(lose).split(" (")[0].to_lower()],
+			_tell(Lang.t("%s destroyed %s.") % [party_name(win).split(" (")[0], party_name(lose).split(" (")[0].to_lower()],
 				{"x": win["x"], "y": win["y"]})
 			_army_lost(lose)
 	return false
@@ -1333,7 +1333,7 @@ func lord_of(p: Dictionary) -> Dictionary:
 
 ## "Count Aldric" / "Count Aldric de Montval".
 func lord_short(l: Dictionary) -> String:
-	return "%s %s" % [Lore.LORDS[l["faction"]]["rank"], l["given"]]
+	return "%s %s" % [Lang.t(Lore.LORDS[l["faction"]]["rank"]), l["given"]]
 
 
 func lord_full(l: Dictionary) -> String:
@@ -1347,14 +1347,14 @@ func change_relation(l: Dictionary, by: int) -> void:
 
 static func relation_word(r: int) -> String:
 	if r <= -40:
-		return "a sworn enemy"
+		return Lang.t("a sworn enemy")
 	if r < 0:
-		return "cold"
+		return Lang.t("cold")
 	if r < 15:
-		return "indifferent"
+		return Lang.t("indifferent")
 	if r < 40:
-		return "well disposed"
-	return "a friend"
+		return Lang.t("well disposed")
+	return Lang.t("a friend")
 
 
 ## Lords without an army raise one at their seat, when they're ready.
@@ -1374,7 +1374,7 @@ func _raise_armies() -> void:
 		p["lord"] = int(l["id"])
 		l["army"] = int(p["id"])
 		if hours > 12.0:
-			_tell("%s raises an army at %s." % [lord_full(l), seat["name"]], seat)
+			_tell(Lang.t("%s raises an army at %s.") % [lord_full(l), seat["name"]], seat)
 
 
 ## Where an army goes next: to war (an enemy village or town near its own
@@ -1432,13 +1432,13 @@ func _relief_target(p: Dictionary) -> Dictionary:
 ## a day and burns the fields round it.
 func _army_arrives(p: Dictionary, tgt: Dictionary) -> void:
 	var l := lord_of(p)
-	var who := lord_short(l) if not l.is_empty() else "An army"
+	var who := lord_short(l) if not l.is_empty() else Lang.t("An army")
 	if tgt["kind"] in ["town", "city"] and int(places[int(tgt["id"])].get("siege_army", -1)) < 0:
 		_begin_siege(p, tgt)
 		return
 	places[int(tgt["id"])]["raided"] = hours + (96.0 if tgt["kind"] == "village" else 48.0)
 	p["wait"] = 10.0 if tgt["kind"] == "village" else 24.0
-	_tell("%s burns %s!" % [who, tgt["name"]] if tgt["kind"] == "village" else "%s lays waste round %s." % [who, tgt["name"]], tgt)
+	_tell(Lang.t("%s burns %s!") % [who, tgt["name"]] if tgt["kind"] == "village" else Lang.t("%s lays waste round %s.") % [who, tgt["name"]], tgt)
 
 
 ## An army is gone (beaten by anyone): its lord gets away and raises
@@ -1451,7 +1451,7 @@ func _army_lost(p: Dictionary) -> void:
 		return
 	l["army"] = -1
 	l["back_at"] = hours + 24.0 * randf_range(6.0, 10.0)
-	_tell("%s's army is broken; he gets away with his household." % lord_short(l), {"x": p["x"], "y": p["y"]})
+	_tell(Lang.t("%s's army is broken; he gets away with his household.") % lord_short(l), {"x": p["x"], "y": p["y"]})
 
 
 # ---------------------------------------------------------------- sieges
@@ -1473,7 +1473,7 @@ func _begin_siege(p: Dictionary, tgt: Dictionary) -> void:
 	p["wait"] = 9999.0 # (it stays until the siege ends)
 	p["path"] = []
 	var l := lord_of(p)
-	_tell("%s lays siege to %s!" % [lord_short(l) if not l.is_empty() else "An army", tgt["name"]], tgt)
+	_tell(Lang.t("%s lays siege to %s!") % [lord_short(l) if not l.is_empty() else Lang.t("An army"), tgt["name"]], tgt)
 
 
 func siege_of(id: int) -> Dictionary:
@@ -1501,7 +1501,7 @@ func _sieges_tick() -> void:
 		var p := party_by_id(a)
 		if p.is_empty() or Vector2(p["x"], p["y"]).distance_to(Vector2(st["x"], st["y"])) > 4.0:
 			pl.erase("siege_army")
-			_tell("The siege of %s is broken!" % st["name"], st)
+			_tell(Lang.t("The siege of %s is broken!") % st["name"], st)
 			continue
 		pl["siege_days"] = int(pl["siege_days"]) + 1
 		if int(pl["siege_days"]) >= int(pl["siege_need"]):
@@ -1521,7 +1521,7 @@ func _town_falls(st: Dictionary, p: Dictionary) -> void:
 	p["wait"] = 24.0
 	p["target"] = -1
 	var l := lord_of(p)
-	_tell("%s falls to %s! It flies the banner of %s now." % [st["name"], lord_short(l) if not l.is_empty() else "the besiegers", Lore.FACTIONS[to]["short"]], st)
+	_tell(Lang.t("%s falls to %s! It flies the banner of %s now.") % [st["name"], lord_short(l) if not l.is_empty() else Lang.t("the besiegers"), Lore.FACTIONS[to]["short"]], st)
 	# A lord whose seat it was moves to another of his nation's places.
 	for lo in lords:
 		if int(lo["home"]) == id and String(lo["faction"]) == was:
@@ -1540,7 +1540,7 @@ func _war_tick() -> void:
 	if truce():
 		return
 	if float(war.get("truce_until", 0.0)) > 0.0 and hours - float(war["truce_until"]) < 24.0:
-		var t := "The truce is over: %s and %s are at war again." % [Lore.FACTIONS["aurest"]["name"], Lore.FACTIONS["vell"]["name"]]
+		var t := Lang.t("The truce is over: %s and %s are at war again.") % [Lore.FACTIONS["aurest"]["name"], Lore.FACTIONS["vell"]["name"]]
 		log.append("%s  %s" % [clock(), t])
 		news.emit(t)
 		war["truce_until"] = 0.0
@@ -1558,7 +1558,7 @@ func _war_tick() -> void:
 			p["wait"] = 0.0
 			p["path"] = []
 			p["target"] = -1
-	var t2 := "Heralds ride between the camps: %s and %s agree a truce for %d days." % [Lore.FACTIONS["aurest"]["name"], Lore.FACTIONS["vell"]["name"], days]
+	var t2 := Lang.t("Heralds ride between the camps: %s and %s agree a truce for %d days.") % [Lore.FACTIONS["aurest"]["name"], Lore.FACTIONS["vell"]["name"], days]
 	log.append("%s  %s" % [clock(), t2])
 	news.emit(t2)
 

@@ -128,7 +128,7 @@ func _build_left() -> Control:
 	_name_edit = LineEdit.new()
 	_name_edit.add_theme_font_size_override("font_size", 22)
 	_name_edit.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
-	_name_edit.tooltip_text = "Your name: tap to change it"
+	_name_edit.tooltip_text = Lang.t("Your name: tap to change it")
 	_name_edit.text_changed.connect(func(t):
 		if t.strip_edges() != "":
 			Company.officer["name"] = t.strip_edges())
@@ -150,7 +150,7 @@ func _build_left() -> Control:
 	var sp := Control.new()
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(sp)
-	col.add_child(_button("BACK", 20, _on_back))
+	col.add_child(_button(Lang.t("BACK"), 20, _on_back))
 	return col
 
 
@@ -238,7 +238,7 @@ func _build_middle() -> Control:
 	sc.add_child(v)
 	var head := HBoxContainer.new()
 	v.add_child(head)
-	var t := _label("ATTRIBUTES", 22, GOLD)
+	var t := _label(Lang.t("ATTRIBUTES"), 22, GOLD)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	_attr_pts = _label("", 17, GOLD)
@@ -252,9 +252,9 @@ func _build_middle() -> Control:
 		var cell := HBoxContainer.new()
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cell.add_theme_constant_override("separation", 6)
-		var n := _label(Officer.ATTR_NAMES[k], 18, DIM)
+		var n := _label(Lang.t(Officer.ATTR_NAMES[k]), 18, DIM)
 		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		n.tooltip_text = Officer.ATTR_HELP[k]
+		n.tooltip_text = Lang.t(Officer.ATTR_HELP[k])
 		n.mouse_filter = Control.MOUSE_FILTER_PASS
 		cell.add_child(n)
 		var val := _label("", 22, Color.WHITE)
@@ -264,11 +264,11 @@ func _build_middle() -> Control:
 		cell.add_child(plus)
 		grid.add_child(cell)
 		_attr_rows[k] = [val, plus]
-	var help := _label("Aim: shooting · Strength: blows · Constitution: hit points · Fitness: speed · Wits: skill points, Tactics, Surgery, Logistics · Presence: Leadership, Trade, Training. Each attribute also caps its skills.", 13, DIM)
+	var help := _label(Lang.t("Aim: shooting · Strength: blows · Constitution: hit points · Fitness: speed · Wits: skill points, Tactics, Surgery, Logistics · Presence: Leadership, Trade, Training. Each attribute also caps its skills."), 13, DIM)
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(help)
 
-	v.add_child(_label("YOUR KIT", 22, GOLD))
+	v.add_child(_label(Lang.t("YOUR KIT"), 22, GOLD))
 	var kit := GridContainer.new()
 	kit.columns = 2
 	kit.add_theme_constant_override("h_separation", 8)
@@ -292,12 +292,12 @@ func _build_middle() -> Control:
 	_ammo_l = _label("", 17, Color.WHITE)
 	_ammo_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ar.add_child(_ammo_l)
-	for spec in [["-", -1], ["+", 1], ["FILL", 99]]:
+	for spec in [["-", -1], ["+", 1], [Lang.t("FILL"), 99]]:
 		var b := _button(spec[0], 18, _on_ammo.bind(spec[1]))
 		b.custom_minimum_size = Vector2(58 if spec[1] != 99 else 74, 48)
 		ar.add_child(b)
 
-	v.add_child(_label("IN BATTLE", 22, GOLD))
+	v.add_child(_label(Lang.t("IN BATTLE"), 22, GOLD))
 	_derived = RichTextLabel.new()
 	_derived.bbcode_enabled = true
 	_derived.fit_content = true
@@ -330,7 +330,7 @@ func _build_right() -> Control:
 	panel.add_child(v)
 	var head := HBoxContainer.new()
 	v.add_child(head)
-	var t := _label("SKILLS", 22, GOLD)
+	var t := _label(Lang.t("SKILLS"), 22, GOLD)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	_skill_pts = _label("", 17, GOLD)
@@ -372,12 +372,12 @@ func _fill_skills() -> void:
 		top.mouse_filter = Control.MOUSE_FILTER_PASS
 		top.add_theme_font_size_override("normal_font_size", 17)
 		top.add_theme_font_size_override("bold_font_size", 17)
-		top.text = "[b]%s[/b]  %d  [color=#%s]%s[/color]  [color=#%s](%s caps it at %d)[/color]" % [
-			spec["name"], lv, GOLD.to_html(false), pips, DIM.to_html(false), Officer.ATTR_NAMES[spec["attr"]], cap]
+		top.text = Lang.t("[b]%s[/b]  %d  [color=#%s]%s[/color]  [color=#%s](%s caps it at %d)[/color]") % [
+			Lang.t(spec["name"]), lv, GOLD.to_html(false), pips, DIM.to_html(false), Lang.t(Officer.ATTR_NAMES[spec["attr"]]), cap]
 		tv.add_child(top)
-		var now := _label("Now: " + Officer.skill_now(k), 14, GREEN if lv > 0 else DIM)
+		var now := _label(Lang.t("Now: ") + Officer.skill_now(k), 14, GREEN if lv > 0 else DIM)
 		tv.add_child(now)
-		var help := _label(String(spec["help"]), 13, DIM)
+		var help := _label(Lang.t(String(spec["help"])), 13, DIM)
 		help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tv.add_child(help)
 		var plus := _plus(_on_skill.bind(k))
@@ -393,40 +393,40 @@ func _refresh() -> void:
 	if not _name_edit.has_focus():
 		_name_edit.text = String(o.get("name", ""))
 	var lv := Officer.level()
-	_rank.text = "%s  ·  Level %d" % [String(o.get("rank", "Ensign")), lv]
+	_rank.text = Lang.t("%s  ·  Level %d") % [Lang.t(String(o.get("rank", "Ensign"))), lv]
 	var into := int(o["xp"]) % Officer.LEVEL_XP
 	_xp_bar.max_value = Officer.LEVEL_XP
 	_xp_bar.value = into
-	_xp_l.text = "%d xp  ·  %d to the next level" % [int(o["xp"]), Officer.LEVEL_XP - into]
-	_record.text = "Battles %d  ·  Kills %d\nCompany: %d men, morale %d" % [int(o["battles"]), int(o["kills"]),
+	_xp_l.text = Lang.t("%d xp  ·  %d to the next level") % [int(o["xp"]), Officer.LEVEL_XP - into]
+	_record.text = Lang.t("Battles %d  ·  Kills %d\nCompany: %d men, morale %d") % [int(o["battles"]), int(o["kills"]),
 		Company.roster.size(), Company.company_morale()]
 	var ap := int(o["attr_points"])
-	_attr_pts.text = "%d point%s to spend" % [ap, "" if ap == 1 else "s"] if ap > 0 else ""
+	_attr_pts.text = Lang.t("%d point%s to spend") % [ap, "" if ap == 1 else "s"] if ap > 0 else ""
 	for k in Officer.ATTRS:
 		var r: Array = _attr_rows[k]
 		(r[0] as Label).text = str(Officer.attr(k))
 		(r[1] as Button).visible = Officer.can_raise_attr(k)
 	var spts := int(o["skill_points"])
-	_skill_pts.text = "%d point%s to spend" % [spts, "" if spts == 1 else "s"] if spts > 0 else ""
+	_skill_pts.text = Lang.t("%d point%s to spend") % [spts, "" if spts == 1 else "s"] if spts > 0 else ""
 	var gear: Dictionary = o["gear"]
 	for slot in Company.OFFICER_SLOTS:
 		var id := String(gear.get(slot, ""))
-		(_cards[slot] as Button).text = "%s\n%s\n%s" % [String(Company.SLOT_NAMES[slot]).to_upper(),
+		(_cards[slot] as Button).text = "%s\n%s\n%s" % [Lang.t(String(Company.SLOT_NAMES[slot])).to_upper(),
 			Company.item_name(id), _effect(id, slot)]
 	var ammo := int(o["pack"].get("ammo", 0))
-	_ammo_l.text = "Cartridge box: %d / %d   (wagon %d)" % [ammo, int(Company.PACK["ammo"]["max"]), int(Company.stores["ammo"])]
+	_ammo_l.text = Lang.t("Cartridge box: %d / %d   (wagon %d)") % [ammo, int(Company.PACK["ammo"]["max"]), int(Company.stores["ammo"])]
 	_ammo_l.add_theme_color_override("font_color", RED if ammo == 0 else Color.WHITE)
 	var g := Officer.gear_stats()
 	var rel := 3.5 * Officer.reload_mult()
 	var t := ""
-	t += "Hit points [b]%d[/b]   ·   Speed [b]%d%%[/b]   ·   Coat turns [b]%d%%[/b] of a hack\n" % [
+	t += Lang.t("Hit points [b]%d[/b]   ·   Speed [b]%d%%[/b]   ·   Coat turns [b]%d%%[/b] of a hack\n") % [
 		int(Officer.max_hp()), int(Officer.speed_mult() * 100), int(Officer.armour() * 100)]
-	t += "Reload [b]%.1f s[/b]   ·   Spread [b]×%.2f[/b]   ·   Misfires [b]%d%%[/b]\n" % [
+	t += Lang.t("Reload [b]%.1f s[/b]   ·   Spread [b]×%.2f[/b]   ·   Misfires [b]%d%%[/b]\n") % [
 		rel, Officer.spread_mult(), int(round(Officer.misfire() * 50))]
-	t += "Blade [b]×%.2f[/b] (%s)   ·   Parry [b]±%d°[/b]\n" % [Officer.melee_mult(),
-		Company.item_name(String(gear.get("secondary", ""))) if String(gear.get("secondary", "")) != "" else "musket butt",
+	t += Lang.t("Blade [b]×%.2f[/b] (%s)   ·   Parry [b]±%d°[/b]\n") % [Officer.melee_mult(),
+		Company.item_name(String(gear.get("secondary", ""))) if String(gear.get("secondary", "")) != "" else Lang.t("musket butt"),
 		int(Officer.block_arc())]
-	t += "[color=#%s]Your men: steadiness +%d, reaction ×%.2f, xp ×%.2f. Wagon %d kg, %.0f space.[/color]" % [
+	t += Lang.t("[color=#%s]Your men: steadiness +%d, reaction ×%.2f, xp ×%.2f. Wagon %d kg, %.0f space.[/color]") % [
 		DIM.to_html(false), int(Officer.men_steady() * 100), Officer.reaction_mult(), Officer.xp_mult(),
 		int(Company.wagon_kg()), Company.wagon_space()]
 	_derived.text = t
@@ -436,20 +436,20 @@ func _refresh() -> void:
 
 static func _effect(id: String, slot: String) -> String:
 	if id == "":
-		return "your musket butt" if slot == "secondary" else "nothing"
+		return Lang.t("your musket butt") if slot == "secondary" else "nothing"
 	var it: Dictionary = Company.ITEMS[id]
 	var bits: PackedStringArray = []
 	if it.has("steady"):
-		bits.append("+%d steadiness" % int(float(it["steady"]) * 100))
+		bits.append(Lang.t("+%d steadiness") % int(float(it["steady"]) * 100))
 	if it.has("armour"):
-		bits.append("turns %d%%" % int(float(it["armour"]) * 100))
+		bits.append(Lang.t("turns %d%%") % int(float(it["armour"]) * 100))
 	if it.has("pace"):
-		bits.append("%+d%% pace" % int(float(it["pace"]) * 100))
+		bits.append(Lang.t("%+d%% pace") % int(float(it["pace"]) * 100))
 	if it.has("spread"):
-		bits.append("spread ×%.2f, reload ×%.2f" % [float(it["spread"]), float(it["reload"])])
+		bits.append(Lang.t("spread ×%.2f, reload ×%.2f") % [float(it["spread"]), float(it["reload"])])
 	if it.has("melee") and not it.has("reach"):
-		bits.append("%d damage" % int(it["melee"]))
-	return ", ".join(bits) if bits.size() > 0 else "no effect"
+		bits.append(Lang.t("%d damage") % int(it["melee"]))
+	return ", ".join(bits) if bits.size() > 0 else Lang.t("no effect")
 
 
 # ---------------------------------------------------------------- actions
@@ -503,32 +503,32 @@ func _build_picker() -> void:
 	_picker_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_picker_list.add_theme_constant_override("separation", 8)
 	sc.add_child(_picker_list)
-	v.add_child(_button("CANCEL", 20, func(): _picker.visible = false))
+	v.add_child(_button(Lang.t("CANCEL"), 20, func(): _picker.visible = false))
 
 
 func _open_picker(slot: String) -> void:
 	_picker_slot = slot
-	_picker_title.text = "%s: from the wagon" % String(Company.SLOT_NAMES[slot]).to_upper()
+	_picker_title.text = Lang.t("%s: from the wagon") % Lang.t(String(Company.SLOT_NAMES[slot])).to_upper()
 	for c in _picker_list.get_children():
 		c.queue_free()
 	var current := String(Company.officer["gear"].get(slot, ""))
-	_picker_list.add_child(_label("Wearing: %s" % Company.item_name(current), 18, DIM))
+	_picker_list.add_child(_label(Lang.t("Wearing: %s") % Company.item_name(current), 18, DIM))
 	var any := false
 	for o in Company.stored_for(slot):
 		var id: String = o[0]
 		if id == current or not _allowed(slot, id):
 			continue
 		any = true
-		var b := _button("%s   ×%d   ·   %s\n%s" % [Company.item_name(id), int(o[1]), _effect(id, slot), Company.ITEMS[id]["desc"]],
+		var b := _button("%s   ×%d   ·   %s\n%s" % [Company.item_name(id), int(o[1]), _effect(id, slot), Lang.t(Company.ITEMS[id]["desc"])],
 			16, _on_pick.bind(id))
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.custom_minimum_size = Vector2(0, 76)
 		_picker_list.add_child(b)
 	if current != "" and slot in ["head", "secondary", "pistol", "sword"]:
-		_picker_list.add_child(_button("Take it off (back to the wagon)", 18, _on_pick.bind("")))
+		_picker_list.add_child(_button(Lang.t("Take it off (back to the wagon)"), 18, _on_pick.bind("")))
 	if not any:
-		_picker_list.add_child(_label("Nothing spare for this slot in the wagon.", 18, DIM))
+		_picker_list.add_child(_label(Lang.t("Nothing spare for this slot in the wagon."), 18, DIM))
 	_picker.visible = true
 
 

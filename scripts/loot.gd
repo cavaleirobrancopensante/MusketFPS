@@ -38,13 +38,13 @@ func _ready() -> void:
 		v.set("offset_" + side, -14)
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
-	v.add_child(_label("THE FIELD IS YOURS", 30, GOLD))
+	v.add_child(_label(Lang.t("THE FIELD IS YOURS"), 30, GOLD))
 	var row := HBoxContainer.new()
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 14)
 	v.add_child(row)
-	_field = _column(row, "ON THE FIELD")
-	var wcol := _column(row, "THE WAGON")
+	_field = _column(row, Lang.t("ON THE FIELD"))
+	var wcol := _column(row, Lang.t("THE WAGON"))
 	_load_l = _label("", 17, Color.WHITE)
 	wcol.get_parent().get_parent().get_child(0).add_sibling(_load_l)
 	_kg = _bar(Color(0.85, 0.65, 0.3))
@@ -55,10 +55,10 @@ func _ready() -> void:
 	var br := HBoxContainer.new()
 	br.add_theme_constant_override("separation", 10)
 	v.add_child(br)
-	var all := _button("TAKE EVERYTHING THAT FITS", _take_all)
+	var all := _button(Lang.t("TAKE EVERYTHING THAT FITS"), _take_all)
 	all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.add_child(all)
-	_done_b = _button("DONE", _done)
+	_done_b = _button(Lang.t("DONE"), _done)
 	_done_b.custom_minimum_size.x = 260
 	br.add_child(_done_b)
 	_refresh()
@@ -139,19 +139,19 @@ func _refresh() -> void:
 		c.queue_free()
 	var loot: Array = Company.loot
 	if loot.is_empty():
-		_field.add_child(_label("Nothing left worth taking.", 18, DIM))
+		_field.add_child(_label(Lang.t("Nothing left worth taking."), 18, DIM))
 	for i in loot.size():
 		var l: Dictionary = loot[i]
 		var id: String = l["id"]
 		var each := Company.load_of(id, 1)
 		var room := Company.room_for(id)
-		var sub := "%.1f kg, %.2f space each" % [each[0], each[1]] if id != "crowns" else "weighs nothing"
+		var sub := Lang.t("%.1f kg, %.2f space each") % [each[0], each[1]] if id != "crowns" else Lang.t("weighs nothing")
 		if room <= 0:
-			sub += "   ·   no room"
+			sub += Lang.t("   ·   no room")
 		var desc := _what(id)
 		var ours := bool(l.get("ours", false))
-		var r := _row("%s ×%d%s" % [Company.item_label(id), int(l["n"]), "   (our fallen)" if ours else ""], sub + desc,
-			[["TAKE", _take.bind(i, 1), room <= 0], ["ALL", _take.bind(i, 99999), room <= 0]])
+		var r := _row("%s ×%d%s" % [Company.item_label(id), int(l["n"]), Lang.t("   (our fallen)") if ours else ""], sub + desc,
+			[[Lang.t("TAKE"), _take.bind(i, 1), room <= 0], [Lang.t("ALL"), _take.bind(i, 99999), room <= 0]])
 		if ours:
 			(r.get_child(0).get_child(0) as Label).add_theme_color_override("font_color", GOLD)
 		_field.add_child(r)
@@ -164,12 +164,12 @@ func _refresh() -> void:
 	for r in rows:
 		var w := Company.load_of(String(r[0]), int(r[1]))
 		var step := 10 if String(r[0]) in ["rations", "water", "ammo", "rum", "arrows", "bolts"] else 1
-		_wagon.add_child(_row("%s ×%d" % [Company.item_label(r[0]), int(r[1])], "%.1f kg, %.1f space" % [w[0], w[1]],
-			[["DROP", _drop.bind(String(r[0]), step)]]))
+		_wagon.add_child(_row("%s ×%d" % [Company.item_label(r[0]), int(r[1])], Lang.t("%.1f kg, %.1f space") % [w[0], w[1]],
+			[[Lang.t("DROP"), _drop.bind(String(r[0]), step)]]))
 	_confirm = false
-	_done_b.text = "DONE"
+	_done_b.text = Lang.t("DONE")
 	var load := Company.wagon_load()
-	_load_l.text = "%d / %d kg     space %.1f / %.0f     %d crowns" % [int(load[0]), int(Company.wagon_kg()), load[1],
+	_load_l.text = Lang.t("%d / %d kg     space %.1f / %.0f     %d crowns") % [int(load[0]), int(Company.wagon_kg()), load[1],
 		Company.wagon_space(), Company.money]
 	_kg.max_value = Company.wagon_kg()
 	_kg.value = load[0]
@@ -181,8 +181,8 @@ static func _what(id: String) -> String:
 	if Company.ITEMS.has(id):
 		var it: Dictionary = Company.ITEMS[id]
 		if it["slot"] == "goods":
-			return "   ·   sells for about %d" % int(it.get("value", 0))
-		return "   ·   %s" % String(Company.SLOT_NAMES.get(it["slot"], "")).to_lower()
+			return Lang.t("   ·   sells for about %d") % int(it.get("value", 0))
+		return "   ·   %s" % Lang.t(String(Company.SLOT_NAMES.get(it["slot"], ""))).to_lower()
 	return ""
 
 
@@ -231,7 +231,7 @@ func _done() -> void:
 	var left := Company.ours_left()
 	if left > 0 and not _confirm:
 		_confirm = true
-		_done_b.text = "LEAVE %d OF OUR KIT?" % left
+		_done_b.text = Lang.t("LEAVE %d OF OUR KIT?") % left
 		return
 	Company.loot = []
 	Company.save()

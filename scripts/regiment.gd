@@ -326,8 +326,8 @@ func order_charge(r) -> void:
 	if r == null:
 		return
 	if is_cav() and side == 1 and r.side == 0 and target != r:
-		field.alert(r, "Their %s are charging %s!%s" % [String(info["name"]).to_lower(), r.title if not r.player_led else "your company",
-			" Form square!" if r.can_square() and not r.square else ""], true)
+		field.alert(r, Lang.t("Their %s are charging %s!%s") % [Lang.t(String(info["name"])).to_lower(), r.title if not r.player_led else Lang.t("your company"),
+			Lang.t(" Form square!") if r.can_square() and not r.square else ""], true)
 	order = "charge"
 	square = false
 	target = r
@@ -651,4 +651,4 @@ func _set_state(s: String) -> void:
 		_rally_t = 0.0
 		field.on_regiment_broke(self, was)
 	elif s == "wavering":
-		field.alert(self, "%s %s wavering!" % [title, verb("is", "are")], side == 0)
+		field.alert(self, Lang.t("%s %s wavering!") % [title, verb("is", "are")], side == 0)

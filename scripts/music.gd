@@ -62,7 +62,7 @@ func _ready() -> void:
 func label(t: Dictionary) -> String:
 	if t.is_empty():
 		return ""
-	return "%s · %s" % [THEME_NAMES.get(t["theme"], ""), String(t["kind"]).capitalize()]
+	return "%s · %s" % [Lang.t(THEME_NAMES.get(t["theme"], "")), String(t["kind"]).capitalize()]
 
 
 func for_context(kind: String) -> Array:
@@ -221,8 +221,8 @@ func _load_stream(path: String) -> AudioStream:
 		if bytes.size() > 0:
 			s = AudioStreamOggVorbis.load_from_buffer(bytes)
 	if s == null:
-		last_error = "Can't open %s (%s)" % [path.get_file(),
-			"file missing" if not FileAccess.file_exists(path) else "not readable"]
+		last_error = Lang.t("Can't open %s (%s)") % [path.get_file(),
+			Lang.t("file missing") if not FileAccess.file_exists(path) else Lang.t("not readable")]
 		push_warning("Music: " + last_error)
 	else:
 		last_error = ""

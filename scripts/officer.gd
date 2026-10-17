@@ -61,7 +61,7 @@ const OFFICER_GEAR := {"head": "bicorne", "torso": "officer_coat", "primary": "m
 
 static func blank() -> Dictionary:
 	return {
-		"name": "Thomas Ashcombe", "rank": "Ensign", "kills": 0, "battles": 0, "xp": 0,
+		"name": Lang.t("Thomas Ashcombe"), "rank": "Ensign", "kills": 0, "battles": 0, "xp": 0,
 		"attr_points": 1, "skill_points": 4,
 		"attrs": {"aim": 6, "strength": 5, "constitution": 5, "fitness": 6, "wits": 6, "presence": 5},
 		"skills": {"marksmanship": 2, "bladework": 1, "leadership": 1, "tactics": 0, "surgery": 0,
@@ -260,14 +260,14 @@ static func xp_mult() -> float:
 static func skill_now(k: String) -> String:
 	var s := skill(k)
 	match k:
-		"marksmanship": return "spread -%d%%, reload -%d%%" % [5 * s, 3 * s]
-		"bladework": return "+%d%% damage, parry ±%d°" % [5 * s, int(block_arc())]
-		"leadership": return "+%d steadiness, desertion -%d%%" % [2 * s, 7 * s]
-		"tactics": return "reaction -%d%%, watch +%d%%, slip +%d%%" % [4 * s, 3 * s, 3 * s]
-		"surgery": return "healing -%d%% days, %d%% saved" % [7 * s, 4 * s]
-		"logistics": return "wagon %d kg, %.0f space" % [int(Company.wagon_kg()), Company.wagon_space()]
-		"pathfinding": return "march +%d%%, sight +%d%%, scouts lost -%d%%" % [3 * s, 4 * s, 7 * s]
-		"trade": return "buy -%d%%, sell +%d%%" % [4 * s, 5 * s]
-		"training": return "men's xp +%d%%" % [8 * s]
-		"tongues": return "learning +%d%%, understood +%d%%" % [15 * s, 3 * s]
+		"marksmanship": return Lang.t("spread -%d%%, reload -%d%%") % [5 * s, 3 * s]
+		"bladework": return Lang.t("+%d%% damage, parry ±%d°") % [5 * s, int(block_arc())]
+		"leadership": return Lang.t("+%d steadiness, desertion -%d%%") % [2 * s, 7 * s]
+		"tactics": return Lang.t("reaction -%d%%, watch +%d%%, slip +%d%%") % [4 * s, 3 * s, 3 * s]
+		"surgery": return Lang.t("healing -%d%% days, %d%% saved") % [7 * s, 4 * s]
+		"logistics": return Lang.t("wagon %d kg, %.0f space") % [int(Company.wagon_kg()), Company.wagon_space()]
+		"pathfinding": return Lang.t("march +%d%%, sight +%d%%, scouts lost -%d%%") % [3 * s, 4 * s, 7 * s]
+		"trade": return Lang.t("buy -%d%%, sell +%d%%") % [4 * s, 5 * s]
+		"training": return Lang.t("men's xp +%d%%") % [8 * s]
+		"tongues": return Lang.t("learning +%d%%, understood +%d%%") % [15 * s, 3 * s]
 	return ""

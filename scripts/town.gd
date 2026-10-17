@@ -110,24 +110,24 @@ func _ready() -> void:
 	R = {"village": 28.0, "town": 42.0, "city": 56.0, "hold": 34.0}.get(kind, 30.0)
 	_rng.seed = hash("town:%d:%d" % [World.seed, sid])
 	Music.set_context("camp" if World.is_night() else "map")
-	await Loading.step(0.15, "Reading the land around %s..." % st["name"])
+	await Loading.step(0.15, Lang.t("Reading the land around %s...") % st["name"])
 	sur = Folk.surroundings(sid)
 	var batcher := BatcherScript.new()
 	batcher.add_to_group("batcher")
 	add_child(batcher)
 	_build_env()
 	_build_ground()
-	await Loading.step(0.3, "Streets, water and walls...")
+	await Loading.step(0.3, Lang.t("Streets, water and walls..."))
 	_plan_water()
 	_build_streets()
 	_build_water()
 	_build_walls()
-	await Loading.step(0.5, "Houses and yards...")
+	await Loading.step(0.5, Lang.t("Houses and yards..."))
 	_build_square()
 	_build_houses()
-	await Loading.step(0.7, "Trees and fields...")
+	await Loading.step(0.7, Lang.t("Trees and fields..."))
 	_build_outside()
-	await Loading.step(0.82, "The people of %s..." % st["name"])
+	await Loading.step(0.82, Lang.t("The people of %s...") % st["name"])
 	_build_men_at_gate()
 	_build_folk()
 	_build_me()
@@ -151,13 +151,13 @@ func _ready() -> void:
 func _arrival_line() -> String:
 	var visits := int(Folk.town(sid).get("visits", 1))
 	if visits <= 1:
-		return "People stop and stare at your blue coats and long muskets. Nobody here speaks a word you know."
+		return Lang.t("People stop and stare at your blue coats and long muskets. Nobody here speaks a word you know.")
 	var rep := int(Folk.town(sid)["rep"])
 	if rep >= 10:
-		return "A few people wave. They know you here."
+		return Lang.t("A few people wave. They know you here.")
 	if rep <= -5:
-		return "Doors close as you come in. They remember you."
-	return "Some faces look familiar. You've been here before."
+		return Lang.t("Doors close as you come in. They remember you.")
+	return Lang.t("Some faces look familiar. You've been here before.")
 
 
 # ---------------------------------------------------------------- looks
@@ -903,7 +903,7 @@ func _find_target() -> void:
 			_target.show_label(Folk.known_as(_target.person))
 	_talk_btn.visible = _target != null
 	if _target != null:
-		_talk_btn.text = "TALK TO %s" % Folk.known_as(_target.person).to_upper()
+		_talk_btn.text = Lang.t("TALK TO %s") % Folk.known_as(_target.person).to_upper()
 
 
 # ---------------------------------------------------------------- the screen
@@ -935,20 +935,20 @@ func _build_ui() -> void:
 	_info.add_theme_font_size_override("normal_font_size", 17)
 	_info.add_theme_font_size_override("bold_font_size", 17)
 	info_panel.add_child(_info)
-	var leave := _button("LEAVE", _on_leave)
+	var leave := _button(Lang.t("LEAVE"), _on_leave)
 	leave.anchor_left = 1.0
 	leave.anchor_right = 1.0
 	leave.position = Vector2(-170, 14)
 	leave.custom_minimum_size = Vector2(150, UI.MIN_TOUCH)
 	_ui.add_child(leave)
 	_leave_btn = leave
-	_menu_btn = _button("TOWN MENU", func(): _set_mode("menu"))
+	_menu_btn = _button(Lang.t("TOWN MENU"), func(): _set_mode("menu"))
 	_menu_btn.anchor_left = 1.0
 	_menu_btn.anchor_right = 1.0
 	_menu_btn.position = Vector2(-370, 14)
 	_menu_btn.custom_minimum_size = Vector2(190, UI.MIN_TOUCH)
 	_ui.add_child(_menu_btn)
-	_talk_btn = _button("TALK", _on_talk)
+	_talk_btn = _button(Lang.t("TALK"), _on_talk)
 	_talk_btn.anchor_left = 0.5
 	_talk_btn.anchor_right = 0.5
 	_talk_btn.anchor_top = 1.0
@@ -1004,11 +1004,11 @@ func _show_toast(t: String, secs := 3.0) -> void:
 
 func _refresh_info() -> void:
 	var fname: String = Lore.FACTIONS[fac]["name"]
-	var t := "[b][color=#%s]%s[/color][/b]  ·  a %s of the %s\n" % [GOLD.to_html(false), st["name"], kind if kind != "hold" else "dwarf hold", fname]
+	var t := Lang.t("[b][color=#%s]%s[/color][/b]  ·  a %s of the %s\n") % [GOLD.to_html(false), st["name"], kind if kind != "hold" else Lang.t("dwarf hold"), fname]
 	if lang != "":
-		t += "%s: [b]%s[/b], %d words" % [Tongue.LANG_NAMES[lang], Tongue.level(lang), Tongue.words_known(lang)]
+		t += Lang.t("%s: [b]%s[/b], %d words") % [Tongue.LANG_NAMES[lang], Tongue.level(lang), Tongue.words_known(lang)]
 	var rep := int(Folk.town(sid)["rep"])
-	t += "\nStanding here: %s" % ("[color=#8fe08f]liked[/color]" if rep >= 10 else ("[color=#f08060]resented[/color]" if rep <= -5 else "a stranger"))
+	t += Lang.t("\nStanding here: %s") % ("[color=#8fe08f]liked[/color]" if rep >= 10 else ("[color=#f08060]resented[/color]" if rep <= -5 else Lang.t("a stranger")))
 	_info.text = t
 
 
@@ -1093,23 +1093,23 @@ func _fill_menu(people := false, market := false) -> void:
 	for c in _menu_box.get_children():
 		c.queue_free()
 	if market:
-		_menu_box.add_child(_label("THE MARKET  ·  %d crowns" % Company.money, 20, GOLD))
+		_menu_box.add_child(_label(Lang.t("THE MARKET  ·  %d crowns") % Company.money, 20, GOLD))
 		var load := Company.wagon_load()
-		_menu_box.add_child(_label("Wagon %d / %d kg" % [int(load[0]), int(Company.wagon_kg())], 15, DIM))
+		_menu_box.add_child(_label(Lang.t("Wagon %d / %d kg") % [int(load[0]), int(Company.wagon_kg())], 15, DIM))
 		for o in Company.market_offers(kind, fac):
 			var cr := Company.price(int(o[2]))
 			var have := int(Company.stores.get(o[0], 0)) if Company.CONSUMABLES.has(o[0]) else Company.item_count(String(o[0]))
-			var b := _button("%s  ·  %d cr   (have %d)" % [o[3], cr, have], func():
+			var b := _button(Lang.t("%s  ·  %d cr   (have %d)") % [o[3], cr, have], func():
 				var why := Company.buy_offer(o)
-				_show_toast(why if why != "" else "Bought %s." % o[3])
+				_show_toast(why if why != "" else Lang.t("Bought %s.") % o[3])
 				_fill_menu(false, true))
 			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 			b.disabled = Company.money < cr
 			_menu_box.add_child(b)
-		_menu_box.add_child(_button("BACK", func(): _fill_menu()))
+		_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
 		return
 	if people:
-		_menu_box.add_child(_label("THE PEOPLE OF %s" % String(st["name"]).to_upper(), 20, GOLD))
+		_menu_box.add_child(_label(Lang.t("THE PEOPLE OF %s") % String(st["name"]).to_upper(), 20, GOLD))
 		var met: Array = []
 		var new: Array = []
 		for tf in _folk:
@@ -1124,32 +1124,32 @@ func _fill_menu(people := false, market := false) -> void:
 				b.add_theme_color_override("font_color", GOLD)
 			_menu_box.add_child(b)
 		if not new.is_empty():
-			_menu_box.add_child(_button("Someone you haven't met (%d)" % new.size(), _talk_from_menu.bind(new.pick_random())))
+			_menu_box.add_child(_button(Lang.t("Someone you haven't met (%d)") % new.size(), _talk_from_menu.bind(new.pick_random())))
 		if met.is_empty() and new.is_empty():
-			_menu_box.add_child(_label("Nobody is about.", 17, DIM))
-		_menu_box.add_child(_button("BACK", func(): _fill_menu()))
+			_menu_box.add_child(_label(Lang.t("Nobody is about."), 17, DIM))
+		_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
 		return
 	_menu_box.add_child(_label(String(st["name"]).to_upper(), 24, GOLD))
-	_menu_box.add_child(_label("%d crowns  ·  food %d  ·  rum %d  ·  cartridges %d  ·  powder %d lb" % [Company.money, int(Company.stores["rations"]), int(Company.stores["rum"]), int(Company.stores["ammo"]), int(Company.stores.get("powder", 0))], 16, DIM))
-	_menu_box.add_child(_button("TALK TO SOMEONE", func(): _fill_menu(true)))
-	var sells := "food, arrows, spears" if kind == "village" else ("powder, lead, bolts, crossbows" if kind == "hold" else "food, rum, lead, bolts, bows, crossbows")
-	_menu_box.add_child(_button("MARKET  (%s)" % sells, func(): _fill_menu(false, true)))
+	_menu_box.add_child(_label(Lang.t("%d crowns  ·  food %d  ·  rum %d  ·  cartridges %d  ·  powder %d lb") % [Company.money, int(Company.stores["rations"]), int(Company.stores["rum"]), int(Company.stores["ammo"]), int(Company.stores.get("powder", 0))], 16, DIM))
+	_menu_box.add_child(_button(Lang.t("TALK TO SOMEONE"), func(): _fill_menu(true)))
+	var sells := Lang.t("food, arrows, spears") if kind == "village" else (Lang.t("powder, lead, bolts, crossbows") if kind == "hold" else Lang.t("food, rum, lead, bolts, bows, crossbows"))
+	_menu_box.add_child(_button(Lang.t("MARKET  (%s)") % sells, func(): _fill_menu(false, true)))
 	if Company.cartridge_batches() > 0:
-		_menu_box.add_child(_button("MAKE %d CARTRIDGES (1 lb powder, 3 lb lead)" % Company.CARTRIDGE_BATCH, func():
+		_menu_box.add_child(_button(Lang.t("MAKE %d CARTRIDGES (1 lb powder, 3 lb lead)") % Company.CARTRIDGE_BATCH, func():
 			var n := Company.make_cartridges(1)
-			_show_toast("The men roll %d cartridges by the fire." % n)
+			_show_toast(Lang.t("The men roll %d cartridges by the fire.") % n)
 			_fill_menu()))
 	var gv := Company.goods_value(kind)
 	if gv > 0:
-		_menu_box.add_child(_button("SELL LOOT for %d crowns" % gv, func():
+		_menu_box.add_child(_button(Lang.t("SELL LOOT for %d crowns") % gv, func():
 			var got := Company.sell_goods(kind)
-			_show_toast("Sold the loot for %d crowns." % got)
+			_show_toast(Lang.t("Sold the loot for %d crowns.") % got)
 			_fill_menu()))
-	_menu_box.add_child(_button("WALK THE STREETS", func(): _set_mode("walk")))
-	_menu_box.add_child(_button("REST HERE A DAY", func():
+	_menu_box.add_child(_button(Lang.t("WALK THE STREETS"), func(): _set_mode("walk")))
+	_menu_box.add_child(_button(Lang.t("REST HERE A DAY"), func():
 		World.pending_rest = 24.0
 		_on_leave()))
-	_menu_box.add_child(_button("LEAVE", _on_leave))
+	_menu_box.add_child(_button(Lang.t("LEAVE"), _on_leave))
 
 
 func _label(text: String, size: int, col: Color) -> Label:
@@ -1173,7 +1173,7 @@ func _mood_plain(trust: int) -> String:
 		return "warming"
 	if trust < 60:
 		return "friendly"
-	return "a friend"
+	return Lang.t("a friend")
 
 
 func _talk_from_menu(tf) -> void:
@@ -1302,16 +1302,16 @@ func _on_talk() -> void:
 	_patience = 5 + (3 if "talkative" in tr else 0) - (2 if "shy" in tr else 0) + (2 if int(s["trust"]) > 30 else 0)
 	_conv_log.text = ""
 	if int(s["met"]) <= 1:
-		_log("[color=#%s]%s eyes your coat and your musket. %s[/color]" % [DIM.to_html(false), _nm(p).capitalize(),
-			"Nobody here has seen anyone like you." if int(Folk.town(sid).get("visits", 1)) <= 1 else "Word of the strangers has gone round."])
+		_log(Lang.t("[color=#%s]%s eyes your coat and your musket. %s[/color]") % [DIM.to_html(false), _nm(p).capitalize(),
+			Lang.t("Nobody here has seen anyone like you.") if int(Folk.town(sid).get("visits", 1)) <= 1 else Lang.t("Word of the strangers has gone round.")])
 	else:
-		_log("[color=#%s]%s knows you.[/color]" % [DIM.to_html(false), _nm(p).capitalize()])
+		_log(Lang.t("[color=#%s]%s knows you.[/color]") % [DIM.to_html(false), _nm(p).capitalize()])
 	_conv.visible = true
 	_fill_conv()
 
 
 func _nm(p: Dictionary) -> String:
-	return String(p["name"]) if bool(Folk.state(p)["named"]) else "the %s" % p["job"]
+	return String(p["name"]) if bool(Folk.state(p)["named"]) else Lang.t("the %s") % p["job"]
 
 
 func _mood_word(trust: int) -> String:
@@ -1322,27 +1322,27 @@ func _mood_word(trust: int) -> String:
 	if trust < 10:
 		return "wary"
 	if trust < 30:
-		return "[color=#d8e090]warming to you[/color]"
+		return Lang.t("[color=#d8e090]warming to you[/color]")
 	if trust < 60:
 		return "[color=#8fe08f]friendly[/color]"
-	return "[color=#8fe08f]a friend[/color]"
+	return Lang.t("[color=#8fe08f]a friend[/color]")
 
 
 func _fill_conv() -> void:
 	var p: Dictionary = _conv_with.person
 	var s := Folk.state(p)
 	_conv_head.text = "[b]%s[/b]  ·  %s  ·  %s" % [Folk.known_as(p).capitalize(), "%d, %s" % [int(p["age"]), "man" if p["sex"] == "m" else "woman"], _mood_word(int(s["trust"]))]
-	_conv_know.text = Folk.what_you_know(p) + ("   ·   Patience: %s" % "●".repeat(maxi(0, _patience)))
+	_conv_know.text = Folk.what_you_know(p) + (Lang.t("   ·   Patience: %s") % "●".repeat(maxi(0, _patience)))
 	for c in _conv_actions.get_children():
 		c.queue_free()
 	if Folk.task_ready(p):
-		var fin := _button("DO WHAT WAS ASKED", _on_finish_task)
+		var fin := _button(Lang.t("DO WHAT WAS ASKED"), _on_finish_task)
 		fin.add_theme_color_override("font_color", GOLD)
 		_conv_actions.add_child(fin)
 	for a in Folk.ACTION_ORDER:
 		var spec: Dictionary = Folk.ACTIONS[a]
 		var words := Folk.can_use_words(p, a)
-		var b := _button("%s\n%s" % [spec["label"], "in words" if words else "with signs"], _on_action.bind(a))
+		var b := _button("%s\n%s" % [Lang.t(spec["label"]), Lang.t("in words") if words else Lang.t("with signs")], _on_action.bind(a))
 		b.add_theme_font_size_override("font_size", 15)
 		b.custom_minimum_size = Vector2(0, 62)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1351,7 +1351,7 @@ func _fill_conv() -> void:
 		if a == "join" and not bool(p["recruitable"]) and int(s["met"]) > 2:
 			b.disabled = true
 		_conv_actions.add_child(b)
-	var end := _button("Goodbye", _end_conv)
+	var end := _button(Lang.t("Goodbye"), _end_conv)
 	end.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	end.custom_minimum_size = Vector2(0, 62)
 	_conv_actions.add_child(end)
@@ -1375,10 +1375,10 @@ func _on_action(a: String) -> void:
 	if said != "":
 		t += "\n" + said
 	if String(r["note"]) != "":
-		t += "\n[color=#%s]%s[/color]" % [GOLD.to_html(false) if not String(r["note"]).begins_with("They didn't") else RED.to_html(false), r["note"]]
+		t += "\n[color=#%s]%s[/color]" % [GOLD.to_html(false) if not String(r["note"]) == Lang.t("They didn't understand you.") else RED.to_html(false), r["note"]]
 	var learned: Array = r["learned"]
 	for w in learned:
-		t += "\n[color=#8fe08f]You learn a word: [b]%s[/b] means “%s”.[/color]" % [Tongue.word(lang, w), w]
+		t += Lang.t("\n[color=#8fe08f]You learn a word: [b]%s[/b] means “%s”.[/color]") % [Tongue.word(lang, w), w]
 	_log(t)
 	_conv_with.mood = {"warm": "talk", "amused": "talk", "afraid": "fear", "angry": "point", "cold": "", "puzzled": "talk"}.get(r["tone"], "talk")
 	if r.has("reveal"):
@@ -1386,7 +1386,7 @@ func _on_action(a: String) -> void:
 		World._reveal(Vector2(o["x"], o["y"]), 4.0)
 	if bool(r["joined"]):
 		var m := Folk.recruit(p)
-		_log("[color=#8fe08f][b]%s joins your company[/b] with %s (the %s tag).[/color]" % [m["name"], Company.item_name(String(m["gear"]["primary"])).to_lower(), m["tag"]])
+		_log(Lang.t("[color=#8fe08f][b]%s joins your company[/b] with %s (the %s tag).[/color]") % [m["name"], Company.item_name(String(m["gear"]["primary"])).to_lower(), m["tag"]])
 		_conv_with.walk_off(_gate + Vector3(4, 0, 2))
 		_finish_conv()
 		return
@@ -1396,7 +1396,7 @@ func _on_action(a: String) -> void:
 		_finish_conv()
 		return
 	if _patience <= 0:
-		_log("[color=#%s]%s has work to do, and goes back to it.[/color]" % [DIM.to_html(false), _nm(p).capitalize()])
+		_log(Lang.t("[color=#%s]%s has work to do, and goes back to it.[/color]") % [DIM.to_html(false), _nm(p).capitalize()])
 		_finish_conv()
 		return
 	Company.save()
@@ -1418,7 +1418,7 @@ func _finish_conv() -> void:
 	_refresh_info()
 	for c in _conv_actions.get_children():
 		c.queue_free()
-	var end := _button("Walk on", _end_conv)
+	var end := _button(Lang.t("Walk on"), _end_conv)
 	end.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_conv_actions.add_child(end)
 

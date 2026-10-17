@@ -337,16 +337,16 @@ func make_recruit() -> Dictionary:
 # ---------------------------------------------------------------- queries
 
 static func title(m: Dictionary) -> String:
-	return "%s %s" % [RANK_SHORT[int(m["rank"])], m["name"]]
+	return "%s %s" % [Lang.t(RANK_SHORT[int(m["rank"])]), m["name"]]
 
 
 static func surname_title(m: Dictionary) -> String:
 	var parts: PackedStringArray = String(m["name"]).split(" ")
-	return "%s %s" % [RANK_SHORT[int(m["rank"])], parts[parts.size() - 1]]
+	return "%s %s" % [Lang.t(RANK_SHORT[int(m["rank"])]), parts[parts.size() - 1]]
 
 
 static func item_name(id: String) -> String:
-	return String(ITEMS[id]["name"]) if ITEMS.has(id) else "None"
+	return Lang.t(String(ITEMS[id]["name"])) if ITEMS.has(id) else Lang.t("None")
 
 
 ## Which store his pack's "ammo" comes from: "ammo" (cartridges), "arrows",
@@ -373,7 +373,7 @@ static func role_of(m: Dictionary) -> String:
 
 ## The word for what's in his pack: "cartridges", "arrows", "bolts".
 static func shot_word(m: Dictionary) -> String:
-	return String(SHOT_WORD.get(shot_key(m), "shot"))
+	return Lang.t(String(SHOT_WORD.get(shot_key(m), "shot")))
 
 
 ## Everything his gear does for him, in one place (see ITEMS).
@@ -501,27 +501,27 @@ func apply_battle(result: Dictionary) -> void:
 		var levels := Men.level(m) - old_level
 		if levels > 0:
 			m["points"] = int(m["points"]) + levels * Men.POINTS_PER_LEVEL
-			summary["levelled"].append("%s, level %d (+%d points)" % [title(m), Men.level(m), levels * Men.POINTS_PER_LEVEL])
+			summary["levelled"].append(Lang.t("%s, level %d (+%d points)") % [title(m), Men.level(m), levels * Men.POINTS_PER_LEVEL])
 		# A win lifts a man; a defeat, or a rout, weighs on him.
 		Men.add_morale(m, -10 if was_prologue else (10 if won else -15))
 		# The wagon crew: running shames a man, standing to it makes him proud.
 		match String(r.get("conduct", "")):
 			"fled":
 				Men.add_morale(m, -6)
-				summary.get_or_add("conduct", []).append("%s ran from the wagon" % title(m))
+				summary.get_or_add("conduct", []).append(Lang.t("%s ran from the wagon") % title(m))
 			"stood":
 				Men.add_morale(m, 3)
-				summary.get_or_add("conduct", []).append("%s held the wagon" % title(m))
+				summary.get_or_add("conduct", []).append(Lang.t("%s held the wagon") % title(m))
 			"fought":
 				Men.add_morale(m, 6)
-				summary.get_or_add("conduct", []).append("%s fought for the wagon" % title(m))
+				summary.get_or_add("conduct", []).append(Lang.t("%s fought for the wagon") % title(m))
 		if r["status"] == "wounded":
 			m["wounded_days"] = maxi(1, int(round(randi_range(3, 10) * Officer.wound_mult())))
-			summary["wounded"].append("%s (%d days)" % [title(m), m["wounded_days"]])
+			summary["wounded"].append(Lang.t("%s (%d days)") % [title(m), m["wounded_days"]])
 		var new_rank := _rank_for(int(m["xp"]))
 		if new_rank > int(m["rank"]):
 			m["rank"] = new_rank
-			summary["promoted"].append("%s, now %s" % [m["name"], RANKS[new_rank]])
+			summary["promoted"].append(Lang.t("%s, now %s") % [m["name"], Lang.t(RANKS[new_rank])])
 		survivors.append(m)
 	roster = survivors
 
@@ -551,7 +551,7 @@ func apply_battle(result: Dictionary) -> void:
 		_loot_from(String(result.get("enemy", "lizards")), int(result["slain"]))
 		if int(result.get("assault", -1)) >= 0:
 			# A burned nest: what they'd hoarded from a dozen raids.
-			summary["nest_burned"] = String(result.get("nest_name", "the nest"))
+			summary["nest_burned"] = String(result.get("nest_name", Lang.t("the nest")))
 			summary["pay"] = int(summary["pay"]) + 60
 			for i in randi_range(4, 8):
 				_add_loot(["rations", "rum", "crowns", "charm", "hide", "lizard_shield"].pick_random(), randi_range(3, 12))
@@ -638,7 +638,7 @@ func recover_kit(m: Dictionary) -> Array:
 		var store: String = k if k != "ammo" else (sk if sk != "" else "ammo")
 		var k_in := stow(store, n)
 		if k_in > 0:
-			got.append(("water for %d day%s" % [k_in, "" if k_in == 1 else "s"]) if k == "water" else "%d %s" % [k_in, "rations" if k == "rations" else String(SHOT_WORD.get(store, "shot"))])
+			got.append((Lang.t("water for %d day%s") % [k_in, "" if k_in == 1 else "s"]) if k == "water" else "%d %s" % [k_in, Lang.t("rations" if k == "rations" else String(SHOT_WORD.get(store, "shot")))])
 		if k_in < n:
 			_add_loot(store, n - k_in, true)
 			left += 1
@@ -680,8 +680,8 @@ func recover_stash() -> String:
 		var k := stow(id, n)
 		if k < n:
 			_add_loot(id, n - k, true)
-		got.append("%d %s" % [n, {"musket": "muskets", "ammo": "cartridges", "rum": "tots of rum"}[id]])
-	got.append("%d guns" % int(s.get("cannons", 0)))
+		got.append("%d %s" % [n, Lang.t({"musket": "muskets", "ammo": "cartridges", "rum": "tots of rum"}[id])])
+	got.append(Lang.t("%d guns") % int(s.get("cannons", 0)))
 	stash = {}
 	return ", ".join(got)
 
@@ -907,15 +907,15 @@ func drop_to_loot(id: String, n: int) -> int:
 
 static func item_label(id: String) -> String:
 	match id:
-		"water": return "Water (days)"
-		"rations": return "Rations"
-		"ammo": return "Cartridges"
-		"rum": return "Rum (tots)"
-		"arrows": return "Arrows"
-		"bolts": return "Crossbow bolts"
-		"powder": return "Powder (lb)"
-		"lead": return "Lead (lb)"
-		"crowns": return "Crowns"
+		"water": return Lang.t("Water (days)")
+		"rations": return Lang.t("Rations")
+		"ammo": return Lang.t("Cartridges")
+		"rum": return Lang.t("Rum (tots)")
+		"arrows": return Lang.t("Arrows")
+		"bolts": return Lang.t("Crossbow bolts")
+		"powder": return Lang.t("Powder (lb)")
+		"lead": return Lang.t("Lead (lb)")
+		"crowns": return Lang.t("Crowns")
 	return item_name(id)
 
 
@@ -1012,27 +1012,27 @@ static func _row(men: Array, y: float, gap: float, officer_gap: bool) -> void:
 static func market_offers(kind: String, fac: String) -> Array:
 	var out: Array = []
 	var food: Array = {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}.get(kind, [10, 6])
-	out.append(["rations", food[0], food[1], "%d rations" % food[0]])
+	out.append(["rations", food[0], food[1], Lang.t("%d rations") % food[0]])
 	if kind != "village":
-		out.append(["rum", 10, 6, "10 tots of rum"])
+		out.append(["rum", 10, 6, Lang.t("10 tots of rum")])
 	if kind != "hold":
-		out.append(["arrows", 20, 3 if fac == "vell" else 4, "20 arrows"])
+		out.append(["arrows", 20, 3 if fac == "vell" else 4, Lang.t("20 arrows")])
 	if kind != "village":
-		out.append(["bolts", 10, 5 if fac == "dwarves" else 6, "10 crossbow bolts"])
-		out.append(["lead", 5, 6, "5 lb of lead"])
+		out.append(["bolts", 10, 5 if fac == "dwarves" else 6, Lang.t("10 crossbow bolts")])
+		out.append(["lead", 5, 6, Lang.t("5 lb of lead")])
 	if kind == "hold" or fac == "dwarves":
-		out.append(["powder", 1, 24, "1 lb of blasting powder"])
-		out.append(["dwarf_crossbow", 1, 70, "a dwarf crossbow"])
+		out.append(["powder", 1, 24, Lang.t("1 lb of blasting powder")])
+		out.append(["dwarf_crossbow", 1, 70, Lang.t("a dwarf crossbow")])
 	elif kind in ["town", "city"]:
-		out.append(["crossbow", 1, 34, "a crossbow"])
-		out.append(["jack", 1, 10, "a padded jack"])
-		out.append(["kettle_hat", 1, 11, "a kettle hat"])
+		out.append(["crossbow", 1, 34, Lang.t("a crossbow")])
+		out.append(["jack", 1, 10, Lang.t("a padded jack")])
+		out.append(["kettle_hat", 1, 11, Lang.t("a kettle hat")])
 	if fac == "vell" and kind != "village":
-		out.append(["war_bow", 1, 22, "a war bow"])
+		out.append(["war_bow", 1, 22, Lang.t("a war bow")])
 	elif kind != "hold":
-		out.append(["hunting_bow", 1, 9, "a hunting bow"])
+		out.append(["hunting_bow", 1, 9, Lang.t("a hunting bow")])
 	if kind != "hold":
-		out.append(["war_spear", 1, 7, "a spear"])
+		out.append(["war_spear", 1, 7, Lang.t("a spear")])
 	return out
 
 
@@ -1042,9 +1042,9 @@ func buy_offer(offer: Array) -> String:
 	var n := int(offer[1])
 	var cr := price(int(offer[2]))
 	if money < cr:
-		return "Not enough crowns."
+		return Lang.t("Not enough crowns.")
 	if room_for(id) < n:
-		return "The wagon is full."
+		return Lang.t("The wagon is full.")
 	money -= cr
 	stow(id, n)
 	save()
@@ -1181,9 +1181,9 @@ func _road_day(water := "random") -> Dictionary:
 			var back := recover_kit(m)
 			var where := ""
 			if int(back[1]) > 0:
-				where = "; no room in the wagon for all his kit: CAMP, then LOOT THE FIELD"
+				where = Lang.t("; no room in the wagon for all his kit: CAMP, then LOOT THE FIELD")
 			elif back[0] != "":
-				where = "; his kit is in the wagon"
+				where = Lang.t("; his kit is in the wagon")
 			day_notes["died"].append("%s (%s)%s" % [title(m), cause, where])
 			roster.erase(m)
 	return day_notes
@@ -1282,26 +1282,26 @@ func pass_day(water: String) -> PackedStringArray:
 	var notes: PackedStringArray = []
 	var dn := _road_day(water)
 	if int(dn["thirsty"]) > 0:
-		notes.append("%d men went thirsty." % int(dn["thirsty"]))
+		notes.append(Lang.t("%d men went thirsty.") % int(dn["thirsty"]))
 	if int(dn["hungry"]) > 0:
-		notes.append("%d men went hungry." % int(dn["hungry"]))
+		notes.append(Lang.t("%d men went hungry.") % int(dn["hungry"]))
 	if int(dn["sick"]) > 0:
-		notes.append("%d fell sick from foul water." % int(dn["sick"]))
+		notes.append(Lang.t("%d fell sick from foul water.") % int(dn["sick"]))
 	if bool(dn["unfair"]):
-		notes.append("Some ate while others starved; there is muttering in the ranks.")
+		notes.append(Lang.t("Some ate while others starved; there is muttering in the ranks."))
 	if dn["died"].size() > 0:
-		notes.append("Died: %s." % ", ".join(dn["died"]))
+		notes.append(Lang.t("Died: %s.") % ", ".join(dn["died"]))
 	if day - last_pay_day >= 7 and roster.size() > 0:
 		last_pay_day += 7
 		var wages := weekly_wages()
 		if money >= wages:
 			money -= wages
-			notes.append("Wages paid: %d crowns." % wages)
+			notes.append(Lang.t("Wages paid: %d crowns.") % wages)
 			for m in roster:
 				Men.add_morale(m, 3)
 		else:
 			money = 0
-			notes.append("No pay! The men are angry.")
+			notes.append(Lang.t("No pay! The men are angry."))
 			for m in roster:
 				Men.add_morale(m, -20)
 	notes.append_array(_contract_day())
@@ -1309,7 +1309,7 @@ func pass_day(water: String) -> PackedStringArray:
 	for g in gone:
 		roster.erase(g)
 	if gone.size() > 0:
-		notes.append("%d deserted in the night." % gone.size())
+		notes.append(Lang.t("%d deserted in the night.") % gone.size())
 	var cm := company_morale()
 	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015 * Officer.desert_mult():
 		notes.append(_mutiny())
@@ -1322,7 +1322,7 @@ func pass_day(water: String) -> PackedStringArray:
 func march_on() -> String:
 	var days := march_days()
 	day += days
-	var notes: PackedStringArray = ["%d days' march. Day %d." % [days, day]]
+	var notes: PackedStringArray = [Lang.t("%d days' march. Day %d.") % [days, day]]
 	var totals := {"thirsty": 0, "hungry": 0, "sick": 0, "grog": 0, "dry": 0, "foul": 0}
 	var died: Array = []
 	var unfair := false
@@ -1337,32 +1337,32 @@ func march_on() -> String:
 		died.append_array(dn["died"])
 		unfair = unfair or bool(dn["unfair"])
 	if totals["dry"] > 0:
-		notes.append("%s without water on the road." % ("A day" if totals["dry"] == 1 else "%d days" % totals["dry"]))
+		notes.append(Lang.t("%s without water on the road.") % (Lang.t("A day") if totals["dry"] == 1 else Lang.t("%d days") % totals["dry"]))
 	if totals["foul"] > 0:
-		notes.append("Foul water for %s.%s" % ["a day" if totals["foul"] == 1 else "%d days" % totals["foul"],
-			(" %d tots of rum went into the grog." % totals["grog"]) if totals["grog"] > 0 else " No grog!"])
+		notes.append(Lang.t("Foul water for %s.%s") % [Lang.t("a day") if totals["foul"] == 1 else Lang.t("%d days") % totals["foul"],
+			(Lang.t(" %d tots of rum went into the grog.") % totals["grog"]) if totals["grog"] > 0 else Lang.t(" No grog!")])
 	if totals["sick"] > 0:
-		notes.append("%d fell sick." % totals["sick"])
+		notes.append(Lang.t("%d fell sick.") % totals["sick"])
 	if totals["thirsty"] > 0:
-		notes.append("%d went thirsty." % totals["thirsty"])
+		notes.append(Lang.t("%d went thirsty.") % totals["thirsty"])
 	if totals["hungry"] > 0:
-		notes.append("%d went hungry." % totals["hungry"])
+		notes.append(Lang.t("%d went hungry.") % totals["hungry"])
 	if unfair:
-		notes.append("Some ate while others starved; there is muttering in the ranks.")
+		notes.append(Lang.t("Some ate while others starved; there is muttering in the ranks."))
 	if died.size() > 0:
-		notes.append("Died on the road: %s." % ", ".join(died))
+		notes.append(Lang.t("Died on the road: %s.") % ", ".join(died))
 
 	while day - last_pay_day >= 7 and roster.size() > 0:
 		last_pay_day += 7
 		var wages := weekly_wages()
 		if money >= wages:
 			money -= wages
-			notes.append("Wages paid: %d crowns." % wages)
+			notes.append(Lang.t("Wages paid: %d crowns.") % wages)
 			for m in roster:
 				Men.add_morale(m, 3)
 		else:
 			money = 0
-			notes.append("No pay! The men are angry.")
+			notes.append(Lang.t("No pay! The men are angry."))
 			for m in roster:
 				Men.add_morale(m, -20)
 
@@ -1371,7 +1371,7 @@ func march_on() -> String:
 	for g in gone:
 		roster.erase(g)
 	if gone.size() > 0:
-		notes.append("%d deserted in the night." % gone.size())
+		notes.append(Lang.t("%d deserted in the night.") % gone.size())
 	var cm := company_morale()
 	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.05 * Officer.desert_mult():
 		notes.append(_mutiny())
@@ -1380,8 +1380,8 @@ func march_on() -> String:
 	stores["water"] = maxi(int(stores["water"]), WATER_CART)
 	stores["foul"] = randf() < FOUL_WATER_CHANCE
 	if bool(stores["foul"]):
-		notes.append("The only water here is a muddy stream: the barrels are foul.")
-	notes.append("Scouts report about %d lizardmen ahead." % next_enemy_count())
+		notes.append(Lang.t("The only water here is a muddy stream: the barrels are foul."))
+	notes.append(Lang.t("Scouts report about %d lizardmen ahead.") % next_enemy_count())
 	march_note = " ".join(notes)
 	save()
 	return march_note
@@ -1403,7 +1403,7 @@ func _mutiny() -> String:
 	# The ones who stayed are shaken, but the worst are gone.
 	for m in roster:
 		Men.add_morale(m, 10)
-	return "MUTINY! %d men broke into the wagon and left with food, powder and %d crowns." % [n, took]
+	return Lang.t("MUTINY! %d men broke into the wagon and left with food, powder and %d crowns.") % [n, took]
 
 
 # ---------------------------------------------------------------- saving
@@ -1534,8 +1534,8 @@ func contract_progress(kind: String, faction: String) -> String:
 		var bonus := 60 + 2 * int(contract["pay"])
 		money += bonus
 		change_standing(String(contract["faction"]), 10)
-		return "Duty done for %s: a bonus of %d crowns." % [contract["lord_name"], bonus]
-	return "%s: %d of %d %s." % [contract["lord_name"], int(contract["done"]), int(contract["need"]), DUTIES[contract["duty"]][2]]
+		return Lang.t("Duty done for %s: a bonus of %d crowns.") % [contract["lord_name"], bonus]
+	return Lang.t("%s: %d of %d %s.") % [contract["lord_name"], int(contract["done"]), int(contract["need"]), Lang.t(DUTIES[contract["duty"]][2])]
 
 
 ## You turned on your employer's men: the contract is torn up.
@@ -1544,7 +1544,7 @@ func break_contract() -> String:
 		return ""
 	var n := String(contract["lord_name"])
 	contract = {}
-	return "Your contract with %s is torn up." % n
+	return Lang.t("Your contract with %s is torn up.") % n
 
 
 ## Each midnight: the week's pay, and the end of the contract.
@@ -1555,10 +1555,10 @@ func _contract_day() -> PackedStringArray:
 	if day - int(contract["paid_day"]) >= 7:
 		contract["paid_day"] = int(contract["paid_day"]) + 7
 		money += int(contract["pay"])
-		notes.append("%s pays your hire: %d crowns." % [contract["lord_name"], int(contract["pay"])])
+		notes.append(Lang.t("%s pays your hire: %d crowns.") % [contract["lord_name"], int(contract["pay"])])
 	if day >= int(contract["until"]):
 		var done := int(contract["done"]) >= int(contract["need"])
-		notes.append("Your contract with %s has run its course%s." % [contract["lord_name"], "" if done else ", the duty undone: he is not pleased"])
+		notes.append(Lang.t("Your contract with %s has run its course%s.") % [contract["lord_name"], "" if done else Lang.t(", the duty undone: he is not pleased")])
 		contract["ended"] = "done" if done else "undone"
 		last_contract = contract
 		contract = {}

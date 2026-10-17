@@ -96,7 +96,7 @@ func pick(w) -> Dictionary:
 		if r <= 0.0:
 			var row: Array = TABLE[id]
 			_last[id] = w.hours
-			return {"id": id, "title": row[0], "text": row[1], "options": row[2]}
+			return {"id": id, "title": Lang.t(row[0]), "text": Lang.t(row[1]), "options": (row[2] as Array).map(func(o): return [Lang.t(o[0]), o[1]])}
 	return {}
 
 
@@ -181,8 +181,8 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				var more := ""
 				if randf() < 0.4:
 					Company.add_item("musket", 1)
-					more = " and a musket, wrapped in oilcloth"
-				return _done("Cartridges that stayed dry (%d), a keg of rum (%d tots)%s." % [shot, rum, more])
+					more = Lang.t(" and a musket, wrapped in oilcloth")
+				return _done(Lang.t("Cartridges that stayed dry (%d), a keg of rum (%d tots)%s.") % [shot, rum, more])
 		"game":
 			if key == "hunt":
 				w.pass_hours(3.0)
@@ -191,27 +191,27 @@ func resolve(w, id: String, key: String) -> Dictionary:
 					var food := randi_range(10, 25)
 					st["rations"] = int(st["rations"]) + food
 					_morale(2)
-					return _done("A good kill: %d rations of strange, gamey meat. The men eat well tonight." % food)
-				return _done("Three hours in the trees and nothing to show for it.")
+					return _done(Lang.t("A good kill: %d rations of strange, gamey meat. The men eat well tonight.") % food)
+				return _done(Lang.t("Three hours in the trees and nothing to show for it."))
 		"berries":
 			if key == "eat":
 				st["rations"] = int(st["rations"]) + 8
 				if randf() < 0.35:
 					var n := _sicken(randi_range(1, 3))
-					return _done("Sweet... and then the cramps. %d men are sick." % n)
-				return _done("Sweet and filling: 8 rations' worth.")
+					return _done(Lang.t("Sweet... and then the cramps. %d men are sick.") % n)
+				return _done(Lang.t("Sweet and filling: 8 rations' worth."))
 		"lost":
 			var m := _random_man()
 			if m.is_empty():
-				return _done("A false alarm.")
+				return _done(Lang.t("A false alarm."))
 			if key == "search":
 				w.pass_hours(4.0)
 				if randf() < 0.75:
 					_morale(2)
-					return _done("You find %s sitting on a log with a twisted ankle. The men cheer." % Company.title(m))
-			_lose(m, "lost on the march")
+					return _done(Lang.t("You find %s sitting on a log with a twisted ankle. The men cheer.") % Company.title(m))
+			_lose(m, Lang.t("lost on the march"))
 			_morale(-6 if key == "leave" else -2)
-			return _done("%s is never seen again." % Company.title(m))
+			return _done(Lang.t("%s is never seen again.") % Company.title(m))
 		"ruins":
 			if key == "search":
 				w.pass_hours(2.0)
@@ -219,32 +219,32 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				if r < 0.45:
 					var coins := randi_range(15, 60)
 					Company.money += coins
-					return _done("Under a fallen lintel: a clay pot of old coins, %d crowns' worth." % coins)
+					return _done(Lang.t("Under a fallen lintel: a clay pot of old coins, %d crowns' worth.") % coins)
 				if r < 0.7:
 					var m2 := _random_man()
 					if not m2.is_empty():
 						m2["wounded_days"] = maxi(1, int(round(randi_range(3, 6) * Company.Officer.wound_mult())))
-						return _done("A floor gives way. %s is hurt in the fall." % Company.title(m2))
+						return _done(Lang.t("A floor gives way. %s is hurt in the fall.") % Company.title(m2))
 				w._reveal(w.pos, 35.0)
-				return _done("Nothing of value, but from the top of the tower you can see far across the land.")
+				return _done(Lang.t("Nothing of value, but from the top of the tower you can see far across the land."))
 		"fever":
 			var men: int = Company.roster.size()
 			if bool(st["grog"]) and int(st["rum"]) >= men:
 				st["rum"] = int(st["rum"]) - men
-				return _done("Grog all round keeps the fever off (%d tots of rum)." % men)
+				return _done(Lang.t("Grog all round keeps the fever off (%d tots of rum).") % men)
 			var n2 := _sicken(randi_range(1, 3))
-			return _done("%d men come down with fever." % n2)
+			return _done(Lang.t("%d men come down with fever.") % n2)
 		"bog":
 			if key == "dig":
 				w.pass_hours(5.0)
-				return _done("Five hours of mud, but the wagon is out with everything on it.")
+				return _done(Lang.t("Five hours of mud, but the wagon is out with everything on it."))
 			var lost := int(st["rations"]) / 4
 			st["rations"] = int(st["rations"]) - lost
-			return _done("You throw off %d rations and the wagon comes free." % lost)
+			return _done(Lang.t("You throw off %d rations and the wagon comes free.") % lost)
 		"spoor":
 			if key == "follow":
 				var p: Dictionary = w.spawn_near("warband", "lizards", randi_range(6, 12), 7.0)
-				return _done("Through the reeds: a warband of %d, resting. They haven't seen you... yet." % int(p["size"]))
+				return _done(Lang.t("Through the reeds: a warband of %d, resting. They haven't seen you... yet.") % int(p["size"]))
 		"ambush":
 			var p2: Dictionary = w.spawn_near("hunters", "lizards", randi_range(5, 10), 0.6)
 			return {"text": "", "fight": p2}
@@ -253,30 +253,30 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				if Company.money >= 5:
 					Company.money -= 5
 					st["rations"] = int(st["rations"]) + 12
-					return _done("12 rations for 5 crowns. He bites the coins.")
-				return _done("You can't afford it.")
+					return _done(Lang.t("12 rations for 5 crowns. He bites the coins."))
+				return _done(Lang.t("You can't afford it."))
 		"pedlar":
 			if key == "rum" and Company.money >= 7:
 				Company.money -= 7
 				st["rum"] = int(st["rum"]) + 10
-				return _done("10 tots of something that is probably rum.")
+				return _done(Lang.t("10 tots of something that is probably rum."))
 			if key == "food" and Company.money >= 5:
 				Company.money -= 5
 				st["rations"] = int(st["rations"]) + 10
-				return _done("10 rations of hard bread and sausage.")
+				return _done(Lang.t("10 rations of hard bread and sausage."))
 			if key != "leave":
-				return _done("You can't afford it.")
+				return _done(Lang.t("You can't afford it."))
 		"refugees":
 			if key == "share":
 				st["rations"] = maxi(0, int(st["rations"]) - 8)
 				_morale(3)
-				return _done("They weep and bless you. The men stand a little straighter.")
+				return _done(Lang.t("They weep and bless you. The men stand a little straighter."))
 			_morale(-2)
-			return _done("They watch you go. Some of the men don't meet their eyes.")
+			return _done(Lang.t("They watch you go. Some of the men don't meet their eyes."))
 		"deserters":
 			if key == "pay":
 				if Company.money < 10:
-					return _done("You can't afford it.")
+					return _done(Lang.t("You can't afford it."))
 				Company.money -= 10
 				var told: Array = []
 				for s2 in w.gen.settlements:
@@ -287,42 +287,42 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				for s3 in told.slice(0, 3):
 					w._reveal(Vector2(s3["x"], s3["y"]), 10.0)
 					names.append(s3["name"])
-				return _done("They draw in the dirt: the roads to %s." % (", ".join(names) if names.size() > 0 else "places you already know"))
+				return _done(Lang.t("They draw in the dirt: the roads to %s.") % (", ".join(names) if names.size() > 0 else Lang.t("places you already know")))
 		"vantage":
 			if key == "climb":
 				w.pass_hours(2.0)
 				w._reveal(w.pos, 40.0)
-				return _done("From the top the land is laid out below you like a map.")
+				return _done(Lang.t("From the top the land is laid out below you like a map."))
 		"fishing":
 			if key == "fish":
 				w.pass_hours(3.0)
 				var fish := randi_range(6, 14)
 				st["rations"] = int(st["rations"]) + fish
-				return _done("%d rations of fish, cleaned and smoked." % fish)
+				return _done(Lang.t("%d rations of fish, cleaned and smoked.") % fish)
 		"flood":
 			if key == "wait":
 				w.pass_hours(6.0)
-				return _done("By evening the water drops enough to cross.")
+				return _done(Lang.t("By evening the water drops enough to cross."))
 			st["rations"] = maxi(0, int(st["rations"]) - 6)
 			if randf() < 0.15:
 				var m3 := _random_man()
 				if not m3.is_empty():
-					_lose(m3, "drowned at a ford")
-					return _done("You get across, but %s is swept away, and some of the food with him." % Company.title(m3))
-			return _done("A wet, cold crossing. Some of the food is ruined.")
+					_lose(m3, Lang.t("drowned at a ford"))
+					return _done(Lang.t("You get across, but %s is swept away, and some of the food with him.") % Company.title(m3))
+			return _done(Lang.t("A wet, cold crossing. Some of the food is ruined."))
 		"camp":
 			if key == "search":
 				var r2 := randf()
 				if r2 < 0.4:
 					var f := randi_range(4, 10)
 					st["rations"] = int(st["rations"]) + f
-					return _done("A sack of meal, still dry: %d rations." % f)
+					return _done(Lang.t("A sack of meal, still dry: %d rations.") % f)
 				if r2 < 0.7:
 					var c2 := randi_range(5, 20)
 					Company.money += c2
-					return _done("A purse, %d crowns, left behind in a hurry." % c2)
+					return _done(Lang.t("A purse, %d crowns, left behind in a hurry.") % c2)
 				_morale(-1)
-				return _done("Behind the tent, what's left of its owner. The lizards took the rest.")
+				return _done(Lang.t("Behind the tent, what's left of its owner. The lizards took the rest."))
 		"prospectors":
 			if key == "show":
 				_morale(2)
@@ -332,7 +332,7 @@ func resolve(w, id: String, key: String) -> Dictionary:
 						hold = s4
 				if not hold.is_empty():
 					w._reveal(Vector2(hold["x"], hold["y"]), 12.0)
-				return _done("They take a musket apart and put it back together in silence, then tell you the way to %s. The men are proud as peacocks." % hold.get("name", "their hold"))
+				return _done(Lang.t("They take a musket apart and put it back together in silence, then tell you the way to %s. The men are proud as peacocks.") % hold.get("name", Lang.t("their hold")))
 	return _done("")
 
 

@@ -81,10 +81,10 @@ func generate_staged(s: int, report: Callable) -> void:
 	river.fill(0)
 	road.fill(0)
 	var phases := [
-		[_heights, "Raising hills and mountains..."], [_rivers, "Cutting the rivers..."],
-		[_terrain, "Forests, swamps and plains..."], [_regions, "Drawing the borders..."],
-		[_place_settlements, "Founding villages and towns..."], [_roads, "Laying the roads..."],
-		[_fords, "Finding the fords..."]]
+		[_heights, Lang.t("Raising hills and mountains...")], [_rivers, Lang.t("Cutting the rivers...")],
+		[_terrain, Lang.t("Forests, swamps and plains...")], [_regions, Lang.t("Drawing the borders...")],
+		[_place_settlements, Lang.t("Founding villages and towns...")], [_roads, Lang.t("Laying the roads...")],
+		[_fords, Lang.t("Finding the fords...")]]
 	# How long each phase takes, roughly (ms on a desktop), so the bar keeps pace.
 	var cost := [550, 270, 50, 180, 120, 250, 10]
 	var total := 0.0

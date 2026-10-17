@@ -127,9 +127,9 @@ func _on_struck_shield() -> void:
 
 func _on_friendly_fire(by_you: bool) -> void:
 	if by_you:
-		show_message("You shot one of your own men!", 2.0)
+		show_message(Lang.t("You shot one of your own men!"), 2.0)
 	else:
-		show_message("Watch your fire! Hit by a ball from our own line.", 2.0)
+		show_message(Lang.t("Watch your fire! Hit by a ball from our own line."), 2.0)
 
 
 func _on_hurt() -> void:
@@ -162,14 +162,14 @@ func _buttons() -> Array:
 		# Four swing buttons in a diamond where FIRE was: the button you
 		# press is where the blow comes from.
 		var gap := 84.0
-		list.append({"id": "swing0", "circle": true, "pos": c + Vector2(0, -gap), "r": 46.0, "label": "OVER"})
-		list.append({"id": "swing1", "circle": true, "pos": c + Vector2(-gap, 0), "r": 46.0, "label": "LEFT"})
-		list.append({"id": "swing2", "circle": true, "pos": c + Vector2(gap, 0), "r": 46.0, "label": "RIGHT"})
-		list.append({"id": "swing3", "circle": true, "pos": c + Vector2(0, gap), "r": 46.0, "label": "THRUST"})
-		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 310, s.y - 280), "r": 52.0, "label": "BLOCK"})
+		list.append({"id": "swing0", "circle": true, "pos": c + Vector2(0, -gap), "r": 46.0, "label": Lang.t("OVER")})
+		list.append({"id": "swing1", "circle": true, "pos": c + Vector2(-gap, 0), "r": 46.0, "label": Lang.t("LEFT")})
+		list.append({"id": "swing2", "circle": true, "pos": c + Vector2(gap, 0), "r": 46.0, "label": Lang.t("RIGHT")})
+		list.append({"id": "swing3", "circle": true, "pos": c + Vector2(0, gap), "r": 46.0, "label": Lang.t("THRUST")})
+		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 310, s.y - 280), "r": 52.0, "label": Lang.t("BLOCK")})
 	else:
-		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": "FIRE"})
-		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": "AIM"})
+		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": Lang.t("FIRE")})
+		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": Lang.t("AIM")})
 	# A small button for every weapon you carry, along the very bottom.
 	var ws: Array = player.weapons().duplicate()
 	if _field_ui() != null:
@@ -178,40 +178,40 @@ func _buttons() -> Array:
 	var x0 := s.x * 0.5 - (ws.size() * (ww + 8.0) - 8.0) * 0.5 - 70.0 # clear of VOLLEY
 	for i in ws.size():
 		list.append({"id": "w_" + String(ws[i]), "circle": false, "rect": Rect2(x0 + i * (ww + 8.0), s.y - 48.0, ww, 40.0),
-			"label": WEAPON_LABELS[ws[i]], "small": true})
+			"label": Lang.t(WEAPON_LABELS[ws[i]]), "small": true})
 	list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
-		"label": "GRENADE %d" % player.grenades})
-	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": "VOLLEY!"})
+		"label": Lang.t("GRENADE %d") % player.grenades})
+	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": Lang.t("VOLLEY!")})
 	var bw := 150.0
 	var bh := 56.0
 	var y := 18.0
-	var mode_label := "AT WILL" if battle.is_at_will() else "ON COMMAND"
+	var mode_label := Lang.t("AT WILL") if battle.is_at_will() else Lang.t("ON COMMAND")
 	var fui = _field_ui()
 	if fui != null:
 		_army_buttons(list, fui, mode_label)
 	else:
-		list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 4 * (bw + 10), y, bw, bh), "label": "FOLLOW"})
-		list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": "HOLD"})
-		list.append({"id": "charge", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": "CHARGE"})
+		list.append({"id": "follow", "circle": false, "rect": Rect2(s.x - 4 * (bw + 10), y, bw, bh), "label": Lang.t("FOLLOW")})
+		list.append({"id": "hold", "circle": false, "rect": Rect2(s.x - 3 * (bw + 10), y, bw, bh), "label": Lang.t("HOLD")})
+		list.append({"id": "charge", "circle": false, "rect": Rect2(s.x - 2 * (bw + 10), y, bw, bh), "label": Lang.t("CHARGE")})
 		list.append({"id": "mode", "circle": false, "rect": Rect2(s.x - (bw + 10), y, bw, bh), "label": mode_label})
-	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": "MENU"})
+	list.append({"id": "menu", "circle": false, "rect": Rect2(20, 92, 110, 46), "label": Lang.t("MENU")})
 	list.append({"id": "view", "circle": false, "rect": Rect2(140, 92, 150, 46),
-			"label": "3RD PERSON" if player.third_person else "1ST PERSON"})
+			"label": Lang.t("3RD PERSON") if player.third_person else Lang.t("1ST PERSON")})
 	if _field_ui() != null:
-		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": "COMMAND"})
+		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": Lang.t("COMMAND")})
 	if Settings.playground:
 		# The range's own controls, down the left side.
-		var pl := [["pg_still1", "+1 TARGET"], ["pg_still5", "+5 TARGETS"], ["pg_charge5", "+5 CHARGING"],
-			["pg_charge20", "+20 CHARGING"], ["pg_clear", "CLEAR"]]
-		var gun_label := "FIRE GUN"
+		var pl := [["pg_still1", Lang.t("+1 TARGET")], ["pg_still5", Lang.t("+5 TARGETS")], ["pg_charge5", Lang.t("+5 CHARGING")],
+			["pg_charge20", Lang.t("+20 CHARGING")], ["pg_clear", Lang.t("CLEAR")]]
+		var gun_label := Lang.t("FIRE GUN")
 		if battle.range_gun != null and not battle.range_gun.ready():
-			gun_label = "LOADING %d%%" % int(battle.range_gun.progress() * 100.0)
+			gun_label = Lang.t("LOADING %d%%") % int(battle.range_gun.progress() * 100.0)
 		pl.append(["pg_gun", gun_label])
 		for i in pl.size():
 			list.append({"id": pl[i][0], "circle": false, "rect": Rect2(20, 160 + i * 54, 170, 46), "label": pl[i][1]})
 	if restart_visible:
 		list.append({"id": "restart", "circle": false, "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 + 30, 260, 72),
-			"label": "CONTINUE" if Company.active else "RESTART"})
+			"label": Lang.t("CONTINUE") if Company.active else Lang.t("RESTART")})
 	return list
 
 
@@ -229,19 +229,19 @@ func _army_buttons(list: Array, fui, mode_label: String) -> void:
 		x += cw + 6.0
 	var row: Array = []
 	if fui.selected.is_empty():
-		row = [["follow", "FOLLOW"], ["hold", "HOLD"], ["charge", "CHARGE"], ["mode", mode_label]]
+		row = [["follow", Lang.t("FOLLOW")], ["hold", Lang.t("HOLD")], ["charge", Lang.t("CHARGE")], ["mode", mode_label]]
 	else:
 		var r0 = fui.selected[0]
-		row = [["o_halt", "HALT"], ["o_charge", "CHARGE"]]
+		row = [["o_halt", Lang.t("HALT")], ["o_charge", Lang.t("CHARGE")]]
 		if fui.selected.any(func(r): return r.is_ranged()):
-			row.append(["o_fire", "FIRE: AT WILL" if r0.fire_at_will else "FIRE: HOLD"])
-			row.append(["o_volley", "VOLLEY"])
+			row.append(["o_fire", Lang.t("FIRE: AT WILL") if r0.fire_at_will else Lang.t("FIRE: HOLD")])
+			row.append(["o_volley", Lang.t("VOLLEY")])
 		if fui.selected.any(func(r): return r.can_square()):
-			row.append(["o_square", "SQUARE" if not r0.square else "IN SQUARE"])
-		row.append(["o_run", "RUN" if not r0.run else "RUNNING"])
-		row.append(["o_fallback", "FALL BACK"])
+			row.append(["o_square", Lang.t("SQUARE") if not r0.square else Lang.t("IN SQUARE")])
+		row.append(["o_run", Lang.t("RUN") if not r0.run else Lang.t("RUNNING")])
+		row.append(["o_fallback", Lang.t("FALL BACK")])
 		if fui.selected.size() == 1 and r0.player_led:
-			row.append(["o_follow", "FOLLOW ME"])
+			row.append(["o_follow", Lang.t("FOLLOW ME")])
 		row.append(["o_none", "✕"])
 	# Right-aligned rows of order buttons, clear of the buttons on the left.
 	var ow := 108.0
@@ -447,9 +447,9 @@ func _draw() -> void:
 		draw_line(c + Vector2(14, 14), c + Vector2(6, 6), col, 3)
 	_draw_swing_indicator(c)
 	if block_flash > 0.0:
-		_text_center("BLOCKED", c + Vector2(0, 60), 30, Color(0.95, 0.78, 0.3, block_flash * 2.0))
+		_text_center(Lang.t("BLOCKED"), c + Vector2(0, 60), 30, Color(0.95, 0.78, 0.3, block_flash * 2.0))
 	if shield_flash > 0.0:
-		_text_center("SHIELD! charge your blow", c + Vector2(0, 60), 26, Color(0.85, 0.85, 0.9, shield_flash * 1.8))
+		_text_center(Lang.t("SHIELD! charge your blow"), c + Vector2(0, 60), 26, Color(0.85, 0.85, 0.9, shield_flash * 1.8))
 
 	if hurt_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0.7, 0.0, 0.0, 0.35 * hurt_flash))
@@ -466,7 +466,7 @@ func _draw() -> void:
 	if Settings.stress:
 		var fps := Engine.get_frames_per_second()
 		var fcol := Color(0.4, 1, 0.4) if fps >= 55 else (Color(1, 0.85, 0.3) if fps >= 30 else Color(1, 0.4, 0.3))
-		_text("%d FPS   units %d" % [fps, battle.soldiers.size() + battle.enemies.size()], Vector2(310, 40), 26, fcol)
+		_text(Lang.t("%d FPS   units %d") % [fps, battle.soldiers.size() + battle.enemies.size()], Vector2(310, 40), 26, fcol)
 
 	# Move joystick.
 	if joy_index != -1:
@@ -477,7 +477,7 @@ func _draw() -> void:
 	else:
 		var hint := Vector2(170, s.y - 170)
 		draw_arc(hint, JOY_RADIUS, 0, TAU, 48, Color(1, 1, 1, 0.15), 2)
-		_text_center("MOVE", hint, 18, Color(1, 1, 1, 0.25))
+		_text_center(Lang.t("MOVE"), hint, 18, Color(1, 1, 1, 0.25))
 
 	_draw_objective()
 	if _field_ui() != null:
@@ -487,7 +487,7 @@ func _draw() -> void:
 		_draw_button(b)
 	var fui = _field_ui()
 	if fui != null and not fui.selected.is_empty():
-		_text_center("Tap an enemy regiment to send them at it  ·  tap the ground to march them there", Vector2(s.x - 330, 194), 16, Color(UI.BRASS.lightened(0.25), 0.9))
+		_text_center(Lang.t("Tap an enemy regiment to send them at it  ·  tap the ground to march them there"), Vector2(s.x - 330, 194), 16, Color(UI.BRASS.lightened(0.25), 0.9))
 
 	_draw_story()
 	_draw_hint()
@@ -555,7 +555,7 @@ func _draw_objective() -> void:
 	draw_colored_polygon(tri, Color(0, 0, 0, 0.45))
 	var tri2 := PackedVector2Array([at + dir * (r - 5.0), at - dir * (r - 5.0) * 0.6 + side * (r - 5.0) * 0.8, at - dir * (r - 5.0) * 0.6 - side * (r - 5.0) * 0.8])
 	draw_colored_polygon(tri2, gold)
-	var turn := "TURN RIGHT" if dir.x > 0.0 else "TURN LEFT"
+	var turn := Lang.t("TURN RIGHT") if dir.x > 0.0 else Lang.t("TURN LEFT")
 	var tp := at - dir * (r + 34.0) + Vector2(0, 6)
 	tp.x = clampf(tp.x, 160.0, size.x - 160.0)
 	_text_center(label, tp + Vector2(2, 2), 20, Color(0, 0, 0, 0.6))
@@ -572,7 +572,7 @@ func _draw_hint() -> void:
 	var tsize := font.get_multiline_string_size(hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 24.0, fsize)
 	var r := Rect2(20, 262, w, tsize.y + 40.0)
 	draw_style_box(_rbox(Color(UI.WOOL, 0.85 * alpha), Color(UI.BRASS, 0.7 * alpha), 6), r)
-	draw_string(display, Vector2(32, 286), "How to", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(UI.BRASS, alpha))
+	draw_string(display, Vector2(32, 286), Lang.t("How to"), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(UI.BRASS, alpha))
 	draw_multiline_string(font, Vector2(32, 308), hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 24.0, fsize, -1,
 		Color(1, 1, 1, alpha))
 
@@ -676,7 +676,7 @@ func _draw_button(b: Dictionary) -> void:
 			# Reload ring fills up around the fire button.
 			var prog: float = player.reload_progress_of(player.weapon)
 			draw_arc(pos, r + 9, -PI * 0.5, -PI * 0.5 + TAU * prog, 48, Color(0.95, 0.78, 0.3), 7)
-			label = {"bow": "NOCKING", "crossbow": "SPANNING"}.get(player.weapon, "LOADING")
+			label = {"bow": Lang.t("NOCKING"), "crossbow": Lang.t("SPANNING")}.get(player.weapon, Lang.t("LOADING"))
 			label_col = Color(1, 1, 1, 0.5)
 		if swinging and player.swing_phase == "windup":
 			# Charge ring fills while you hold; white when fully charged.
@@ -737,12 +737,12 @@ func _draw_unit_card(b: Dictionary) -> void:
 	if r.broken():
 		bg = Color(0.3, 0.08, 0.06, 0.7)
 	draw_style_box(_rbox(bg, UI.BRASS if sel else Color(UI.PIPECLAY, 0.4), 5, 2 if sel else 1), rect)
-	var lab := String(r.info["short"]) + ("★" if r.player_led else "")
+	var lab := Lang.t(String(r.info["short"])) + ("★" if r.player_led else "")
 	_text_center(lab, rect.get_center() + Vector2(0, -12), 15 if rect.size.x > 80 else 13, UI.BRASS.lightened(0.2) if sel else Color(UI.PIPECLAY, 0.95))
 	var st := "%d" % r.members.size()
 	match r.state:
-		"wavering": st = "WAVERING"
-		"routing", "shattered": st = "RUNNING"
+		"wavering": st = Lang.t("WAVERING")
+		"routing", "shattered": st = Lang.t("RUNNING")
 	if r.engaged() and not r.broken():
 		st += " ⚔"
 	_text_center(st, rect.get_center() + Vector2(0, 8), 13, Color(1.0, 0.75, 0.35) if r.state == "wavering" else Color(UI.PIPECLAY, 0.75))
@@ -781,7 +781,7 @@ func _draw_minimap() -> void:
 		var d := Vector2(fwd.x, fwd.z).normalized()
 		var sd := Vector2(-d.y, d.x)
 		draw_colored_polygon(PackedVector2Array([pp + d * 8.0, pp - d * 5.0 + sd * 5.0, pp - d * 5.0 - sd * 5.0]), Color.WHITE)
-	_text(" MAP · tap for command", MAP_RECT.position + Vector2(0, MAP_RECT.size.y + 18), 13, Color(UI.PIPECLAY, 0.6))
+	_text(Lang.t(" MAP · tap for command"), MAP_RECT.position + Vector2(0, MAP_RECT.size.y + 18), 13, Color(UI.PIPECLAY, 0.6))
 
 
 func _world_to_map(w: Vector3) -> Vector2:

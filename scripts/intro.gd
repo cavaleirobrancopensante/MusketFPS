@@ -63,14 +63,14 @@ var _shake := 0.0
 var _done := false
 var _snaps: Array = [] # (test renders: -- --intro-render --snaps=3,16.5,...)
 var _captions := [
-	[0.6, 6.2, "Three weeks out of port, the troopship %s carries %s to the colonies." % [Lore.SHIP, Lore.REGIMENT]],
-	[7.4, 12.6, "A storm drives her far off course, onto rocks no chart has ever shown."],
-	[14.6, 21.8, "Dawn. Before the wreck breaks up, %s has the guns swayed out and lowered into the boats." % Lore.COMMANDER],
-	[23.0, 30.8, "Of eight hundred souls aboard, some three hundred pull for a shore no one has ever charted."],
-	[32.0, 39.8, "They drag the guns up through the surf by hand."],
-	[41.0, 49.4, "By noon the beach is entrenched: a rampart of sand and wicker, four guns in its embrasures."],
-	[50.6, 57.2, "\"Not one step back from this sand,\" the Major tells them. \"Whatever comes out of those trees.\""],
-	[58.4, 65.0, "Then, from deep in the forest, the scouts hear drums."],
+	[0.6, 6.2, Lang.t("Three weeks out of port, the troopship %s carries %s to the colonies.") % [Lore.SHIP, Lore.REGIMENT]],
+	[7.4, 12.6, Lang.t("A storm drives her far off course, onto rocks no chart has ever shown.")],
+	[14.6, 21.8, Lang.t("Dawn. Before the wreck breaks up, %s has the guns swayed out and lowered into the boats.") % Lore.COMMANDER],
+	[23.0, 30.8, Lang.t("Of eight hundred souls aboard, some three hundred pull for a shore no one has ever charted.")],
+	[32.0, 39.8, Lang.t("They drag the guns up through the surf by hand.")],
+	[41.0, 49.4, Lang.t("By noon the beach is entrenched: a rampart of sand and wicker, four guns in its embrasures.")],
+	[50.6, 57.2, Lang.t("\"Not one step back from this sand,\" the Major tells them. \"Whatever comes out of those trees.\"")],
+	[58.4, 65.0, Lang.t("Then, from deep in the forest, the scouts hear drums.")],
 ]
 
 # The shots' actors.
@@ -574,7 +574,7 @@ func _build_overlay() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_fade)
 	var skip := Button.new()
-	skip.text = "Skip  ▸"
+	skip.text = Lang.t("Skip  ▸")
 	skip.add_theme_font_size_override("font_size", 22)
 	skip.position = Vector2(20, 76)
 	skip.size = Vector2(150, 56)

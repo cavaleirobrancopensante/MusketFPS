@@ -754,7 +754,7 @@ func _apply_melee() -> void:
 
 func _fire() -> void:
 	if not loaded and ammo == 0:
-		battle.hud.show_message("Your cartridge box is empty!", 1.2)
+		battle.hud.show_message(Lang.t("Your cartridge box is empty!"), 1.2)
 		return
 	if not loaded or _reprime > 0.0:
 		return
@@ -762,7 +762,7 @@ func _fire() -> void:
 		# A flash in the pan: prime it again.
 		_reprime = 1.2
 		battle.play_sound_ui("crack", -10.0)
-		battle.hud.show_message("Misfire!", 1.0)
+		battle.hud.show_message(Lang.t("Misfire!"), 1.0)
 		return
 	loaded = false
 	reload_left = reload_time
@@ -798,13 +798,13 @@ func _fire() -> void:
 ## The pistol: one quick shot, short-ranged and wild, then a slow reload.
 func _fire_pistol() -> void:
 	if not pistol_loaded and ammo == 0:
-		battle.hud.show_message("Your cartridge box is empty!", 1.2)
+		battle.hud.show_message(Lang.t("Your cartridge box is empty!"), 1.2)
 		return
 	if not pistol_loaded:
 		return
 	if randf() < misfire_chance * 1.5:
 		battle.play_sound_ui("crack", -10.0)
-		battle.hud.show_message("The pistol misfires!", 1.0)
+		battle.hud.show_message(Lang.t("The pistol misfires!"), 1.0)
 		return
 	pistol_loaded = false
 	pistol_reload_left = PISTOL_RELOAD * reload_time / RELOAD_TIME

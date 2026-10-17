@@ -11,6 +11,20 @@ It's growing into a Warband-style sandbox: see [ROADMAP.md](ROADMAP.md).
 Built and tested with **Godot 4.7.1**. No art or audio files: every model,
 sprite, animation and sound is generated in code.
 
+**Play it in the browser:** <https://cavaleirobrancopensante.github.io/MusketFPS/>.
+Every push to `main` rebuilds it (`.github/workflows/web.yml` exports the
+Web preset and publishes it on the `gh-pages` branch), so the link is
+always the latest version. (GitHub Pages must be set once to serve the
+`gh-pages` branch: Settings → Pages → Deploy from a branch → gh-pages / root.)
+
+**Languages:** English, Português (Brasil) and Español: the three flags in
+the top-right corner of the main menu switch the whole game (remembered).
+Every piece of text goes through `Lang.t()` (`scripts/lang.gd`), with the
+English as the key and the translations in `data/i18n/pt_BR.json` and
+`data/i18n/es.json`. `python3 tools/i18n.py wrap` wraps new text in the
+scripts, `extract` refreshes `data/i18n/en.json`, and `missing` lists what
+each language still lacks.
+
 ## The campaign
 
 ### Prologue: the wreck and the beach (also the tutorial)

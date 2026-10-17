@@ -81,7 +81,7 @@ func setup(b, from: Vector3, forward: Vector3, dist: float, garrison: int, walls
 			_build_segment(a, rng)
 	_build_inside(rng)
 	_place_garrison(garrison, rng)
-	battle.objective = {"label": "THE GATE", "pos": gate_point(), "height": 3.6}
+	battle.objective = {"label": Lang.t("THE GATE"), "pos": gate_point(), "height": 3.6}
 
 
 # ---------------------------------------------------------------- building
@@ -274,7 +274,7 @@ func _sally(n: int) -> void:
 	if field != null:
 		_last_sally = field.sally(self, n)
 		if battle.hud != null:
-			battle.hud.show_message("The gate swings open: they're coming out!", 2.0)
+			battle.hud.show_message(Lang.t("The gate swings open: they're coming out!"), 2.0)
 		battle.play_sound("roar", gate_point() + Vector3.UP * 2.0, 4.0)
 		return
 	var out := gate_point() + (gate_point() - centre).normalized() * 2.5
@@ -288,7 +288,7 @@ func _sally(n: int) -> void:
 		battle.enemies.append(l)
 		battle.add_child(l)
 		_last_sally.append(l)
-	battle.hud.show_message("The gate swings open: they're coming out!", 2.0)
+	battle.hud.show_message(Lang.t("The gate swings open: they're coming out!"), 2.0)
 	battle.play_sound("roar", out + Vector3.UP * 2.0, 4.0)
 
 
@@ -303,7 +303,7 @@ func damage_gate(amount: float) -> void:
 	if not _told_giving and gate_hp < gate_max * 0.5:
 		_told_giving = true
 		if battle.hud != null:
-			battle.hud.show_message("The gate is giving!", 1.6)
+			battle.hud.show_message(Lang.t("The gate is giving!"), 1.6)
 	if gate_hp <= 0.0:
 		gate_open = true
 		_gate_body.queue_free()
@@ -316,8 +316,8 @@ func damage_gate(amount: float) -> void:
 		for i in 4:
 			battle.spawn_smoke(gate_point() + Vector3(randf_range(-1.5, 1.5), randf_range(0.2, 2.0), randf_range(-1, 1)), 2.0)
 		if battle.hud != null:
-			battle.hud.show_message("The gate is down! Into the nest!", 2.5)
-		battle.objective = {"label": "STORM THE NEST", "pos": centre, "height": 3.0}
+			battle.hud.show_message(Lang.t("The gate is down! Into the nest!"), 2.5)
+		battle.objective = {"label": Lang.t("STORM THE NEST"), "pos": centre, "height": 3.0}
 
 
 func _animate_gate(delta: float) -> void:

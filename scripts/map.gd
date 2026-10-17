@@ -119,20 +119,20 @@ func _ready() -> void:
 		# The land itself, phase by phase (most of the wait on a new or loaded game).
 		await World.prebuild(func(fr: float, what: String):
 			await Loading.step(lerpf(f[0], f[1] - 0.08, fr), what))
-		await Loading.step(f[1] - 0.08, "Charting the roads and the march...")
+		await Loading.step(f[1] - 0.08, Lang.t("Charting the roads and the march..."))
 	World.ensure()
-	await Loading.step(f[1], "Drawing the land...")
+	await Loading.step(f[1], Lang.t("Drawing the land..."))
 	_shader = Shader.new()
 	_shader.code = MAP_SHADER
 	_build_fog()
 	_mat = _material(false, Color.WHITE)
 	_build_env()
 	_build_terrain()
-	await Loading.step(f[2], "Rivers, lakes and the sea...")
+	await Loading.step(f[2], Lang.t("Rivers, lakes and the sea..."))
 	_build_sea()
-	await Loading.step(f[3], "Planting the forests...")
+	await Loading.step(f[3], Lang.t("Planting the forests..."))
 	_build_trees()
-	await Loading.step(f[4], "Roads, bridges, villages and towns...")
+	await Loading.step(f[4], Lang.t("Roads, bridges, villages and towns..."))
 	_build_bridges()
 	_build_settlements()
 	_build_player()
@@ -150,7 +150,7 @@ func _ready() -> void:
 	Music.set_context("camp" if World.camping else "map")
 	_target = _world_pos(World.pos)
 	_apply_battle_result()
-	await Loading.step(f[5], "Fog over the unknown...")
+	await Loading.step(f[5], Lang.t("Fog over the unknown..."))
 	_update_fog(true)
 	_update_camera()
 	if World.pending_rest > 0.0:
@@ -436,9 +436,9 @@ func _ring(c: Vector3, r: float, n: int, seg: Vector3, col: Color) -> void:
 func _label_for(st: Dictionary, c: Vector3) -> void:
 	var l := Label3D.new()
 	var kind: String = st["kind"]
-	var what: String = {"village": "", "town": "", "city": "", "hold": "  (dwarf hold)", "nest": "  (lizard nest)"}[kind]
+	var what: String = {"village": "", "town": "", "city": "", "hold": Lang.t("  (dwarf hold)"), "nest": Lang.t("  (lizard nest)")}[kind]
 	if kind == "nest" and World.nest_destroyed(int(st["id"])):
-		what = "  (burned)"
+		what = Lang.t("  (burned)")
 	l.text = String(st["name"]) + what
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.fixed_size = true
@@ -572,11 +572,11 @@ func _build_hud() -> void:
 	right.position = Vector2(-170, 12)
 	right.add_theme_constant_override("separation", 8)
 	root.add_child(right)
-	for spec in [["YOU", func():
+	for spec in [[Lang.t("YOU"), func():
 				get_tree().set_meta("officer_back", "res://scenes/map.tscn")
 				_go("res://scenes/officer.tscn")],
-			["COMPANY", _go.bind(COMPANY_SCREEN)], ["PLAN", _go.bind(PLAN)], ["WAGON", func(): _logistics.open()], ["SCOUTS", _open_scouts], ["LORDS", _show_lords],
-			["CAMP", _go.bind(CAMP)], ["MENU", _go.bind(MENU)]]:
+			[Lang.t("COMPANY"), _go.bind(COMPANY_SCREEN)], [Lang.t("PLAN"), _go.bind(PLAN)], [Lang.t("WAGON"), func(): _logistics.open()], [Lang.t("SCOUTS"), _open_scouts], [Lang.t("LORDS"), _show_lords],
+			[Lang.t("CAMP"), _go.bind(CAMP)], [Lang.t("MENU"), _go.bind(MENU)]]:
 		right.add_child(_button(spec[0], spec[1]))
 	var br := HBoxContainer.new()
 	br.anchor_left = 1.0
@@ -586,9 +586,9 @@ func _build_hud() -> void:
 	br.position = Vector2(-430, -76)
 	br.add_theme_constant_override("separation", 8)
 	root.add_child(br)
-	_wait_btn = _button("WAIT", _on_wait)
+	_wait_btn = _button(Lang.t("WAIT"), _on_wait)
 	br.add_child(_wait_btn)
-	br.add_child(_button("CENTRE", func(): _follow = true))
+	br.add_child(_button(Lang.t("CENTRE"), func(): _follow = true))
 	br.add_child(_button("−", func(): _zoom(1.35)))
 	br.add_child(_button("+", func(): _zoom(1.0 / 1.35)))
 
@@ -667,39 +667,39 @@ func _go(scene: String) -> void:
 
 
 func _update_hud() -> void:
-	var state := "   (paused)"
+	var state := Lang.t("   (paused)")
 	if World.camping:
-		state = "   (in camp, sleeping)"
+		state = Lang.t("   (in camp, sleeping)")
 	elif World.moving() or World.waiting:
-		state = "" if not World.is_night() else "   (night march)" if World.moving() else ""
+		state = "" if not World.is_night() else Lang.t("   (night march)") if World.moving() else ""
 	_clock.text = World.clock() + state
 	var fit := Company.fit_men().size()
 	var cm := Company.company_morale()
-	_status.text = "%d crowns · %d/%d men fit · morale %d (%s)\nfood %.1f days · water %.1f days%s" % [
+	_status.text = Lang.t("%d crowns · %d/%d men fit · morale %d (%s)\nfood %.1f days · water %.1f days%s") % [
 		Company.money, fit, Company.roster.size(), cm, Men.morale_word(cm),
-		Company.days_left("rations"), Company.days_left("water"), " · water foul" if bool(Company.stores["foul"]) else ""]
+		Company.days_left("rations"), Company.days_left("water"), Lang.t(" · water foul") if bool(Company.stores["foul"]) else ""]
 	var c := World.cell()
 	var i: int = Gen.idx(c.x, c.y)
 	var g = World.gen
-	var what: String = Gen.T_NAMES[g.terrain[i]]
+	var what: String = Lang.t(Gen.T_NAMES[g.terrain[i]])
 	if g.road[i] > 0:
-		what = Gen.ROAD_NAMES[g.road[i]] + " through " + what.to_lower()
+		what = Lang.t(Gen.ROAD_NAMES[g.road[i]]) + Lang.t(" through ") + what.to_lower()
 	if g.river[i] == 2:
-		what = "Ford"
+		what = Lang.t("Ford")
 	elif g.river[i] == 3:
-		what = "Bridge"
+		what = Lang.t("Bridge")
 	var eta := ""
 	if World.moving():
-		eta = " · %d cells to go" % World.path.size()
+		eta = Lang.t(" · %d cells to go") % World.path.size()
 	var scouting := ""
 	if not World.scouts.is_empty():
 		var out := 0
 		for sc in World.scouts:
 			out += (sc["ids"] as Array).size()
-		scouting = "\n%d scout%s out" % [out, "" if out == 1 else "s"]
-	_terrain_l.text = "%s · pace ×%.2f · sight %d%s%s" % [what, g.speed_at(c.x, c.y) * World.party_pace(),
+		scouting = Lang.t("\n%d scout%s out") % [out, "" if out == 1 else "s"]
+	_terrain_l.text = Lang.t("%s · pace ×%.2f · sight %d%s%s") % [what, g.speed_at(c.x, c.y) * World.party_pace(),
 		int(World.sight_radius()), eta, scouting]
-	_wait_btn.text = "STOP" if World.waiting else "WAIT"
+	_wait_btn.text = Lang.t("STOP") if World.waiting else Lang.t("WAIT")
 
 
 func _push_toast(t: String) -> void:
@@ -825,9 +825,9 @@ func _update_labels() -> void:
 		var far: float = {"village": 260.0, "town": 520.0, "city": 9999.0, "hold": 9999.0, "nest": 520.0}[st["kind"]]
 		l.visible = known and _dist < far
 		if known and not World.siege_of(id).is_empty():
-			l.text = String(st["name"]) + "  (besieged)"
+			l.text = String(st["name"]) + Lang.t("  (besieged)")
 		elif known and World.is_raided(id):
-			l.text = String(st["name"]) + "  (raided)"
+			l.text = String(st["name"]) + Lang.t("  (raided)")
 		elif known and st["kind"] in ["village", "town", "city"]:
 			l.text = String(st["name"])
 
@@ -913,7 +913,7 @@ func _tap(screen: Vector2) -> void:
 	_chase = {}
 	if World.camping:
 		World.camping = false
-		_push_toast("You break camp and march in the dark.")
+		_push_toast(Lang.t("You break camp and march in the dark."))
 		World.night_march_day = World.day()
 	var tap := Vector2(cell) + Vector2(0.5, 0.5)
 	for p in World.parties:
@@ -931,7 +931,7 @@ func _tap(screen: Vector2) -> void:
 			_follow = true
 			return
 	if not World.go_to(cell):
-		_push_toast("No way there.")
+		_push_toast(Lang.t("No way there."))
 	_follow = true
 
 
@@ -1040,8 +1040,8 @@ func _popup_close() -> void:
 func _visit(st: Dictionary) -> void:
 	var fac: Dictionary = Lore.FACTIONS[st["faction"]]
 	var kind: String = st["kind"]
-	var title := "%s, %s of %s" % [st["name"], {"village": "a village", "town": "a town", "city": "a city",
-		"hold": "a hold", "nest": "a nest"}[kind], fac["short"]]
+	var title := Lang.t("%s, %s of %s") % [st["name"], {"village": Lang.t("a village"), "town": Lang.t("a town"), "city": Lang.t("a city"),
+		"hold": Lang.t("a hold"), "nest": Lang.t("a nest")}[kind], fac["short"]]
 	var text := ""
 	var buttons: Array = []
 	var id := int(st["id"])
@@ -1051,16 +1051,16 @@ func _visit(st: Dictionary) -> void:
 		return
 	elif kind in ["village", "town", "city"] and Company.is_enemy(String(st["faction"])):
 		# You're the enemy here.
-		text = ("The gates are shut against you, and there are crossbows on the walls. %s has no welcome for you." if kind != "village" \
-			else "The villagers see your red coats coming and bar their doors; someone runs for the soldiers of %s.") % fac["name"]
-		buttons.append(["LEAVE", _popup_close])
+		text = (Lang.t("The gates are shut against you, and there are crossbows on the walls. %s has no welcome for you.") if kind != "village" \
+			else Lang.t("The villagers see your red coats coming and bar their doors; someone runs for the soldiers of %s.")) % fac["name"]
+		buttons.append([Lang.t("LEAVE"), _popup_close])
 		_scene("patrol", {"faction": st["faction"]})
 	elif not World.siege_of(id).is_empty() and kind in ["town", "city"]:
 		_visit_besieged(st)
 		return
 	elif World.is_raided(id):
-		text = "Burned. Raiders have been here; the people who are left have nothing to sell."
-		buttons.append(["LEAVE", _popup_close])
+		text = Lang.t("Burned. Raiders have been here; the people who are left have nothing to sell.")
+		buttons.append([Lang.t("LEAVE"), _popup_close])
 		_scene("burned")
 	elif not _test:
 		# Into the town itself: on foot the first time, its menu after that.
@@ -1071,45 +1071,45 @@ func _visit(st: Dictionary) -> void:
 	else:
 		match kind:
 			"village":
-				text = "A farming village. They eye your red coats and muskets warily, but they'll sell food."
+				text = Lang.t("A farming village. They eye your red coats and muskets warily, but they'll sell food.")
 			"town":
-				text = "A market town. Food and drink for sale, and talk of the war with %s." % ("Vell" if st["faction"] == "aurest" else "Aurest")
+				text = Lang.t("A market town. Food and drink for sale, and talk of the war with %s.") % ("Vell" if st["faction"] == "aurest" else "Aurest")
 			"city":
-				text = "A walled city of %s. Everything that can be bought is for sale here, except powder: nobody here has heard of it." % fac["name"]
+				text = Lang.t("A walled city of %s. Everything that can be bought is for sale here, except powder: nobody here has heard of it.") % fac["name"]
 			"hold":
-				text = "A dwarf hold cut into the mountain. The dwarves look at your muskets with great interest."
-		text += "\n\nWater barrels refilled. Recruiting locals comes soon."
+				text = Lang.t("A dwarf hold cut into the mountain. The dwarves look at your muskets with great interest.")
+		text += Lang.t("\n\nWater barrels refilled. Recruiting locals comes soon.")
 		var prices := {"village": [10, 5], "town": [20, 9], "city": [20, 8], "hold": [20, 10]}
 		var pr: Array = [prices[kind][0], Company.price(prices[kind][1])]
-		buttons.append(["FOOD +%d (%d cr)" % [pr[0], pr[1]], func():
+		buttons.append([Lang.t("FOOD +%d (%d cr)") % [pr[0], pr[1]], func():
 			if Company.room_for("rations") < int(pr[0]):
-				_push_toast("The wagon is full.")
+				_push_toast(Lang.t("The wagon is full."))
 			elif Company.money >= int(pr[1]):
 				Company.money -= int(pr[1])
 				Company.stores["rations"] = int(Company.stores["rations"]) + int(pr[0])
 				Company.save()
-				_push_toast("Bought %d rations." % int(pr[0]))])
+				_push_toast(Lang.t("Bought %d rations.") % int(pr[0]))])
 		if kind != "village":
 			var rum_cr := Company.price(6)
-			buttons.append(["RUM +10 (%d cr)" % rum_cr, func():
+			buttons.append([Lang.t("RUM +10 (%d cr)") % rum_cr, func():
 				if Company.room_for("rum") < 10:
-					_push_toast("The wagon is full.")
+					_push_toast(Lang.t("The wagon is full."))
 				elif Company.money >= rum_cr:
 					Company.money -= rum_cr
 					Company.stores["rum"] = int(Company.stores["rum"]) + 10
 					Company.save()
-					_push_toast("Bought 10 tots of rum.")])
+					_push_toast(Lang.t("Bought 10 tots of rum."))])
 		var gv := Company.goods_value(kind)
 		if gv > 0:
-			buttons.append(["SELL LOOT (%d cr)" % gv, func():
+			buttons.append([Lang.t("SELL LOOT (%d cr)") % gv, func():
 				var got := Company.sell_goods(kind)
-				_push_toast("Sold the loot for %d crowns." % got)
+				_push_toast(Lang.t("Sold the loot for %d crowns.") % got)
 				_popup_close()])
-		buttons.append(["REST A DAY", func():
+		buttons.append([Lang.t("REST A DAY"), func():
 			_popup_close()
 			World.waiting = true
 			_rest_until = World.hours + 24.0])
-		buttons.append(["LEAVE", _popup_close])
+		buttons.append([Lang.t("LEAVE"), _popup_close])
 		Company.stores["water"] = maxi(int(Company.stores["water"]), Company.WATER_CART)
 		Company.stores["foul"] = false
 	_popup_open(title, text, buttons)
@@ -1124,40 +1124,40 @@ var _siege_id := -1 # the nest you're besieging (a day's siege is running)
 ## guns thin them and break the stakes, but at night they may sally out.
 func _visit_nest(st: Dictionary) -> void:
 	var id := int(st["id"])
-	var title := "%s, a lizard nest" % st["name"]
+	var title := Lang.t("%s, a lizard nest") % st["name"]
 	var buttons: Array = []
 	if World.nest_destroyed(id):
 		_scene("burned")
-		_popup_open(title, "Burned-out mounds and toppled stakes. Nothing moves here now.", [["LEAVE", _popup_close]])
+		_popup_open(title, Lang.t("Burned-out mounds and toppled stakes. Nothing moves here now."), [[Lang.t("LEAVE"), _popup_close]])
 		return
 	var n := World.nest(id)
 	var g := int(n["garrison"])
 	var walls := float(n["walls"])
-	var text := "Mounds of packed mud behind a ring of sharpened stakes lashed with bone, one gate of logs. "
-	text += "You count about [b]%d[/b] of them, " % (int(round(g / 5.0)) * 5)
+	var text := Lang.t("Mounds of packed mud behind a ring of sharpened stakes lashed with bone, one gate of logs. ")
+	text += Lang.t("You count about [b]%d[/b] of them, ") % (int(round(g / 5.0)) * 5)
 	if walls > 0.85:
-		text += "behind a palisade that stands whole."
+		text += Lang.t("behind a palisade that stands whole.")
 	elif walls > 0.5:
-		text += "behind a palisade starting to sag."
+		text += Lang.t("behind a palisade starting to sag.")
 	elif walls > 0.2:
-		text += "behind a broken palisade: there are gaps you could get through."
+		text += Lang.t("behind a broken palisade: there are gaps you could get through.")
 	else:
-		text += "behind what's left of the stakes: it's wide open."
+		text += Lang.t("behind what's left of the stakes: it's wide open.")
 	var days := int(n["siege_days"])
 	if days > 0:
-		text += "\n\nDay %d of the siege. They're hungry, and they're fewer." % days
+		text += Lang.t("\n\nDay %d of the siege. They're hungry, and they're fewer.") % days
 	if id == World.gen.stash_nest and not Company.stash.is_empty():
-		text += "\n\n[color=#f0c060]Through the stakes you can see crates with the %s's mark, the ship's guns, powder kegs. Your stores are here.[/color]" % Lore.SHIP
+		text += Lang.t("\n\n[color=#f0c060]Through the stakes you can see crates with the %s's mark, the ship's guns, powder kegs. Your stores are here.[/color]") % Lore.SHIP
 	var fit := Company.fit_men().size()
-	text += "\n\nYou have %d fit men%s." % [fit, " and %d guns" % Company.guns if Company.guns > 0 else ", and no guns to batter the gate"]
-	text += "\n\n[color=#9aa3b8]ASSAULT: storm it now: break the gate (guns, grenades, axes) while the garrison sallies out at you.\nBESIEGE: camp before it for a day. Hunger thins them%s, but at night they may come out at you.[/color]" % (" and your guns batter the stakes" if Company.guns > 0 else "")
-	buttons.append(["PLAN", _plan_assault.bind(st)])
-	buttons.append(["ASSAULT", _assault.bind(st)])
-	buttons.append(["BESIEGE A DAY", _besiege.bind(st)])
-	buttons.append(["LEAVE", func():
+	text += Lang.t("\n\nYou have %d fit men%s.") % [fit, Lang.t(" and %d guns") % Company.guns if Company.guns > 0 else Lang.t(", and no guns to batter the gate")]
+	text += Lang.t("\n\n[color=#9aa3b8]ASSAULT: storm it now: break the gate (guns, grenades, axes) while the garrison sallies out at you.\nBESIEGE: camp before it for a day. Hunger thins them%s, but at night they may come out at you.[/color]") % (Lang.t(" and your guns batter the stakes") if Company.guns > 0 else "")
+	buttons.append([Lang.t("PLAN"), _plan_assault.bind(st)])
+	buttons.append([Lang.t("ASSAULT"), _assault.bind(st)])
+	buttons.append([Lang.t("BESIEGE A DAY"), _besiege.bind(st)])
+	buttons.append([Lang.t("LEAVE"), func():
 		if int(World.nest(id)["siege_days"]) > 0:
 			World.lift_siege(id)
-			_push_toast("You lift the siege.")
+			_push_toast(Lang.t("You lift the siege."))
 		_popup_close()])
 	_scene("nest")
 	_popup_open(title, text, buttons)
@@ -1198,7 +1198,7 @@ func _besiege(st: Dictionary) -> void:
 	_siege_id = int(st["id"])
 	World.waiting = true
 	_rest_until = World.hours + 24.0
-	_push_toast("You dig in before %s." % st["name"])
+	_push_toast(Lang.t("You dig in before %s.") % st["name"])
 
 
 func _siege_day_done() -> void:
@@ -1206,18 +1206,18 @@ func _siege_day_done() -> void:
 	_siege_id = -1
 	var st := World.settlement(id)
 	var r := World.siege_day(id, Company.guns)
-	var text := "A day before %s. Hunger%s cost them about %d." % [st["name"], " and your guns" if Company.guns > 0 else "", int(r["lost"])]
+	var text := Lang.t("A day before %s. Hunger%s cost them about %d.") % [st["name"], Lang.t(" and your guns") if Company.guns > 0 else "", int(r["lost"])]
 	if float(r["walls"]) > 0.06:
-		text += " The stakes are coming down."
+		text += Lang.t(" The stakes are coming down.")
 	if int(r["sortie"]) > 0:
 		# They come out in the night: fought like a camp attack, the watch up and ready.
 		var size := int(r["sortie"])
 		Company.next_battle = {"enemy": size, "terrain": World.gen.t(int(st["x"]), int(st["y"])), "party": -1, "ambush": false,
 			"enemy_kind": "lizards", "camp": true, "spotted": true, "night": true, "watch": [], "sortie": id}
 		Company.results_unseen = false
-		text += "\n\n[b]In the night they sally out at your lines: %d of them![/b]" % size
+		text += Lang.t("\n\n[b]In the night they sally out at your lines: %d of them![/b]") % size
 		_scene("camp_attack", {"time": "night"})
-		_popup_open("A sortie!", text, [["STAND TO!", func():
+		_popup_open(Lang.t("A sortie!"), text, [[Lang.t("STAND TO!"), func():
 			_popup_close()
 			if _test:
 				World.nest_fought(id, size, false)
@@ -1226,7 +1226,7 @@ func _siege_day_done() -> void:
 			_go(BATTLE)]])
 		return
 	_scene("nest")
-	_popup_open("The siege", text, [["GO ON", func(): _visit_nest(st)]])
+	_popup_open(Lang.t("The siege"), text, [[Lang.t("GO ON"), func(): _visit_nest(st)]])
 
 
 ## Meeting a party that isn't hostile.
@@ -1234,50 +1234,50 @@ func _meet(p: Dictionary) -> void:
 	var text := ""
 	match String(p["kind"]):
 		"caravan":
-			text = "Merchants with mules and carts. They'll trade once you have something they want."
+			text = Lang.t("Merchants with mules and carts. They'll trade once you have something they want.")
 		"patrol":
-			text = "Soldiers of %s. They watch you closely: strangers in red coats, armed with something they've never seen." % Lore.FACTIONS[p["faction"]]["name"]
+			text = Lang.t("Soldiers of %s. They watch you closely: strangers in red coats, armed with something they've never seen.") % Lore.FACTIONS[p["faction"]]["name"]
 		"villagers":
-			text = "Country folk on their way to market. They tell you the lizards have been raiding to the south."
+			text = Lang.t("Country folk on their way to market. They tell you the lizards have been raiding to the south.")
 		"traders":
-			text = "Dwarf traders with pack ponies loaded with iron. They ask, very politely, how your guns work."
+			text = Lang.t("Dwarf traders with pack ponies loaded with iron. They ask, very politely, how your guns work.")
 		"army":
 			var l := World.lord_of(p)
 			if not l.is_empty():
-				text = "The army of %s: a long column of spears and crossbows, his household riding at its head under his banner. He reins in to look you over: the strangers with the fire-sticks." % World.lord_full(l)
-				text += "\n\n[color=#9aa3b8]%s is %s to you.[/color]" % [World.lord_short(l), World.relation_word(int(l["relation"]))]
+				text = Lang.t("The army of %s: a long column of spears and crossbows, his household riding at its head under his banner. He reins in to look you over: the strangers with the fire-sticks.") % World.lord_full(l)
+				text += Lang.t("\n\n[color=#9aa3b8]%s is %s to you.[/color]") % [World.lord_short(l), World.relation_word(int(l["relation"]))]
 				if int(l["relation"]) >= 15:
-					text += " He greets you by name, and asks what you've seen of the lizards."
+					text += Lang.t(" He greets you by name, and asks what you've seen of the lizards.")
 				var c: Dictionary = Company.contract
 				if not c.is_empty() and int(c["lord"]) == int(l["id"]):
-					text += "\n\n[color=#c9a14a]You serve him until day %d: %s (%d of %d). %d crowns a week.[/color]" % [
-						int(c["until"]), Company.DUTIES[c["duty"]][0], int(c["done"]), int(c["need"]), int(c["pay"])]
+					text += Lang.t("\n\n[color=#c9a14a]You serve him until day %d: %s (%d of %d). %d crowns a week.[/color]") % [
+						int(c["until"]), Lang.t(Company.DUTIES[c["duty"]][0]), int(c["done"]), int(c["need"]), int(c["pay"])]
 			else:
-				text = "An army of %s on the march." % Lore.FACTIONS[p["faction"]]["name"]
+				text = Lang.t("An army of %s on the march.") % Lore.FACTIONS[p["faction"]]["name"]
 	var buttons: Array = []
 	var kind := String(p["kind"])
 	if kind == "deserters":
-		text = "Ragged men in odd bits of %s kit, who ran from the war and live off the road now. Nobody would miss them." % Lore.FACTIONS[p["faction"]]["short"]
+		text = Lang.t("Ragged men in odd bits of %s kit, who ran from the war and live off the road now. Nobody would miss them.") % Lore.FACTIONS[p["faction"]]["short"]
 	if kind in ["patrol", "caravan", "deserters", "army"]:
 		var lvl := World.intel_level(p, 0.0)
-		text += "\n\n%s of them" % ("%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p))
+		text += Lang.t("\n\n%s of them") % ("%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p))
 		if lvl >= 3:
 			text += ": %s" % World.comp_text(World.party_comp(p))
 		text += "."
 		var f := String(p["faction"])
 		if kind != "deserters":
-			text += "\n\n[color=#9aa3b8]%s thinks of you: %s.[/color]" % [Lore.FACTIONS[f]["name"], Company.standing_word(f)]
-			text += "\n[color=#f08060]Attack them and %s will remember it: %s.[/color]" % [Lore.FACTIONS[f]["short"],
-				"their patrols will hunt you" if Company.standing.get(f, 0) - _ATTACK_COST[kind] <= Company.HOSTILE_AT else "they'll trust you less"]
+			text += Lang.t("\n\n[color=#9aa3b8]%s thinks of you: %s.[/color]") % [Lore.FACTIONS[f]["name"], Lang.t(Company.standing_word(f))]
+			text += Lang.t("\n[color=#f08060]Attack them and %s will remember it: %s.[/color]") % [Lore.FACTIONS[f]["short"],
+				Lang.t("their patrols will hunt you") if Company.standing.get(f, 0) - _ATTACK_COST[kind] <= Company.HOSTILE_AT else Lang.t("they'll trust you less")]
 		if kind == "army" and _may_hire(p):
-			buttons.append(["OFFER YOUR SERVICE", _offer_service.bind(p)])
+			buttons.append([Lang.t("OFFER YOUR SERVICE"), _offer_service.bind(p)])
 		if kind == "army" and _may_march_with(p):
-			buttons.append(["MARCH WITH US", func():
+			buttons.append([Lang.t("MARCH WITH US"), func():
 				_popup_close()
 				World.escort(p, 4.0)
-				_push_toast("%s's army will march with you for four days." % World.lord_short(World.lord_of(p)))])
-		buttons.append(["ATTACK", _attack_party.bind(p)])
-	buttons.append(["LEAVE", _popup_close])
+				_push_toast(Lang.t("%s's army will march with you for four days.") % World.lord_short(World.lord_of(p)))])
+		buttons.append([Lang.t("ATTACK"), _attack_party.bind(p)])
+	buttons.append([Lang.t("LEAVE"), _popup_close])
 	_scene({"caravan": "caravan", "patrol": "patrol", "villagers": "villagers", "traders": "traders",
 		"deserters": "deserters", "army": "patrol"}.get(kind, "road"), {"faction": p.get("faction", "vell")})
 	_popup_open(World.party_label(p, mini(World.intel_level(p, 0.0), 2)), text, buttons)
@@ -1322,18 +1322,18 @@ func _offer_service(p: Dictionary) -> void:
 	_popup_close()
 	var l := World.lord_of(p)
 	var terms := Company.contract_terms(int(l["id"]), String(p["faction"]), World.lord_short(l))
-	var text := "%s looks over your men, and the muskets longer still.\n\n\"Three weeks. %d crowns a week while you serve, paid every seventh day. %s, and there's a bonus in it.\"" % [
-		World.lord_full(l), int(terms["pay"]), Company.DUTIES[terms["duty"]][0]]
-	text += "\n\n[color=#9aa3b8]Duty: %s (%d). %s will hear of it and like you less.[/color]" % [
-		Company.DUTIES[terms["duty"]][2], int(terms["need"]), Lore.FACTIONS[Company.AT_WAR[p["faction"]]]["name"]]
+	var text := Lang.t("%s looks over your men, and the muskets longer still.\n\n\"Three weeks. %d crowns a week while you serve, paid every seventh day. %s, and there's a bonus in it.\"") % [
+		World.lord_full(l), int(terms["pay"]), Lang.t(Company.DUTIES[terms["duty"]][0])]
+	text += Lang.t("\n\n[color=#9aa3b8]Duty: %s (%d). %s will hear of it and like you less.[/color]") % [
+		Lang.t(Company.DUTIES[terms["duty"]][2]), int(terms["need"]), Lore.FACTIONS[Company.AT_WAR[p["faction"]]]["name"]]
 	_scene("patrol", {"faction": p["faction"]})
-	_popup_open("Terms from %s" % World.lord_short(l), text, [["ACCEPT", func():
+	_popup_open(Lang.t("Terms from %s") % World.lord_short(l), text, [[Lang.t("ACCEPT"), func():
 			_popup_close()
 			Company.sign_contract(terms)
 			World.change_relation(l, 5)
 			Company.save()
-			_push_toast("You serve %s until day %d." % [World.lord_short(l), int(terms["until"])])],
-		["DECLINE", _popup_close]])
+			_push_toast(Lang.t("You serve %s until day %d.") % [World.lord_short(l), int(terms["until"])])],
+		[Lang.t("DECLINE"), _popup_close]])
 
 
 func _attack_party(p: Dictionary) -> void:
@@ -1351,12 +1351,12 @@ func _attack_party(p: Dictionary) -> void:
 		Company.change_standing(f, -int(_ATTACK_COST[kind]))
 		Company.change_standing(String(Company.AT_WAR.get(f, "")), 10)
 		if Company.is_enemy(f) and not was:
-			note = "%s will not forget this: its patrols will hunt you now." % Lore.FACTIONS[f]["name"]
+			note = Lang.t("%s will not forget this: its patrols will hunt you now.") % Lore.FACTIONS[f]["name"]
 	if kind == "army":
 		var l := World.lord_of(p)
 		World.change_relation(l, -60)
 		if not l.is_empty() and note == "":
-			note = "%s has sworn to see you hanged." % World.lord_short(l)
+			note = Lang.t("%s has sworn to see you hanged.") % World.lord_short(l)
 	_fight(p, false)
 	if note != "" and not Company.next_battle.is_empty():
 		Company.next_battle["standing_note"] = note
@@ -1365,10 +1365,10 @@ func _attack_party(p: Dictionary) -> void:
 ## 18:00 on the march.
 func _on_dusk() -> void:
 	_scene("dusk", {"time": "dusk"})
-	_popup_open("Dusk", "The light is going. Make camp and sleep until dawn, or march on through the night: slower, half blind, and the men won't thank you.",
-		[["MAKE CAMP", func():
+	_popup_open("Dusk", Lang.t("The light is going. Make camp and sleep until dawn, or march on through the night: slower, half blind, and the men won't thank you."),
+		[[Lang.t("MAKE CAMP"), func():
 			_popup_close()
-			World.make_camp()], ["MARCH ON IN THE DARK", func():
+			World.make_camp()], [Lang.t("MARCH ON IN THE DARK"), func():
 			_popup_close()
 			World.march_through_night()]], false)
 
@@ -1396,7 +1396,7 @@ func _event_choice(ev: Dictionary, key: String) -> void:
 		return
 	if String(r["text"]) != "":
 		_scene(_event_scene(String(ev["id"])))
-		_popup_open(ev["title"], r["text"], [["CARRY ON", _popup_close]], false)
+		_popup_open(ev["title"], r["text"], [[Lang.t("CARRY ON"), _popup_close]], false)
 
 
 ## Scouts: pick a direction and how far.
@@ -1439,7 +1439,7 @@ func _build_scout_panel() -> void:
 	_scout_panel.add_child(v)
 	var head := HBoxContainer.new()
 	v.add_child(head)
-	var title := _label("SEND SCOUTS", 26, Color(0.95, 0.8, 0.45))
+	var title := _label(Lang.t("SEND SCOUTS"), 26, Color(0.95, 0.8, 0.45))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
 	var x := _button("✕", _close_scouts)
@@ -1452,10 +1452,10 @@ func _build_scout_panel() -> void:
 	var range_row := HBoxContainer.new()
 	range_row.add_theme_constant_override("separation", 10)
 	v.add_child(range_row)
-	var near := _button("NEAR: 1 man, a day", func():
+	var near := _button(Lang.t("NEAR: 1 man, a day"), func():
 		_scout_far = false
 		_refresh_scouts())
-	var far := _button("FAR: 2 men, two days", func():
+	var far := _button(Lang.t("FAR: 2 men, two days"), func():
 		_scout_far = true
 		_refresh_scouts())
 	near.name = "near"
@@ -1472,13 +1472,13 @@ func _build_scout_panel() -> void:
 		["SW", Vector2(-1, 1)], ["S", Vector2(0, 1)], ["SE", Vector2(1, 1)]]
 	for d in dirs:
 		if d[0] == "":
-			var mid := _label("PICK A\nDIRECTION", 14, Color(0.72, 0.74, 0.8))
+			var mid := _label(Lang.t("PICK A\nDIRECTION"), 14, Color(0.72, 0.74, 0.8))
 			mid.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			mid.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			grid.add_child(mid)
 		else:
 			grid.add_child(_button(d[0], _send_scouts.bind(d[1])))
-	var cancel := _button("CANCEL: KEEP THEM HERE", _close_scouts)
+	var cancel := _button(Lang.t("CANCEL: KEEP THEM HERE"), _close_scouts)
 	cancel.custom_minimum_size.y = 58
 	v.add_child(cancel)
 	_scout_panel.visible = false
@@ -1488,14 +1488,14 @@ func _build_scout_panel() -> void:
 func _refresh_scouts() -> void:
 	var cands := World.scout_candidates()
 	var n := 2 if _scout_far else 1
-	var t := "Scouts ride out, look around, and come back to the company wherever it is, with word of what they found: towns, roads, warbands. Some never come back, more often in the lizards' country.\n\n"
+	var t := Lang.t("Scouts ride out, look around, and come back to the company wherever it is, with word of what they found: towns, roads, warbands. Some never come back, more often in the lizards' country.\n\n")
 	if cands.size() < n + 2:
-		t += "Not enough fit men to spare."
+		t += Lang.t("Not enough fit men to spare.")
 	else:
 		var names: Array = cands.slice(0, n).map(func(m): return Company.surname_title(m))
-		t += "Going: %s." % ", ".join(names)
+		t += Lang.t("Going: %s.") % ", ".join(names)
 	for sc in World.scouts:
-		t += "\nOut now: %s, back around day %d." % [", ".join(sc["names"]), 1 + int(float(sc["back"]) / 24.0)]
+		t += Lang.t("\nOut now: %s, back around day %d.") % [", ".join(sc["names"]), 1 + int(float(sc["back"]) / 24.0)]
 	_scout_info.text = t
 	(_scout_panel.find_child("near", true, false) as Button).modulate = Color(1, 0.85, 0.4) if not _scout_far else Color.WHITE
 	(_scout_panel.find_child("far", true, false) as Button).modulate = Color(1, 0.85, 0.4) if _scout_far else Color.WHITE
@@ -1505,29 +1505,29 @@ func _send_scouts(dir: Vector2) -> void:
 	var sc := World.send_scouts(dir, _scout_far)
 	_close_scouts()
 	if sc.is_empty():
-		_push_toast("Not enough fit men to spare.")
+		_push_toast(Lang.t("Not enough fit men to spare."))
 	else:
-		_push_toast("%s set out." % ", ".join(sc["names"]))
+		_push_toast(Lang.t("%s set out.") % ", ".join(sc["names"]))
 
 
 func _on_scouts_back(r: Dictionary) -> void:
 	var t := ""
 	var names: Array = r["names"]
 	if r["lost"].size() == names.size():
-		t = "%s never came back. You wait as long as you dare." % ", ".join(names)
+		t = Lang.t("%s never came back. You wait as long as you dare.") % ", ".join(names)
 		_scene("scouts_lost")
-		_popup_open("The scouts are lost", t, [["CARRY ON", _popup_close]], false)
+		_popup_open(Lang.t("The scouts are lost"), t, [[Lang.t("CARRY ON"), _popup_close]], false)
 		return
 	if r["lost"].size() > 0:
-		t += "Only one comes back, wounded. %s did not.\n\n" % ", ".join(r["lost"])
+		t += Lang.t("Only one comes back, wounded. %s did not.\n\n") % ", ".join(r["lost"])
 	else:
-		t += "%s report:\n\n" % ", ".join(names)
+		t += Lang.t("%s report:\n\n") % ", ".join(names)
 	if r["terrain"] != "":
-		t += "Mostly %s out there.\n" % r["terrain"]
-	t += ("They found: " + ", ".join(r["found"]) + ".\n") if r["found"].size() > 0 else "No towns or villages.\n"
-	t += ("They saw: " + ", ".join(r["parties"]) + ".") if r["parties"].size() > 0 else "Nobody on the move."
+		t += Lang.t("Mostly %s out there.\n") % r["terrain"]
+	t += (Lang.t("They found: ") + ", ".join(r["found"]) + ".\n") if r["found"].size() > 0 else Lang.t("No towns or villages.\n")
+	t += (Lang.t("They saw: ") + ", ".join(r["parties"]) + ".") if r["parties"].size() > 0 else Lang.t("Nobody on the move.")
 	_scene("scouts_back", {"n": names.size() - (r["lost"] as Array).size()})
-	_popup_open("The scouts are back", t, [["CARRY ON", _popup_close]], false)
+	_popup_open(Lang.t("The scouts are back"), t, [[Lang.t("CARRY ON"), _popup_close]], false)
 
 
 ## A town under siege: the gates are shut. Attack the besiegers (with the
@@ -1541,26 +1541,26 @@ func _visit_besieged(st: Dictionary) -> void:
 	var def := String(st["faction"])
 	var att := String(army.get("faction", ""))
 	var lvl := World.intel_level(army, 0.0)
-	var text := "%s is under siege: %s's army (%s) sits before the walls, day %d of the siege. The gates are shut.\n\nThe town will hold %d more days at most." % [
-		st["name"], World.lord_full(l) if not l.is_empty() else "an army", "%d" % int(army["size"]) if lvl >= 2 else World.rough_count(army),
+	var text := Lang.t("%s is under siege: %s's army (%s) sits before the walls, day %d of the siege. The gates are shut.\n\nThe town will hold %d more days at most.") % [
+		st["name"], World.lord_full(l) if not l.is_empty() else Lang.t("an army"), "%d" % int(army["size"]) if lvl >= 2 else World.rough_count(army),
 		int(sg["days"]), maxi(1, int(sg["need"]) - int(sg["days"]))]
 	var buttons: Array = []
 	if not Company.is_enemy(def):
-		text += "\n\n[color=#9aa3b8]ATTACK THE BESIEGERS: the garrison sallies to fight beside you. %s will be grateful; %s won't.[/color]" % [Lore.FACTIONS[def]["short"], Lore.FACTIONS[att]["short"]]
-		buttons.append(["ATTACK THE BESIEGERS", _relieve_town.bind(st, army)])
+		text += Lang.t("\n\n[color=#9aa3b8]ATTACK THE BESIEGERS: the garrison sallies to fight beside you. %s will be grateful; %s won't.[/color]") % [Lore.FACTIONS[def]["short"], Lore.FACTIONS[att]["short"]]
+		buttons.append([Lang.t("ATTACK THE BESIEGERS"), _relieve_town.bind(st, army)])
 	if not Company.is_enemy(att) and (l.is_empty() or int(l["relation"]) >= 0):
-		text += "\n[color=#9aa3b8]HELP THE SIEGE: your men dig in beside his%s. It costs you with %s.[/color]" % [
-			" and your guns batter the walls (it falls in a day)" if Company.guns > 0 else "", Lore.FACTIONS[def]["short"]]
-		buttons.append(["HELP THE SIEGE", func():
+		text += Lang.t("\n[color=#9aa3b8]HELP THE SIEGE: your men dig in beside his%s. It costs you with %s.[/color]") % [
+			Lang.t(" and your guns batter the walls (it falls in a day)") if Company.guns > 0 else "", Lore.FACTIONS[def]["short"]]
+		buttons.append([Lang.t("HELP THE SIEGE"), func():
 			_popup_close()
 			World.help_siege(id, 99 if Company.guns > 0 else 2)
 			Company.change_standing(def, -20)
 			Company.change_standing(att, 10)
 			World.change_relation(l, 15)
-			_push_toast("You dig in beside %s's men." % (World.lord_short(l) if not l.is_empty() else "the besiegers"))])
-	buttons.append(["LEAVE", _popup_close])
+			_push_toast(Lang.t("You dig in beside %s's men.") % (World.lord_short(l) if not l.is_empty() else Lang.t("the besiegers")))])
+	buttons.append([Lang.t("LEAVE"), _popup_close])
 	_scene("patrol", {"faction": att})
-	_popup_open("%s, besieged" % st["name"], text, buttons)
+	_popup_open(Lang.t("%s, besieged") % st["name"], text, buttons)
 
 
 func _relieve_town(st: Dictionary, army: Dictionary) -> void:
@@ -1583,34 +1583,34 @@ func _relieve_town(st: Dictionary, army: Dictionary) -> void:
 func _show_lords() -> void:
 	var t := ""
 	for f in ["aurest", "vell"]:
-		t += "[b]%s[/b]: %s to you.\n" % [Lore.FACTIONS[f]["name"], Company.standing_word(f)]
+		t += Lang.t("[b]%s[/b]: %s to you.\n") % [Lore.FACTIONS[f]["name"], Lang.t(Company.standing_word(f))]
 		for l in World.lords:
 			if l["faction"] != f:
 				continue
 			var state := ""
 			var p := World.party_by_id(int(l["army"]))
 			if p.is_empty():
-				state = "raising a new army"
+				state = Lang.t("raising a new army")
 			elif World.can_see(p):
-				state = "his army in sight: %s" % World.party_label(p, mini(World.intel_level(p), 2)).split("\n")[0]
+				state = Lang.t("his army in sight: %s") % World.party_label(p, mini(World.intel_level(p), 2)).split("\n")[0]
 			else:
-				state = "his army in the field"
+				state = Lang.t("his army in the field")
 			t += "   %s: %s; %s.\n" % [World.lord_full(l), World.relation_word(int(l["relation"])), state]
 		t += "\n"
 	if World.truce():
-		t += "[color=#9aa3b8]A truce holds between them until day %d.[/color]\n\n" % (1 + int(float(World.war["truce_until"]) / 24.0))
+		t += Lang.t("[color=#9aa3b8]A truce holds between them until day %d.[/color]\n\n") % (1 + int(float(World.war["truce_until"]) / 24.0))
 	var e := World.escorting()
 	if not e.is_empty():
-		t += "[color=#c9a14a]%s marches with you until day %d.[/color]\n" % [World.party_name(e).split(" (")[0], 1 + int(float(e["escort_until"]) / 24.0)]
+		t += Lang.t("[color=#c9a14a]%s marches with you until day %d.[/color]\n") % [World.party_name(e).split(" (")[0], 1 + int(float(e["escort_until"]) / 24.0)]
 	var c: Dictionary = Company.contract
 	if not c.is_empty():
-		t += "[color=#c9a14a]In the service of %s until day %d: %s (%d of %d). %d crowns a week.[/color]\n\n" % [
-			c["lord_name"], int(c["until"]), Company.DUTIES[c["duty"]][0], int(c["done"]), int(c["need"]), int(c["pay"])]
+		t += Lang.t("[color=#c9a14a]In the service of %s until day %d: %s (%d of %d). %d crowns a week.[/color]\n\n") % [
+			c["lord_name"], int(c["until"]), Lang.t(Company.DUTIES[c["duty"]][0]), int(c["done"]), int(c["need"]), int(c["pay"])]
 	else:
-		t += "[color=#9aa3b8]Meet a lord's army and you can offer him your service.[/color]\n"
-	t += "[color=#9aa3b8]Aurest and Vell are at war. Help a nation's men and it warms to you; attack them and it turns on you, and its patrols and armies hunt you.[/color]"
+		t += Lang.t("[color=#9aa3b8]Meet a lord's army and you can offer him your service.[/color]\n")
+	t += Lang.t("[color=#9aa3b8]Aurest and Vell are at war. Help a nation's men and it warms to you; attack them and it turns on you, and its patrols and armies hunt you.[/color]")
 	_scene("patrol", {"faction": "aurest"})
-	_popup_open("The lords of the land", t, [["CLOSE", _popup_close]], false)
+	_popup_open(Lang.t("The lords of the land"), t, [[Lang.t("CLOSE"), _popup_close]], false)
 
 
 ## A nation's patrol is about to fight close by (a warband, or the other
@@ -1627,17 +1627,17 @@ func _on_fight_near(friend: Dictionary, foe: Dictionary) -> void:
 	var fl := World.lord_of(friend)
 	if not fl.is_empty():
 		fname = "%s (%s)" % [fname, World.lord_full(fl)]
-	var text := "Ahead of you %s men of %s are about to fight %s %s." % [n_f, fname, n_e,
-		("men of %s" % Lore.FACTIONS[foe["faction"]]["name"]) if foe_humans else "lizards of a warband"]
+	var text := Lang.t("Ahead of you %s men of %s are about to fight %s %s.") % [n_f, fname, n_e,
+		(Lang.t("men of %s") % Lore.FACTIONS[foe["faction"]]["name"]) if foe_humans else Lang.t("lizards of a warband")]
 	if lvl_e >= 3:
-		text += "\n\n[color=#c9a14a]The enemy: %s.[/color]" % World.comp_text(World.party_comp(foe))
-	text += "\n\nJoin them and their regiments fight beside yours: you can command them from the command view, and they follow their own officers until you do. %s would remember the help." % Lore.FACTIONS[ff]["short"]
+		text += Lang.t("\n\n[color=#c9a14a]The enemy: %s.[/color]") % World.comp_text(World.party_comp(foe))
+	text += Lang.t("\n\nJoin them and their regiments fight beside yours: you can command them from the command view, and they follow their own officers until you do. %s would remember the help.") % Lore.FACTIONS[ff]["short"]
 	if foe_humans:
-		text += "\n[color=#f08060]%s would remember it too.[/color]" % Lore.FACTIONS[foe["faction"]]["short"]
-	var buttons: Array = [["JOIN %s" % String(Lore.FACTIONS[ff]["short"]).to_upper(), _join_fight.bind(friend, foe)],
-		["STAY OUT", _popup_close]]
+		text += Lang.t("\n[color=#f08060]%s would remember it too.[/color]") % Lore.FACTIONS[foe["faction"]]["short"]
+	var buttons: Array = [[Lang.t("JOIN %s") % String(Lore.FACTIONS[ff]["short"]).to_upper(), _join_fight.bind(friend, foe)],
+		[Lang.t("STAY OUT"), _popup_close]]
 	_scene("patrol", {"faction": ff})
-	_popup_open("A fight ahead!", text, buttons)
+	_popup_open(Lang.t("A fight ahead!"), text, buttons)
 	if _test:
 		print("  MAPTEST: a fight near: %s against %s (stayed out)" % [World.party_name(friend), World.party_name(foe)])
 		_popup_close()
@@ -1669,30 +1669,30 @@ func _on_encounter(p: Dictionary) -> void:
 	var c := World.cell()
 	var cover: bool = World.gen.t(c.x, c.y) in [T.FOREST, T.SWAMP]
 	var chance := clampf(0.3 + (0.25 if cover else 0.0) + (World.party_pace() - 0.85) + Company.Officer.slip_bonus(), 0.1, 0.85)
-	var where := "in the trees" if cover else "in the open"
+	var where := Lang.t("in the trees") if cover else Lang.t("in the open")
 	# Seen coming, there's time to form up as planned; out of nowhere, there isn't.
 	var ambush := World.hours - float(p.get("seen_at", -99.0)) > 1.5
 	var lvl := World.intel_level(p, 0.0)
 	var count := "%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p)
 	var humans: bool = p["faction"] != "lizards"
-	var who := "Soldiers of %s have" % Lore.FACTIONS[p["faction"]]["name"] if humans else "They've"
+	var who := Lang.t("Soldiers of %s have") % Lore.FACTIONS[p["faction"]]["name"] if humans else Lang.t("They've")
 	if not World.lord_of(p).is_empty():
-		who = "The army of %s has" % World.lord_full(World.lord_of(p))
-	var text := "%s caught up with you %s. %s of them against %d fit men." % [who, where, count, Company.fit_men().size()]
+		who = Lang.t("The army of %s has") % World.lord_full(World.lord_of(p))
+	var text := Lang.t("%s caught up with you %s. %s of them against %d fit men.") % [who, where, count, Company.fit_men().size()]
 	if lvl >= 3:
-		text += "\n\n[color=#c9a14a]You make them out: %s.[/color]" % World.comp_text(World.party_comp(p))
+		text += Lang.t("\n\n[color=#c9a14a]You make them out: %s.[/color]") % World.comp_text(World.party_comp(p))
 	elif Company.Officer.skill("tactics") < 3:
-		text += "\n\n[color=#9aa3b8](With more Tactics you'd read what they are, not just how many.)[/color]"
+		text += Lang.t("\n\n[color=#9aa3b8](With more Tactics you'd read what they are, not just how many.)[/color]")
 	if ambush:
-		text += "\n\n[color=#f08060]AMBUSH! No time to form up: the men will be scattered.[/color]"
+		text += Lang.t("\n\n[color=#f08060]AMBUSH! No time to form up: the men will be scattered.[/color]")
 	else:
-		text += "\n\nYou saw them coming: there's time to form up (PLAN to change the formation)."
-	text += "\n\nSlip away? About %d%% chance; fail and you fight anyway, caught off guard." % int(chance * 100)
+		text += Lang.t("\n\nYou saw them coming: there's time to form up (PLAN to change the formation).")
+	text += Lang.t("\n\nSlip away? About %d%% chance; fail and you fight anyway, caught off guard.") % int(chance * 100)
 	var buttons: Array = []
 	if not ambush:
-		buttons.append(["PLAN", _plan_fight.bind(p)])
-	buttons.append(["FIGHT", _fight.bind(p, ambush)])
-	buttons.append(["SLIP AWAY", _slip.bind(p, chance)])
+		buttons.append([Lang.t("PLAN"), _plan_fight.bind(p)])
+	buttons.append([Lang.t("FIGHT"), _fight.bind(p, ambush)])
+	buttons.append([Lang.t("SLIP AWAY"), _slip.bind(p, chance)])
 	_scene("ambush" if ambush else ("patrol" if humans else "warband"), {"faction": p.get("faction", "vell")})
 	_popup_open("%s!" % World.party_label(p, mini(World.intel_level(p, 0.0), 2)), text, buttons)
 
@@ -1733,19 +1733,19 @@ func _camp_attacked(p: Dictionary) -> void:
 	var text := ""
 	var buttons: Array = []
 	if spotted:
-		text = "Night, by the fire. %s on watch hear something in the dark, then see the eyes catch the firelight, and raise the alarm. The men are throwing off their blankets and reaching for their muskets.\n\n%d of them against %d fit men." % [
-			" and ".join(names), int(p["size"]), fit.size()]
-		text += "\n\nAbandon the camp and slip away in the dark? About %d%% chance; fail and you fight anyway, worse placed." % int(100 * (0.35 + Company.Officer.slip_bonus()))
-		buttons.append(["STAND TO!", _camp_fight.bind(p)])
-		buttons.append(["SLIP AWAY", _slip.bind(p, 0.35 + Company.Officer.slip_bonus())])
+		text = Lang.t("Night, by the fire. %s on watch hear something in the dark, then see the eyes catch the firelight, and raise the alarm. The men are throwing off their blankets and reaching for their muskets.\n\n%d of them against %d fit men.") % [
+			Lang.t(" and ").join(names), int(p["size"]), fit.size()]
+		text += Lang.t("\n\nAbandon the camp and slip away in the dark? About %d%% chance; fail and you fight anyway, worse placed.") % int(100 * (0.35 + Company.Officer.slip_bonus()))
+		buttons.append([Lang.t("STAND TO!"), _camp_fight.bind(p)])
+		buttons.append([Lang.t("SLIP AWAY"), _slip.bind(p, 0.35 + Company.Officer.slip_bonus())])
 		_scene("camp_attack", {"time": "night"})
-		_popup_open("The watch has seen them!", text, buttons)
+		_popup_open(Lang.t("The watch has seen them!"), text, buttons)
 	else:
-		text = "Night. %s on watch never saw them come. You wake to screaming: they're already in among the bedrolls, %d of them, and your men are still asleep." % [
-			" and ".join(names), int(p["size"])]
-		buttons.append(["UP! TO ARMS!", _camp_fight.bind(p)])
+		text = Lang.t("Night. %s on watch never saw them come. You wake to screaming: they're already in among the bedrolls, %d of them, and your men are still asleep.") % [
+			Lang.t(" and ").join(names), int(p["size"])]
+		buttons.append([Lang.t("UP! TO ARMS!"), _camp_fight.bind(p)])
 		_scene("camp_attack", {"time": "night"})
-		_popup_open("They're in the camp!", text, buttons)
+		_popup_open(Lang.t("They're in the camp!"), text, buttons)
 
 
 func _camp_fight(p: Dictionary) -> void:
@@ -1795,9 +1795,9 @@ func _slip(p: Dictionary, chance: float) -> void:
 		World.pos += away * 3.0
 		p["wait"] = 4.0
 		p["path"] = []
-		_push_toast("You slip away from them.")
+		_push_toast(Lang.t("You slip away from them."))
 	else:
-		_push_toast("They're too quick!")
+		_push_toast(Lang.t("They're too quick!"))
 		_fight(p, true)
 
 
@@ -1819,11 +1819,11 @@ func _apply_battle_result() -> void:
 				var cp := Company.contract_progress("nest", "lizards")
 				if cp != "":
 					_push_toast(cp)
-			_push_toast("%s burns!" % World.settlement(nid)["name"] if won else "The assault is thrown back.")
+			_push_toast(Lang.t("%s burns!") % World.settlement(nid)["name"] if won else Lang.t("The assault is thrown back."))
 		else:
 			# A sortie: the dead are gone; if they won, the rest go back in.
 			World.nest_fought(nid, 0, false, 0 if won else maxi(0, int(nb["enemy"]) - int(r.get("slain", 0))))
-			_push_toast("The sortie is beaten off." if won else "They drive you from your lines.")
+			_push_toast(Lang.t("The sortie is beaten off.") if won else Lang.t("They drive you from your lines."))
 			if not won:
 				World.lift_siege(nid)
 		if not won:
@@ -1854,17 +1854,17 @@ func _apply_battle_result() -> void:
 			var al_lord := World.lord(int(al.get("lord", -1)))
 			World.change_relation(al_lord, 15)
 			if not al_lord.is_empty():
-				_push_toast("%s will remember you stood with him." % World.lord_short(al_lord))
+				_push_toast(Lang.t("%s will remember you stood with him.") % World.lord_short(al_lord))
 			else:
-				_push_toast("%s will remember you stood with them." % Lore.FACTIONS[al["faction"]]["name"])
+				_push_toast(Lang.t("%s will remember you stood with them.") % Lore.FACTIONS[al["faction"]]["name"])
 	if bool(r.get("won", false)):
 		World.remove_party(id)
-		_push_toast("The warband is destroyed." if String(nb.get("enemy_kind", "lizards")) == "lizards" else "They're beaten: the survivors scatter.")
+		_push_toast(Lang.t("The warband is destroyed.") if String(nb.get("enemy_kind", "lizards")) == "lizards" else Lang.t("They're beaten: the survivors scatter."))
 	elif not p.is_empty():
 		var away := (World.pos - Vector2(p["x"], p["y"])).normalized()
 		World.pos += away * 5.0
 		p["wait"] = 6.0
-		_push_toast("You fall back, leaving the field to them.")
+		_push_toast(Lang.t("You fall back, leaving the field to them."))
 	Company.next_battle = {}
 	Company.save()
 	World.save()
@@ -1915,7 +1915,7 @@ func _run_test(delta: float) -> void:
 		if _popup_title.text.ends_with("!") and n > 1:
 			print("  (would fight; slipping away for the test)")
 			_popup_buttons.get_child(n - 1).emit_signal("pressed") # slip away
-		elif last.text == "LEAVE" and n > 2:
+		elif last.text == Lang.t("LEAVE") and n > 2:
 			_popup_buttons.get_child(0).emit_signal("pressed") # buy food once
 			last.emit_signal("pressed")
 		else:
@@ -1946,5 +1946,5 @@ func _run_test(delta: float) -> void:
 					kinds[pp["kind"]] = kinds.get(pp["kind"], 0) + 1
 				print("  parties: ", kinds, " stores ", Company.stores)
 				print("MAPTEST END ", World.clock(), " men ", Company.roster.size(), " parties ", World.parties.size(),
-					" explored ", Array(World.explored).count(1), " fps ", Engine.get_frames_per_second())
+					Lang.t(" explored "), Array(World.explored).count(1), Lang.t(" fps "), Engine.get_frames_per_second())
 				get_tree().quit()

@@ -13,6 +13,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Settings="*res://scripts/settings.gd"
+Lang="*res://scripts/lang.gd"
 Company="*res://scripts/company.gd"
 World="*res://scripts/world.gd"
 Music="*res://scripts/music.gd"

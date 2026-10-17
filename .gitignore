@@ -2,3 +2,4 @@
 .godot/
 /android/
 build/
+tools/__pycache__/

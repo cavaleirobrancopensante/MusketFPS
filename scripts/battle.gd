@@ -124,7 +124,7 @@ func _ready() -> void:
 	_setup_input()
 	Loading.begin(self)
 	var f := Loading.plan([30, 0 if SoundFactory.is_cached() else 300, 40, 30, 10], 0.5)
-	await Loading.step(f[0], "Drawing the men and the enemy...")
+	await Loading.step(f[0], Lang.t("Drawing the men and the enemy..."))
 	# The batcher first: everything that draws a character registers with it.
 	batcher = BatcherScript.new()
 	batcher.add_to_group("batcher")
@@ -136,16 +136,16 @@ func _ready() -> void:
 	soldier_frames = batcher.add_sprite_kind("soldier", SpriteFactory.soldier_frames())
 	lizard_frames = batcher.add_sprite_kind("lizard", SpriteFactory.lizard_frames())
 	smoke_tex = SpriteFactory.smoke_texture()
-	await Loading.step(f[1], "Tuning the drums, priming the pans...")
+	await Loading.step(f[1], Lang.t("Tuning the drums, priming the pans..."))
 	sounds = SoundFactory.cached()
-	await Loading.step(f[2], "The ground, the sky, the trees...")
+	await Loading.step(f[2], Lang.t("The ground, the sky, the trees..."))
 	var fcfg := _field_config(nb)
 	if not fcfg.is_empty():
 		field = FieldScript.new()
 		add_child(field)
 		field.setup(self, fcfg)
 	_build_world()
-	await Loading.step(f[3], "Mustering the company...")
+	await Loading.step(f[3], Lang.t("Mustering the company..."))
 
 	player = PlayerScript.new()
 	player.battle = self
@@ -238,7 +238,7 @@ func _ready() -> void:
 			field.spawn_armies()
 		game_state = "field"
 
-	await Loading.step(f[4], "Fall in!")
+	await Loading.step(f[4], Lang.t("Fall in!"))
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	hud = HudScript.new()
@@ -255,21 +255,21 @@ func _ready() -> void:
 		ui.setup(field)
 	if prologue:
 		state_timer = 11.0
-		say("", "%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs." % [Lore.BEACH, Lore.SHIP], 5.5)
-		say(Lore.COMMANDER, "Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today.", 5.5)
+		say("", Lang.t("%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs.") % [Lore.BEACH, Lore.SHIP], 5.5)
+		say(Lore.COMMANDER, Lang.t("Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today."), 5.5)
 	elif camp and spotted:
-		hud.show_message("\"Stand to!\" The watch has seen them. Up, and form on me!", 5.0)
+		hud.show_message(Lang.t("\"Stand to!\" The watch has seen them. Up, and form on me!"), 5.0)
 		state_timer = 7.0
 	elif camp:
-		hud.show_message("Screams in the dark: they're in the camp!", 5.0)
+		hud.show_message(Lang.t("Screams in the dark: they're in the camp!"), 5.0)
 		state_timer = 0.05
 	elif ambush:
-		hud.show_message("AMBUSH! Form on me!", 4.0)
+		hud.show_message(Lang.t("AMBUSH! Form on me!"), 4.0)
 	elif Company.active and Company.march_note != "":
 		hud.show_message(Company.march_note, 6.0)
 		state_timer = maxf(state_timer, 6.0)
 	else:
-		hud.show_message("Form the line! They're coming...", 4.5)
+		hud.show_message(Lang.t("Form the line! They're coming..."), 4.5)
 	Loading.done(self)
 
 
@@ -318,7 +318,7 @@ func can_command() -> bool:
 func _not_yours() -> bool:
 	if _commanding:
 		return false
-	hud.show_message("%s has the command." % Lore.COMMANDER_SHORT, 1.5)
+	hud.show_message(Lang.t("%s has the command.") % Lore.COMMANDER_SHORT, 1.5)
 	return true
 
 
@@ -331,7 +331,7 @@ func order_follow() -> void:
 		return
 	order = Order.FOLLOW
 	_snap_line_to_player()
-	hud.show_message("Company — follow me!", 1.5)
+	hud.show_message(Lang.t("Company — follow me!"), 1.5)
 
 
 ## Break ranks: every man picks his own fight (see soldier.gd). With no
@@ -344,7 +344,7 @@ func order_charge() -> void:
 	if _not_yours():
 		return
 	order = Order.CHARGE
-	hud.show_message("CHARGE! At them, lads!", 1.5)
+	hud.show_message(Lang.t("CHARGE! At them, lads!"), 1.5)
 
 
 func order_hold() -> void:
@@ -356,7 +356,7 @@ func order_hold() -> void:
 		return
 	order = Order.HOLD
 	_snap_line_to_player() # the line forms where you're looking, then stays
-	hud.show_message("Company — halt! Hold here!", 1.5)
+	hud.show_message(Lang.t("Company — halt! Hold here!"), 1.5)
 
 
 func toggle_fire_mode() -> void:
@@ -368,10 +368,10 @@ func toggle_fire_mode() -> void:
 		return
 	if fire_mode == FireMode.ON_COMMAND:
 		fire_mode = FireMode.AT_WILL
-		hud.show_message("Fire at will!", 1.5)
+		hud.show_message(Lang.t("Fire at will!"), 1.5)
 	else:
 		fire_mode = FireMode.ON_COMMAND
-		hud.show_message("Hold your fire... wait for the order!", 1.5)
+		hud.show_message(Lang.t("Hold your fire... wait for the order!"), 1.5)
 
 
 func order_volley() -> void:
@@ -386,9 +386,9 @@ func order_volley() -> void:
 
 func _volley() -> void:
 	if loaded_count() == 0:
-		hud.show_message("Nobody's loaded!", 1.0)
+		hud.show_message(Lang.t("Nobody's loaded!"), 1.0)
 		return
-	hud.show_message("PRESENT... FIRE!", 1.0)
+	hud.show_message(Lang.t("PRESENT... FIRE!"), 1.0)
 	for s in soldiers:
 		s.volley()
 
@@ -402,19 +402,19 @@ func status_line() -> String:
 	if field != null:
 		return field.status_line()
 	if Settings.playground:
-		return "Weapon range   Lizards %d   Your kills %d" % [enemies.size(), player.kills]
-	var tail := "Company %d   Loaded %d" % [soldiers.size(), loaded_count()]
+		return Lang.t("Weapon range   Lizards %d   Your kills %d") % [enemies.size(), player.kills]
+	var tail := Lang.t("Company %d   Loaded %d") % [soldiers.size(), loaded_count()]
 	if player != null and player.ammo >= 0:
-		tail += "   Your shot %d" % player.ammo
+		tail += Lang.t("   Your shot %d") % player.ammo
 	if prologue:
-		var what := "RETREAT" if story_phase == "retreat" else Lore.BEACH
-		return "%s   Lizardmen %d   %s" % [what, enemies.size(), tail]
+		var what := Lang.t("RETREAT") if story_phase == "retreat" else Lore.BEACH
+		return Lang.t("%s   Lizardmen %d   %s") % [what, enemies.size(), tail]
 	if nest != null:
-		var gate := "DOWN" if nest.gate_open else "%d%%" % int(100.0 * nest.gate_hp / nest.gate_max)
-		return "Gate %s   Sallies to come %d   Lizardmen %d   %s" % [gate, nest.pending_sallies(), enemies.size(), tail]
+		var gate := Lang.t("DOWN") if nest.gate_open else "%d%%" % int(100.0 * nest.gate_hp / nest.gate_max)
+		return Lang.t("Gate %s   Sallies to come %d   Lizardmen %d   %s") % [gate, nest.pending_sallies(), enemies.size(), tail]
 	if rations_spoiled > 0 or looters() > 0:
-		tail += "   Wagon: %d looters, %d rations eaten" % [looters(), rations_spoiled]
-	return "Wave %d/%d   Lizardmen %d   %s" % [wave, wave_count(), enemies.size(), tail]
+		tail += Lang.t("   Wagon: %d looters, %d rations eaten") % [looters(), rations_spoiled]
+	return Lang.t("Wave %d/%d   Lizardmen %d   %s") % [wave, wave_count(), enemies.size(), tail]
 
 
 func is_at_will() -> bool:
@@ -613,11 +613,11 @@ func porter_reacts(s) -> void:
 	var who: String = s.display_name
 	match String(s.conduct):
 		"fled":
-			hud.show_message("%s drops the shafts and runs!" % who, 2.0)
+			hud.show_message(Lang.t("%s drops the shafts and runs!") % who, 2.0)
 		"stood":
-			hud.show_message("%s stands by the wagon and fires!" % who, 2.0)
+			hud.show_message(Lang.t("%s stands by the wagon and fires!") % who, 2.0)
 		"fought":
-			hud.show_message("%s goes at them with the %s!" % [who, "pike" if s.pike else "bayonet"], 2.0)
+			hud.show_message(Lang.t("%s goes at them with the %s!") % [who, "pike" if s.pike else "bayonet"], 2.0)
 
 
 ## A looter is cut down: what he was carrying goes back in the wagon.
@@ -625,7 +625,7 @@ func recover_loot(who) -> void:
 	wagon_looted = maxf(0.0, wagon_looted - float(who.carried))
 	who.carried = 0.0
 	if wagon_looted <= 0.0005 and _loot_told:
-		hud.show_message("The wagon is ours again!", 1.5)
+		hud.show_message(Lang.t("The wagon is ours again!"), 1.5)
 
 
 func wagon_open() -> bool:
@@ -669,7 +669,7 @@ func rations_left() -> int:
 	return (int(Company.stores.get("rations", 0)) if Company.active else 40) - rations_spoiled
 	if not _loot_told:
 		_loot_told = true
-		hud.show_message("They're at the wagon! Lizards are looting the stores!", 2.5)
+		hud.show_message(Lang.t("They're at the wagon! Lizards are looting the stores!"), 2.5)
 
 
 # ---------------------------------------------------------------- spatial grid
@@ -812,11 +812,11 @@ func on_soldier_died(s) -> void:
 	soldiers.erase(s)
 	_reassign_slots()
 	if soldiers.size() == 0:
-		hud.show_message("Your company is gone.", 2.5)
+		hud.show_message(Lang.t("Your company is gone."), 2.5)
 	elif s.record != null:
-		hud.show_message("%s is down! Close ranks!" % s.display_name, 1.8)
+		hud.show_message(Lang.t("%s is down! Close ranks!") % s.display_name, 1.8)
 	else:
-		hud.show_message("Man down! Close ranks!", 1.5)
+		hud.show_message(Lang.t("Man down! Close ranks!"), 1.5)
 
 
 ## An allied man made it off the field.
@@ -827,7 +827,7 @@ func on_ally_escaped(s) -> void:
 
 func on_out_of_ammo(s) -> void:
 	if s.record != null:
-		hud.show_message("%s is out of %s!" % [s.display_name, {"arrow": "arrows", "bolt": "bolts"}.get(s.missile, "cartridges")], 1.8)
+		hud.show_message(Lang.t("%s is out of %s!") % [s.display_name, Lang.t({"arrow": "arrows", "bolt": "bolts"}.get(s.missile, "cartridges"))], 1.8)
 
 
 ## The weapon range: send lizards to shoot at. `still` ones stand where they
@@ -847,7 +847,7 @@ func playground_spawn(n: int, still: bool) -> void:
 		l.position = Vector3(at.x, 0, at.z)
 		enemies.append(l)
 		add_child(l)
-	hud.show_message("%d %s" % [n, "targets" if still else "lizards coming!"], 1.2)
+	hud.show_message("%d %s" % [n, "targets" if still else Lang.t("lizards coming!")], 1.2)
 
 
 ## Storming a nest: the palisade, the gate and the garrison, in front of
@@ -874,7 +874,7 @@ func _setup_assault() -> void:
 	add_child(nest)
 	nest.setup(self, line_anchor, line_forward, 46.0, g, walls, has_stash)
 	game_state = "fighting"
-	_tell_later.call_deferred("Break the gate, then storm the nest!")
+	_tell_later.call_deferred(Lang.t("Break the gate, then storm the nest!"))
 
 
 func _tell_later(text: String) -> void:
@@ -928,7 +928,7 @@ func fire_range_gun() -> void:
 	if range_gun == null:
 		return
 	if not range_gun.ready():
-		hud.show_message("The crew is still loading", 1.0)
+		hud.show_message(Lang.t("The crew is still loading"), 1.0)
 		return
 	_gun_order = true
 
@@ -1109,13 +1109,13 @@ func _process(delta: float) -> void:
 					state_timer = 5.0
 			elif enemies.is_empty() and _spawn_queue.is_empty() and (nest == null or nest.done()):
 				if wave >= waves.size():
-					hud.show_message("Victory! The field is ours.", 9999.0)
+					hud.show_message(Lang.t("Victory! The field is ours."), 9999.0)
 					victory = true
 					_end_battle(true)
 				else:
 					game_state = "between"
 					state_timer = 7.0
-					hud.show_message("They falter! More are coming. Reload and dress the line.", 4.0)
+					hud.show_message(Lang.t("They falter! More are coming. Reload and dress the line."), 4.0)
 
 	if _autotest:
 		_run_autotest(delta)
@@ -1153,11 +1153,11 @@ func _start_wave() -> void:
 		_spawn_queue.append(Vector3(pos.x, 0, pos.z))
 	_spawn_some()
 	if prologue:
-		hud.show_message("Here they come!" if wave == 1 else "The second wave! Hold the line!", 2.5)
+		hud.show_message(Lang.t("Here they come!") if wave == 1 else Lang.t("The second wave! Hold the line!"), 2.5)
 	elif wave == 1:
-		hud.show_message("Here they come: %d lizardmen!" % count, 2.5)
+		hud.show_message(Lang.t("Here they come: %d lizardmen!") % count, 2.5)
 	else:
-		hud.show_message("Another %d coming!" % count, 2.5)
+		hud.show_message(Lang.t("Another %d coming!") % count, 2.5)
 	if _autotest:
 		print("wave ", wave, " start: soldiers ", soldiers.size(), " player hp ", player.hp)
 
@@ -1348,7 +1348,7 @@ func _update_guns(_delta: float) -> void:
 		if nearest_enemy(at, 3.5) != null:
 			g["silent"] = true
 			gc.overrun()
-			hud.show_message("A gun is overrun!", 1.5)
+			hud.show_message(Lang.t("A gun is overrun!"), 1.5)
 			continue
 		var tgt := nearest_enemy(at, 110.0)
 		if tgt != null and nest != null and nest.inside(tgt.global_position) and not nest.gate_open:
@@ -1380,17 +1380,17 @@ func _fire_gun(g: Dictionary, tgt: Node3D) -> void:
 ## The tutorial: each beat of the battle shows the controls it needs, once.
 func _tutorial() -> void:
 	if story_phase == "line" and wave == 0:
-		_hint("move", "MOVE: drag on the left of the screen.  LOOK: drag on the right.  Walk the earthworks while the guns are readied.", 11.0)
+		_hint("move", Lang.t("MOVE: drag on the left of the screen.  LOOK: drag on the right.  Walk the earthworks while the guns are readied."), 11.0)
 	if wave >= 1 and story_phase == "line":
-		_hint("fire", "FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys.", 12.0)
+		_hint("fire", Lang.t("FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys."), 12.0)
 	if not _hints.has("melee") and player.alive and nearest_enemy(player.global_position, 14.0) != null:
-		_hint("melee", "BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing.", 12.0)
+		_hint("melee", Lang.t("BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing."), 12.0)
 	if wave >= 2 and story_phase == "line":
-		_hint("grenade", "GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men.", 8.0)
+		_hint("grenade", Lang.t("GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men."), 8.0)
 	if story_phase == "captain_down":
-		_hint("major", "Go to the Major: follow the gold marker.", 8.0)
+		_hint("major", Lang.t("Go to the Major: follow the gold marker."), 8.0)
 	if story_phase == "retreat":
-		_hint("orders", "You command now.  FOLLOW: the line moves with you.  HOLD: it stands where you look.  CHARGE: every man picks his fight.  VOLLEY!: every loaded musket fires.  Lead them to the cliff path.", 14.0)
+		_hint("orders", Lang.t("You command now.  FOLLOW: the line moves with you.  HOLD: it stands where you look.  CHARGE: every man picks his fight.  VOLLEY!: every loaded musket fires.  Lead them to the cliff path."), 14.0)
 
 
 func _hint(id: String, text: String, seconds: float) -> void:
@@ -1432,7 +1432,7 @@ func _prologue_process(delta: float) -> void:
 			var near := nearest_enemy(line_anchor, 42.0)
 			if near != null and _volley_cd <= 0.0 and loaded_count() >= ceili(soldiers.size() * 0.6):
 				_volley_cd = 3.5
-				hud.show_message("Harrow: Present... FIRE!", 1.2)
+				hud.show_message(Lang.t("Harrow: Present... FIRE!"), 1.2)
 				_volley()
 			if wave == 1 and game_state == "fighting" and _phase_t > 40.0:
 				_start_wave() # the second wave won't wait for the first to die
@@ -1442,7 +1442,7 @@ func _prologue_process(delta: float) -> void:
 					_throw_at_captain(close)
 		"captain_down":
 			if captain != null and not _heard_captain:
-				objective = {"label": "THE MAJOR", "pos": captain.global_position}
+				objective = {"label": Lang.t("THE MAJOR"), "pos": captain.global_position}
 			if not _heard_captain and player.alive:
 				var d: float = player.global_position.distance_to(captain.global_position)
 				if d < 2.6:
@@ -1450,18 +1450,18 @@ func _prologue_process(delta: float) -> void:
 					objective = {}
 					_lines.clear()
 					_line_t = 0.0
-					say(Lore.COMMANDER, "Ensign... the left's gone. The beach is lost.", 4.0)
-					say(Lore.COMMANDER, "The company is yours, Captain. Take them up the cliff path, inland. Keep them alive.", 5.5,
+					say(Lore.COMMANDER, Lang.t("Ensign... the left's gone. The beach is lost."), 4.0)
+					say(Lore.COMMANDER, Lang.t("The company is yours, Captain. Take them up the cliff path, inland. Keep them alive."), 5.5,
 						func(): _commanding = true)
-					say(Lore.COMMANDER, "Find the stores... they'll have taken the stores...", 4.0)
-					say("", "%s is dead. You command the company." % Lore.COMMANDER_SHORT, 3.5, _begin_retreat)
+					say(Lore.COMMANDER, Lang.t("Find the stores... they'll have taken the stores..."), 4.0)
+					say("", Lang.t("%s is dead. You command the company.") % Lore.COMMANDER_SHORT, 3.5, _begin_retreat)
 				elif _phase_t > 22.0:
 					_heard_captain = true
 					objective = {}
-					say(_sergeant_name(), "He's gone, sir! The Major's dead! You're in command. Get us out of here!",
+					say(_sergeant_name(), Lang.t("He's gone, sir! The Major's dead! You're in command. Get us out of here!"),
 						4.5, _begin_retreat)
 		"retreat":
-			objective = {"label": "THE CLIFF PATH", "pos": RETREAT_POINT, "height": 5.4}
+			objective = {"label": Lang.t("THE CLIFF PATH"), "pos": RETREAT_POINT, "height": 5.4}
 			_wave_t -= delta
 			if _wave_t <= 0.0:
 				_wave_t = RETREAT_EVERY
@@ -1469,7 +1469,7 @@ func _prologue_process(delta: float) -> void:
 			if player.alive and player.global_position.distance_to(RETREAT_POINT) < 8.0:
 				story_phase = "escaped"
 				objective = {}
-				hud.show_message("Up the cliff path and into the fog. They don't follow.", 9999.0)
+				hud.show_message(Lang.t("Up the cliff path and into the fog. They don't follow."), 9999.0)
 				_end_battle(true)
 
 
@@ -1500,8 +1500,8 @@ func _captain_down() -> void:
 		return
 	story_phase = "captain_down"
 	_phase_t = 0.0
-	hud.show_message("%s is down!" % Lore.COMMANDER_SHORT, 3.0)
-	say(_sergeant_name(), "The Major's hit! Ensign, to the Major!", 4.0)
+	hud.show_message(Lang.t("%s is down!") % Lore.COMMANDER_SHORT, 3.0)
+	say(_sergeant_name(), Lang.t("The Major's hit! Ensign, to the Major!"), 4.0)
 	# The company on the left breaks and runs for the path.
 	var right := line_forward.cross(Vector3.UP).normalized()
 	for s in allies:
@@ -1510,7 +1510,7 @@ func _captain_down() -> void:
 			s.rout_to = RETREAT_POINT + Vector3(20, 0, randf_range(-3, 3))
 	get_tree().create_timer(3.5).timeout.connect(func():
 		if story_phase == "captain_down":
-			hud.show_message("The left is breaking! They're over the earthworks!", 3.0)
+			hud.show_message(Lang.t("The left is breaking! They're over the earthworks!"), 3.0)
 			_spawn_flank(6))
 
 
@@ -1522,7 +1522,7 @@ func _begin_retreat() -> void:
 	_wave_t = 2.0
 	for g in _guns:
 		g["silent"] = true
-	hud.show_message("Leave the guns! Along the beach to the cliff path!", 4.0)
+	hud.show_message(Lang.t("Leave the guns! Along the beach to the cliff path!"), 4.0)
 	# The right-hand company goes too.
 	for s in allies:
 		if s.alive and not s.routing:
@@ -1567,7 +1567,7 @@ func _sergeant_name() -> String:
 	for s in soldiers:
 		if s.record != null and (best == null or int(s.record["xp"]) > int(best.record["xp"])):
 			best = s
-	return best.display_name if best != null else "A sergeant"
+	return best.display_name if best != null else Lang.t("A sergeant")
 
 
 func _on_player_died() -> void:
@@ -1578,9 +1578,9 @@ func _on_player_died() -> void:
 		print("  player fell: phase %s, %.0f m from the path" % [story_phase, player.global_position.distance_to(RETREAT_POINT)])
 	objective = {}
 	if Company.active:
-		hud.show_message("You fall. Your men carry you from the field.", 9999.0)
+		hud.show_message(Lang.t("You fall. Your men carry you from the field."), 9999.0)
 	else:
-		hud.show_message("You have fallen.", 9999.0)
+		hud.show_message(Lang.t("You have fallen."), 9999.0)
 	_end_battle(false)
 
 

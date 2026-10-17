@@ -39,6 +39,9 @@ var slot := 1
 var graphics := "medium"
 const GRAPHICS := ["low", "medium", "high"]
 
+## The language (see lang.gd): "en", "pt_BR" or "es".
+var language := "en"
+
 
 func _ready() -> void:
 	# The game's look for every screen (see ui.gd).
@@ -50,6 +53,7 @@ func _ready() -> void:
 		graphics = String(data.get("graphics", "medium"))
 		if not graphics in GRAPHICS:
 			graphics = "medium"
+		language = String(data.get("language", "en"))
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--gfxq="):
 			graphics = a.substr(7)
@@ -69,7 +73,7 @@ func use_slot(s: int) -> void:
 func save_prefs() -> void:
 	var f := FileAccess.open(PREFS, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"slot": slot, "third_person": third_person, "graphics": graphics}))
+		f.store_string(JSON.stringify({"slot": slot, "third_person": third_person, "graphics": graphics, "language": language}))
 
 
 ## Saves from before slots existed move into slot 1.

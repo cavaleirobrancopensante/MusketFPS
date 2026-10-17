@@ -71,24 +71,24 @@ func _ready() -> void:
 	buttons.add_theme_constant_override("h_separation", 12)
 	buttons.add_theme_constant_override("v_separation", 12)
 	left.add_child(buttons)
-	_march = _button("TO THE MAP", _on_march)
+	_march = _button(Lang.t("TO THE MAP"), _on_march)
 	_hire = _button("", _on_hire)
-	_honour = _button("ROLL OF HONOUR", _on_honour)
+	_honour = _button(Lang.t("ROLL OF HONOUR"), _on_honour)
 	if not Company.loot.is_empty():
-		var lb := _button("LOOT THE FIELD (%d)" % Company.loot.size(), func():
+		var lb := _button(Lang.t("LOOT THE FIELD (%d)") % Company.loot.size(), func():
 			Company.results_unseen = false
 			Loading.change(LOOT))
 		lb.add_theme_color_override("font_color", GOLD)
 		buttons.add_child(lb)
-	buttons.add_child(_button("YOU", func():
+	buttons.add_child(_button(Lang.t("YOU"), func():
 		get_tree().set_meta("officer_back", "res://scenes/aftermath.tscn")
 		Loading.change("res://scenes/officer.tscn")))
-	buttons.add_child(_button("COMPANY & KIT", _on_company))
-	buttons.add_child(_button("WAGON", func(): _logistics.open()))
+	buttons.add_child(_button(Lang.t("COMPANY & KIT"), _on_company))
+	buttons.add_child(_button(Lang.t("WAGON"), func(): _logistics.open()))
 	buttons.add_child(_march)
 	buttons.add_child(_hire)
 	buttons.add_child(_honour)
-	buttons.add_child(_button("SAVE & MENU", _on_menu))
+	buttons.add_child(_button(Lang.t("SAVE & MENU"), _on_menu))
 
 	# ---- right: the company
 	var right := PanelContainer.new()
@@ -142,7 +142,7 @@ func _button(text: String, cb: Callable) -> Button:
 
 
 static func _n(n: int, word: String) -> String:
-	return "%d %s%s" % [n, word, "" if n == 1 else "s"]
+	return "%d %s" % [n, Lang.t(word + ("" if n == 1 else "s"))]
 
 
 static func _hex(c: Color) -> String:
@@ -158,81 +158,81 @@ func _refresh() -> void:
 	var men := Company.roster.size()
 
 	if men == 0 and not Company.can_hire():
-		_header.text = "THE COMPANY IS NO MORE"
+		_header.text = Lang.t("THE COMPANY IS NO MORE")
 		_header.add_theme_color_override("font_color", RED)
 	elif fresh and r.get("prologue", false):
-		_header.text = "CASTAWAYS"
+		_header.text = Lang.t("CASTAWAYS")
 		_header.add_theme_color_override("font_color", RED)
 	elif fresh:
-		_header.text = "VICTORY" if r["won"] else "DEFEAT"
+		_header.text = Lang.t("VICTORY") if r["won"] else Lang.t("DEFEAT")
 		_header.add_theme_color_override("font_color", GOLD if r["won"] else RED)
 	else:
-		_header.text = "IN CAMP"
+		_header.text = Lang.t("IN CAMP")
 		_header.add_theme_color_override("font_color", GOLD)
-	_sub.text = "%s  ·  Day %d  ·  %s, %d won  ·  %d crowns  ·  wages %d/wk" % [
-		Company.officer.get("rank", "Captain"), Company.day, _n(Company.battles, "battle"), Company.victories,
+	_sub.text = Lang.t("%s  ·  Day %d  ·  %s, %d won  ·  %d crowns  ·  wages %d/wk") % [
+		Lang.t(Company.officer.get("rank", "Captain")), Company.day, _n(Company.battles, "battle"), Company.victories,
 		Company.money, Company.weekly_wages()]
 
 	var t := ""
 	if fresh and r.get("prologue", false):
-		t += "[color=#%s]The beach is lost. %s fell at the earthworks and gave you the company as he died. You led what was left of it up the cliff path into an unknown land, with no ship, no allies and no word from home.[/color]\n\n" % [_hex(DIM), r.get("captain", "The Major")]
-		t += "You are its captain now. The men are shaken (morale %d).\n" % Company.company_morale()
-		t += "Lizardmen slain on the field: [b]%d[/b]\n" % int(r["slain"])
-		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
+		t += Lang.t("[color=#%s]The beach is lost. %s fell at the earthworks and gave you the company as he died. You led what was left of it up the cliff path into an unknown land, with no ship, no allies and no word from home.[/color]\n\n") % [_hex(DIM), r.get("captain", Lang.t("The Major"))]
+		t += Lang.t("You are its captain now. The men are shaken (morale %d).\n") % Company.company_morale()
+		t += Lang.t("Lizardmen slain on the field: [b]%d[/b]\n") % int(r["slain"])
+		t += _section("Fallen", r["fallen"], RED, Lang.t("None. Every man came back."))
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
-		t += _section("Levelled up (points to spend)", r.get("levelled", []), GOLD, "")
+		t += _section(Lang.t("Levelled up (points to spend)"), r.get("levelled", []), GOLD, "")
 		var st: Dictionary = Company.stash
-		t += "\n[color=#%s]The lizards carried off the ship's stores: %d muskets, powder and ball for %d shots, %d guns, %d tots of rum. Getting them back is the first task.[/color]\n" % [
+		t += Lang.t("\n[color=#%s]The lizards carried off the ship's stores: %d muskets, powder and ball for %d shots, %d guns, %d tots of rum. Getting them back is the first task.[/color]\n") % [
 			_hex(RED), int(st.get("muskets", 0)), int(st.get("ammo", 0)), int(st.get("cannons", 0)), int(st.get("rum", 0))]
-		t += "\n[color=#%s]%d pieces of kit were dropped in the rout. The little wagon you saved holds the Major's rifle and a few days' food. See to your men on the COMPANY & KIT screen.[/color]\n" % [_hex(GOLD), int(r.get("lost_gear", 0))]
+		t += Lang.t("\n[color=#%s]%d pieces of kit were dropped in the rout. The little wagon you saved holds the Major's rifle and a few days' food. See to your men on the COMPANY & KIT screen.[/color]\n") % [_hex(GOLD), int(r.get("lost_gear", 0))]
 	elif fresh:
 		var humans := String(r.get("enemy", "lizards")) == "humans"
-		t += "%s slain: [b]%d[/b]\n" % ["Enemy soldiers" if humans else "Lizardmen", int(r["slain"])]
+		t += Lang.t("%s slain: [b]%d[/b]\n") % [Lang.t("Enemy soldiers") if humans else Lang.t("Lizardmen"), int(r["slain"])]
 		if r.has("standing_note"):
 			t += "[color=#%s]%s[/color]\n" % [_hex(RED), r["standing_note"]]
 		if r.has("nest_burned"):
-			t += "[color=#%s][b]%s burns.[/b] Its mounds are torn open and fired; no more warbands will come out of it.[/color]\n" % [_hex(GOLD), r["nest_burned"]]
+			t += Lang.t("[color=#%s][b]%s burns.[/b] Its mounds are torn open and fired; no more warbands will come out of it.[/color]\n") % [_hex(GOLD), r["nest_burned"]]
 		if r.has("stash"):
-			t += "[color=#%s][b]The ship's stores are ours again:[/b] %s. The guns will march with the company now, each with its crew.[/color]\n" % [_hex(GOLD), r["stash"]]
+			t += Lang.t("[color=#%s][b]The ship's stores are ours again:[/b] %s. The guns will march with the company now, each with its crew.[/color]\n") % [_hex(GOLD), r["stash"]]
 		var pay := int(r["pay"])
 		if int(r.get("rations_spoiled", 0)) > 0 and int(r.get("wagon_looted", 0)) == 0:
-			t += "Lizards got into the wagon. You took back what they grabbed, but they'd eaten %d rations before you cut them down.\n" % int(r["rations_spoiled"])
+			t += Lang.t("Lizards got into the wagon. You took back what they grabbed, but they'd eaten %d rations before you cut them down.\n") % int(r["rations_spoiled"])
 		if int(r.get("wagon_looted", 0)) > 0:
-			t += "[color=#%s]Lizards plundered the wagon: %d%% of its stores are gone.[/color]\n" % [_hex(RED), int(r["wagon_looted"])]
+			t += Lang.t("[color=#%s]Lizards plundered the wagon: %d%% of its stores are gone.[/color]\n") % [_hex(RED), int(r["wagon_looted"])]
 		if humans and bool(r.get("won", false)):
-			t += "No bounty on men: what they carried is on the loot pile.\n"
+			t += Lang.t("No bounty on men: what they carried is on the loot pile.\n")
 		elif pay >= 0:
-			t += "Bounty: [color=#%s]+%d crowns[/color]\n" % [_hex(GOLD), pay]
+			t += Lang.t("Bounty: [color=#%s]+%d crowns[/color]\n") % [_hex(GOLD), pay]
 			if int(r.get("loot", 0)) > 0:
-				t += "[color=#%s]There's loot on the field: LOOT THE FIELD to pick through it.[/color]\n" % _hex(GOLD)
+				t += Lang.t("[color=#%s]There's loot on the field: LOOT THE FIELD to pick through it.[/color]\n") % _hex(GOLD)
 		else:
-			t += "Baggage plundered: [color=#%s]%d crowns[/color], half the wagon's stores and %d pieces of kit\n" % [_hex(RED), pay, int(r.get("lost_gear", 0))]
+			t += Lang.t("Baggage plundered: [color=#%s]%d crowns[/color], half the wagon's stores and %d pieces of kit\n") % [_hex(RED), pay, int(r.get("lost_gear", 0))]
 			if r["fallen"].size() > 0:
-				t += "[color=#%s]The dead were left where they fell, and their muskets with them.[/color]\n" % _hex(RED)
-		t += _section("Fallen", r["fallen"], RED, "None. Every man came back.")
+				t += Lang.t("[color=#%s]The dead were left where they fell, and their muskets with them.[/color]\n") % _hex(RED)
+		t += _section("Fallen", r["fallen"], RED, Lang.t("None. Every man came back."))
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
-		t += _section("At the wagon", r.get("conduct", []), DIM, "")
+		t += _section(Lang.t("At the wagon"), r.get("conduct", []), DIM, "")
 		t += _section("Promoted", r["promoted"], GOLD, "")
-		t += _section("Levelled up (points to spend)", r.get("levelled", []), GOLD, "")
+		t += _section(Lang.t("Levelled up (points to spend)"), r.get("levelled", []), GOLD, "")
 	else:
 		t += "[color=#%s]%s[/color]\n\n" % [_hex(DIM), Company.march_note]
-		t += "%d men, %d fit to fight. Morale %d (%s).\n" % [men, fit, Company.company_morale(),
+		t += Lang.t("%d men, %d fit to fight. Morale %d (%s).\n") % [men, fit, Company.company_morale(),
 			Men.morale_word(Company.company_morale())]
 		var no_shot := Company.roster.filter(func(m): return int(m["pack"]["ammo"]) == 0 and Company.shot_key(m) != "").size()
 		if no_shot > 0:
-			t += "[color=#%s]%d men have nothing to shoot.[/color]\n" % [_hex(RED), no_shot]
+			t += Lang.t("[color=#%s]%d men have nothing to shoot.[/color]\n") % [_hex(RED), no_shot]
 		pass
 	if men > 0 and fit == 0:
-		t += "\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]" % _hex(RED)
+		t += Lang.t("\n[color=#%s]Every man is wounded. Marching now means fighting alone.[/color]") % _hex(RED)
 	_summary.text = t
 
 	# Recruits can only be found where there are people: a town or city.
 	var m := World.market_here()
 	var in_town: bool = not m.is_empty() and m["kind"] in ["town", "city"]
-	_hire.text = "HIRE RECRUIT (%d)" % Company.RECRUIT_COST if in_town else "HIRE (in towns)"
+	_hire.text = Lang.t("HIRE RECRUIT (%d)") % Company.RECRUIT_COST if in_town else Lang.t("HIRE (in towns)")
 	_hire.disabled = not Company.can_hire() or not in_town
 	_march.disabled = men == 0 and not Company.can_hire()
-	_honour.text = "THE COMPANY" if _showing_honour else "ROLL OF HONOUR (%d)" % Company.fallen.size()
+	_honour.text = Lang.t("THE COMPANY") if _showing_honour else Lang.t("ROLL OF HONOUR (%d)") % Company.fallen.size()
 	if _showing_honour:
 		_fill_honour()
 	else:
@@ -241,8 +241,8 @@ func _refresh() -> void:
 
 func _section(title: String, items: Array, col: Color, empty: String) -> String:
 	if items.is_empty():
-		return "\n[b]%s:[/b] %s\n" % [title, empty] if empty != "" else ""
-	return "\n[b]%s:[/b]\n[color=#%s]%s[/color]\n" % [title, _hex(col), "\n".join(items)]
+		return "\n[b]%s:[/b] %s\n" % [Lang.t(title), empty] if empty != "" else ""
+	return "\n[b]%s:[/b]\n[color=#%s]%s[/color]\n" % [Lang.t(title), _hex(col), "\n".join(items)]
 
 
 func _clear_list() -> void:
@@ -252,7 +252,7 @@ func _clear_list() -> void:
 
 func _fill_roster() -> void:
 	_clear_list()
-	_list_title.text = "THE COMPANY  ·  %d men" % Company.roster.size()
+	_list_title.text = Lang.t("THE COMPANY  ·  %d men") % Company.roster.size()
 	var men: Array = Company.roster.duplicate()
 	# Highest rank first, then most experienced.
 	men.sort_custom(func(a, b): return int(a["xp"]) > int(b["xp"]))
@@ -271,10 +271,10 @@ func _man_row(m: Dictionary) -> Control:
 	name_l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	top.add_child(name_l)
 	var wd := int(m["wounded_days"])
-	var status := _label("WOUNDED %dd" % wd if wd > 0 else "FIT", 18, RED if wd > 0 else GREEN)
+	var status := _label(Lang.t("WOUNDED %dd") % wd if wd > 0 else Lang.t("FIT"), 18, RED if wd > 0 else GREEN)
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	top.add_child(status)
-	var info := "%s  ·  %s  ·  %s  ·  %s" % [Company.RANKS[rank], _n(int(m["battles"]), "battle"),
+	var info := "%s  ·  %s  ·  %s  ·  %s" % [Lang.t(Company.RANKS[rank]), _n(int(m["battles"]), "battle"),
 		_n(int(m["kills"]), "kill"), _temper(float(m["steadiness"]))]
 	box.add_child(_label(info, 17, DIM))
 	# Progress to the next rank.
@@ -300,14 +300,14 @@ static func _temper(steadiness: float) -> String:
 
 func _fill_honour() -> void:
 	_clear_list()
-	_list_title.text = "ROLL OF HONOUR  ·  %d fallen" % Company.fallen.size()
+	_list_title.text = Lang.t("ROLL OF HONOUR  ·  %d fallen") % Company.fallen.size()
 	if Company.fallen.is_empty():
-		_list.add_child(_label("No man of this company has fallen yet.", 20, DIM))
+		_list.add_child(_label(Lang.t("No man of this company has fallen yet."), 20, DIM))
 		return
 	for i in range(Company.fallen.size() - 1, -1, -1):
 		var f: Dictionary = Company.fallen[i]
-		_list.add_child(_label("%s %s" % [f["rank"], f["name"]], 22, Color.WHITE))
-		_list.add_child(_label("Fell on day %d  ·  %s  ·  %s" % [
+		_list.add_child(_label("%s %s" % [Lang.t(f["rank"]), f["name"]], 22, Color.WHITE))
+		_list.add_child(_label(Lang.t("Fell on day %d  ·  %s  ·  %s") % [
 			int(f["day"]), _n(int(f["battles"]), "battle"), _n(int(f["kills"]), "kill")], 17, DIM))
 		_list.add_child(HSeparator.new())
 
@@ -317,7 +317,7 @@ func _fill_honour() -> void:
 func _on_hire() -> void:
 	var m := Company.hire_recruit()
 	if not m.is_empty():
-		Company.march_note = "%s joins the company with a worn musket and no cartridges. Kit him out on the COMPANY & KIT screen." % Company.title(m)
+		Company.march_note = Lang.t("%s joins the company with a worn musket and no cartridges. Kit him out on the COMPANY & KIT screen.") % Company.title(m)
 		Company.results_unseen = false
 		_refresh()
 

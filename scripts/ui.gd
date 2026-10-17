@@ -44,6 +44,12 @@ static func font(name: String) -> Font:
 		f = ff
 	if f == null:
 		f = ThemeDB.fallback_font
+	# The symbols (♪ ▲ ★ ⚔ ✕ ...) aren't in the text fonts, and a browser
+	# has no system fonts to fall back on: a small DejaVu subset has them.
+	if name != "symbols":
+		var sym := font("symbols")
+		if sym != f and sym not in f.fallbacks:
+			f.fallbacks = f.fallbacks + [sym]
 	_fonts[name] = f
 	return f
 
@@ -148,6 +154,9 @@ static func theme() -> Theme:
 	if _theme != null:
 		return _theme
 	var t := Theme.new()
+	var sym := font("symbols")
+	if sym not in ThemeDB.fallback_font.fallbacks:
+		ThemeDB.fallback_font.fallbacks = ThemeDB.fallback_font.fallbacks + [sym]
 	var body := font("alegreya_sans_400")
 	var medium := font("alegreya_sans_500")
 	var bold := font("alegreya_sans_700")

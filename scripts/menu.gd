@@ -12,6 +12,7 @@ const INTRO := "res://scenes/intro.tscn"
 const MusicBar := preload("res://scripts/music_bar.gd")
 const MAP := "res://scenes/map.tscn"
 const Vignette := preload("res://scripts/vignette.gd")
+const FlagButton := preload("res://scripts/flag_button.gd")
 const Lore := preload("res://scripts/lore.gd")
 
 var _tp_check: CheckButton
@@ -131,7 +132,7 @@ func _ready() -> void:
 		# Headless check of a contract: signing, pay, progress, the end.
 		Company.new_campaign()
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
-		var terms := Company.contract_terms(0, "aurest", "Count Test")
+		var terms := Company.contract_terms(0, "aurest", Lang.t("Count Test"))
 		terms["duty"] = "warbands"
 		terms["need"] = 2
 		Company.sign_contract(terms)
@@ -229,12 +230,12 @@ func _ready() -> void:
 			var fac := "vell" if "--vell" in args else "aurest"
 			var pp := {"kind": "army" if "--army" in args else "patrol", "faction": fac, "size": 60 if "--army" in args else 20, "id": 0}
 			Company.next_battle = {"enemy": int(pp["size"]), "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "humans",
-				"faction": fac, "comp": World.party_comp(pp), "map": "flat", "party_name": "Test patrol"}
+				"faction": fac, "comp": World.party_comp(pp), "map": "flat", "party_name": Lang.t("Test patrol")}
 			if "--allied" in args:
 				# ...or beside one, against a warband: -- --autotest --patrol --allied
 				var wb := {"kind": "warband", "faction": "lizards", "size": 34, "id": 1}
 				Company.next_battle = {"enemy": 34, "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "lizards",
-					"faction": "lizards", "comp": World.party_comp(wb), "map": "flat", "party_name": "Test warband",
+					"faction": "lizards", "comp": World.party_comp(wb), "map": "flat", "party_name": Lang.t("Test warband"),
 					"allies": {"faction": fac, "comp": World.party_comp(pp), "party": -1, "size": int(pp["size"])}}
 		elif "--assault" in args:
 			# Storming a nest: -- --autotest --assault [--walls=0.5]
@@ -248,7 +249,7 @@ func _ready() -> void:
 				if a.begins_with("--walls="):
 					walls = float(a.substr(8))
 			Company.next_battle = {"enemy": 40, "terrain": 3, "party": -1, "ambush": false, "enemy_kind": "lizards",
-				"assault": 0, "walls": walls, "stash": false, "nest_name": "Test nest"}
+				"assault": 0, "walls": walls, "stash": false, "nest_name": Lang.t("Test nest")}
 		elif "--campaign" in args:
 			Company.new_campaign()
 		else:
@@ -293,11 +294,11 @@ func _ready() -> void:
 	col.add_theme_constant_override("separation", 12)
 	add_child(col)
 
-	var title := UI.heading("Musket FPS", 92, UI.PIPECLAY)
+	var title := UI.heading(Lang.t("Musket FPS"), 92, UI.PIPECLAY)
 	title.add_theme_constant_override("line_spacing", -18)
 	col.add_child(title)
 	var sub := Label.new()
-	sub.text = "%s, cast away on %s." % ["The " + Lore.REGIMENT.trim_prefix("the "), Lore.LAND]
+	sub.text = Lang.t("The %s, cast away on the %s.") % [Lore.REGIMENT.trim_prefix("the "), Lore.LAND.trim_prefix("the ")]
 	sub.add_theme_font_override("font", UI.font("fell_italic"))
 	sub.add_theme_font_size_override("font_size", 25)
 	sub.add_theme_color_override("font_color", UI.BRASS)
@@ -309,12 +310,12 @@ func _ready() -> void:
 
 	var last := Settings.slot_summary(Settings.slot)
 	if not last.is_empty():
-		var where := "on the beach" if bool(last.get("prologue", false)) else "day %d" % int(last["day"])
-		var cont := _button("Continue  ·  %s, %d men" % [where, int(last.get("men", 0))], _on_continue, true)
+		var where := Lang.t("on the beach") if bool(last.get("prologue", false)) else Lang.t("day %d") % int(last["day"])
+		var cont := _button(Lang.t("Continue  ·  %s, %d men") % [where, int(last.get("men", 0))], _on_continue, true)
 		col.add_child(cont)
-	var new_b := _button("New campaign", _open_slots.bind("new"), last.is_empty())
+	var new_b := _button(Lang.t("New campaign"), _open_slots.bind("new"), last.is_empty())
 	col.add_child(new_b)
-	col.add_child(_button("Load a campaign", _open_slots.bind("load")))
+	col.add_child(_button(Lang.t("Load a campaign"), _open_slots.bind("load")))
 	var rule := ColorRect.new()
 	rule.color = Color(UI.PIPECLAY, 0.18)
 	rule.custom_minimum_size = Vector2(0, 1)
@@ -323,7 +324,7 @@ func _ready() -> void:
 	rule_box.add_theme_constant_override("margin_bottom", 8)
 	rule_box.add_child(rule)
 	col.add_child(rule_box)
-	var tests := _button("Tests", _open_tests)
+	var tests := _button(Lang.t("Tests"), _open_tests)
 	tests.custom_minimum_size = Vector2(0, 62)
 	tests.add_theme_font_size_override("font_size", 24)
 	col.add_child(tests)
@@ -343,7 +344,7 @@ func _ready() -> void:
 	view.flat = true
 	view.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
 	view.add_theme_font_size_override("font_size", 20)
-	var view_label := func(): view.text = "View: %s" % ("third person" if _tp_check.button_pressed else "first person")
+	var view_label := func(): view.text = Lang.t("View: %s") % (Lang.t("third person") if _tp_check.button_pressed else Lang.t("first person"))
 	view_label.call()
 	view.pressed.connect(func():
 		_tp_check.button_pressed = not _tp_check.button_pressed
@@ -356,7 +357,7 @@ func _ready() -> void:
 	gfx.add_theme_font_size_override("font_size", 20)
 	gfx.flat = true
 	gfx.add_theme_color_override("font_color", UI.PIPECLAY)
-	var label := func(): gfx.text = "Graphics: %s" % Settings.graphics.capitalize()
+	var label := func(): gfx.text = Lang.t("Graphics: %s") % Lang.t(Settings.graphics.capitalize())
 	label.call()
 	gfx.pressed.connect(func():
 		var i := Settings.GRAPHICS.find(Settings.graphics)
@@ -367,7 +368,32 @@ func _ready() -> void:
 	_build_tests()
 	# The music button in the bottom-right corner, away from the menu.
 	MusicBar.attach(self, get_viewport_rect().size - Vector2(84, 84))
+	_build_flags()
 	_build_slots()
+
+
+## The language flags in the top-right corner: pressing one translates the
+## whole game (remembered) and rebuilds the menu in it.
+func _build_flags() -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.anchor_left = 1.0
+	row.anchor_right = 1.0
+	row.offset_left = -3 * 106 - 28
+	row.offset_right = -28
+	row.offset_top = 24
+	row.alignment = BoxContainer.ALIGNMENT_END
+	add_child(row)
+	for l in ["en", "pt_BR", "es"]:
+		var f = FlagButton.new(l)
+		f.chosen = Lang.current == l
+		f.pressed.connect(func():
+			if Lang.current == l:
+				return
+			Lang.set_language(l)
+			Settings.save_prefs()
+			get_tree().reload_current_scene.call_deferred())
+		row.add_child(f)
 
 
 func _button(text: String, cb: Callable, primary := false) -> Button:
@@ -420,7 +446,7 @@ func _build_slots() -> void:
 	_slots_box = VBoxContainer.new()
 	_slots_box.add_theme_constant_override("separation", 10)
 	v.add_child(_slots_box)
-	var back := _button("Back", func(): _slots_panel.visible = false)
+	var back := _button(Lang.t("Back"), func(): _slots_panel.visible = false)
 	back.custom_minimum_size = Vector2(200, 60)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	v.add_child(back)
@@ -434,7 +460,7 @@ func _open_slots(mode: String) -> void:
 
 
 func _fill_slots() -> void:
-	_slots_title.text = "Choose a slot for the new campaign" if _mode == "new" else "Load a campaign"
+	_slots_title.text = Lang.t("Choose a slot for the new campaign") if _mode == "new" else Lang.t("Load a campaign")
 	for c in _slots_box.get_children():
 		c.queue_free()
 	for i in range(1, Settings.SLOTS + 1):
@@ -446,25 +472,25 @@ func _fill_slots() -> void:
 		l.add_theme_font_size_override("font_size", 20)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if info.is_empty():
-			l.text = "Slot %d   ·   empty" % i
+			l.text = Lang.t("Slot %d   ·   empty") % i
 			l.add_theme_color_override("font_color", UI.SLATE)
 		else:
-			var where := "on the beach" if info["prologue"] else "day %d" % int(info["day"])
-			l.text = "Slot %d   ·   %s, %d men, %d crowns%s\nsaved %s" % [i, where, int(info["men"]),
-				int(info["money"]), ("  ·  land %s" % info["seed"]) if info["seed"] != "" else "", info["when"]]
+			var where := Lang.t("on the beach") if info["prologue"] else Lang.t("day %d") % int(info["day"])
+			l.text = Lang.t("Slot %d   ·   %s, %d men, %d crowns%s\nsaved %s") % [i, where, int(info["men"]),
+				int(info["money"]), (Lang.t("  ·  land %s") % info["seed"]) if info["seed"] != "" else "", info["when"]]
 		row.add_child(l)
 		var main := ""
 		if _mode == "new":
-			main = "Start here" if info.is_empty() else ("Tap again to overwrite" if _armed == "new%d" % i else "Overwrite")
+			main = Lang.t("Start here") if info.is_empty() else (Lang.t("Tap again to overwrite") if _armed == "new%d" % i else Lang.t("Overwrite"))
 		else:
-			main = "Load"
+			main = Lang.t("Load")
 		var b := _button(main, _on_slot.bind(i))
 		b.custom_minimum_size = Vector2(250, 60)
 		b.add_theme_font_size_override("font_size", 20)
 		b.disabled = _mode == "load" and info.is_empty()
 		row.add_child(b)
 		if not info.is_empty():
-			var d := _button("Tap again" if _armed == "del%d" % i else "Delete", _on_delete.bind(i))
+			var d := _button(Lang.t("Tap again") if _armed == "del%d" % i else "Delete", _on_delete.bind(i))
 			d.custom_minimum_size = Vector2(140, 60)
 			d.add_theme_font_size_override("font_size", 18)
 			row.add_child(d)
@@ -523,13 +549,13 @@ func _build_tests() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	_tests_panel.add_child(v)
-	v.add_child(UI.heading("Tests", 34))
+	v.add_child(UI.heading(Lang.t("Tests"), 34))
 	for t in [
-		["Weapon range", "You alone with every weapon: musket, bayonet, pistol, sabre, bow, crossbow and grenades. Send targets or charging lizards when you like. You can't die.", _on_playground],
-		["Field battle", "Total War on foot: pick the ground and both armies (muskets, pikes, bows, crossbows, cavalry, cannon; lizards or a rival army), lead your company and command the rest from above.", _on_field],
-		["Skirmish", "A mixed company of muskets, spears, bows and crossbows against three waves.", _on_skirmish],
-		["Nest assault", "The mixed company and two guns against a lizard nest: break the gate, beat off the sallies, storm it.", _on_siege_test],
-		["Stress test", "50 musketeers against 200 lizardmen, with a frame counter, to see what your phone can take.", _on_stress],
+		[Lang.t("Weapon range"), Lang.t("You alone with every weapon: musket, bayonet, pistol, sabre, bow, crossbow and grenades. Send targets or charging lizards when you like. You can't die."), _on_playground],
+		[Lang.t("Field battle"), Lang.t("Total War on foot: pick the ground and both armies (muskets, pikes, bows, crossbows, cavalry, cannon; lizards or a rival army), lead your company and command the rest from above."), _on_field],
+		[Lang.t("Skirmish"), Lang.t("A mixed company of muskets, spears, bows and crossbows against three waves."), _on_skirmish],
+		[Lang.t("Nest assault"), Lang.t("The mixed company and two guns against a lizard nest: break the gate, beat off the sallies, storm it."), _on_siege_test],
+		[Lang.t("Stress test"), Lang.t("50 musketeers against 200 lizardmen, with a frame counter, to see what your phone can take."), _on_stress],
 	]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 16)
@@ -545,7 +571,7 @@ func _build_tests() -> void:
 		l.add_theme_font_size_override("font_size", 18)
 		l.add_theme_color_override("font_color", UI.SLATE.lightened(0.25))
 		row.add_child(l)
-	var back := _button("Back", func(): _tests_panel.visible = false)
+	var back := _button(Lang.t("Back"), func(): _tests_panel.visible = false)
 	back.custom_minimum_size = Vector2(200, 60)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	v.add_child(back)

@@ -99,7 +99,7 @@ func _label(text: String, size: int, col: Color) -> Label:
 ## uncovered as soon as it has been added.
 func go(path: String, title := "Loading") -> void:
 	_show(title)
-	_set_bar(0.04, "Opening the page...")
+	_set_bar(0.04, Lang.t("Opening the page..."))
 	await _frame()
 	await _frame()
 	# Read the scene on a worker thread so the bar can move meanwhile.
@@ -113,7 +113,7 @@ func go(path: String, title := "Loading") -> void:
 		packed = ResourceLoader.load_threaded_get(path) as PackedScene
 	if packed == null:
 		packed = load(path) as PackedScene
-	_mark("load " + path.get_file())
+	_mark(Lang.t("load ") + path.get_file())
 	get_tree().change_scene_to_packed(packed)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -127,10 +127,10 @@ func go(path: String, title := "Loading") -> void:
 func change(path: String) -> void:
 	var title := ""
 	match path.get_file():
-		"map.tscn": title = "On the march"
-		"battle.tscn": title = "To arms!"
-		"intro.tscn": title = "The voyage"
-		"town.tscn": title = "Through the gate"
+		"map.tscn": title = Lang.t("On the march")
+		"battle.tscn": title = Lang.t("To arms!")
+		"intro.tscn": title = Lang.t("The voyage")
+		"town.tscn": title = Lang.t("Through the gate")
 	if title == "":
 		get_tree().change_scene_to_file(path)
 	else:
@@ -200,7 +200,7 @@ func _show(title: String) -> void:
 	_t0 = Time.get_ticks_msec()
 	_last_t = _t0
 	_title.text = title
-	_hint.text = HINTS[randi() % HINTS.size()]
+	_hint.text = Lang.t(HINTS[randi() % HINTS.size()])
 	_bar.value = 0.0
 	_cover.modulate.a = 1.0
 	_cover.visible = true

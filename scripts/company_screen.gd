@@ -159,9 +159,9 @@ func _build_left() -> Control:
 	for k in Men.ATTRS:
 		var cell := HBoxContainer.new()
 		cell.custom_minimum_size = Vector2(145, 0)
-		var n := _label({"aim": "Aim", "strength": "Strength", "constitution": "Constit.", "fitness": "Fitness"}[k], 16, DIM)
+		var n := _label(Lang.t({"aim": "Aim", "strength": "Strength", "constitution": "Constit.", "fitness": "Fitness"}[k]), 16, DIM)
 		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		n.tooltip_text = Men.ATTR_HELP[k]
+		n.tooltip_text = Lang.t(Men.ATTR_HELP[k])
 		cell.add_child(n)
 		var v := _label("", 17, Color.WHITE)
 		cell.add_child(v)
@@ -262,11 +262,11 @@ func _fill_stats(m: Dictionary) -> void:
 	var rank := int(m["rank"])
 	_name.text = String(m["name"])
 	var wd := int(m["wounded_days"])
-	_sub.text = "%s  ·  Level %d  ·  %s" % [Company.RANKS[rank], Men.level(m), "WOUNDED, %d days" % wd if wd > 0 else "Fit for duty"]
+	_sub.text = Lang.t("%s  ·  Level %d  ·  %s") % [Lang.t(Company.RANKS[rank]), Men.level(m), Lang.t("WOUNDED, %d days") % wd if wd > 0 else Lang.t("Fit for duty")]
 	_sub.add_theme_color_override("font_color", RED if wd > 0 else GOLD)
 	var pts := int(m["points"])
 	var to_next := Men.LEVEL_XP - int(m["xp"]) % Men.LEVEL_XP
-	_points.text = ("%d POINTS TO SPEND  ·  " % pts if pts > 0 else "") + "%d xp to next level" % to_next
+	_points.text = (Lang.t("%d POINTS TO SPEND  ·  ") % pts if pts > 0 else "") + Lang.t("%d xp to next level") % to_next
 	var pen := Men.penalty(m)
 	for k in Men.ATTRS:
 		var row: Array = _attr_rows[k]
@@ -279,15 +279,15 @@ func _fill_stats(m: Dictionary) -> void:
 	var morale := int(m["morale"])
 	var mcol := GREEN if morale >= 60 else (Color(1, 0.8, 0.4) if morale >= 35 else RED)
 	var t := ""
-	t += "Morale [color=#%s][b]%d %s[/b][/color]   Health [b]%d[/b]   HP [b]%d[/b]\n" % [
+	t += Lang.t("Morale [color=#%s][b]%d %s[/b][/color]   Health [b]%d[/b]   HP [b]%d[/b]\n") % [
 		mcol.to_html(false), morale, Men.morale_word(morale), int(m["health"]), int(st["hp"])]
-	t += "Battles [b]%d[/b]  Kills [b]%d[/b]  Steadiness [b]%d[/b]\n" % [int(m["battles"]), int(m["kills"]),
+	t += Lang.t("Battles [b]%d[/b]  Kills [b]%d[/b]  Steadiness [b]%d[/b]\n") % [int(m["battles"]), int(m["kills"]),
 		int(clampf(float(m["steadiness"]) + 0.1 * rank + float(st["steady"]), 0.0, 1.0) * 100)]
-	t += "Spread [b]×%.2f[/b]  Bayonet [b]%d[/b]  Pace [b]%d%%[/b]\n" % [float(st["spread"]),
+	t += Lang.t("Spread [b]×%.2f[/b]  Bayonet [b]%d[/b]  Pace [b]%d%%[/b]\n") % [float(st["spread"]),
 		int(float(st["melee"]) + 5.0 * rank), int(float(m["pace"]) * (1.0 + float(st["pace"])) * 100)]
 	var cond := Men.conditions(m)
 	if pen > 0:
-		cond.append("-%d to all attributes" % pen)
+		cond.append(Lang.t("-%d to all attributes") % pen)
 	if cond.size() > 0:
 		t += "[color=#%s]%s[/color]" % [RED.to_html(false), ", ".join(cond)]
 	_stats.text = t
@@ -328,7 +328,7 @@ func _build_middle() -> Control:
 	_doll.draw.connect(_draw_doll)
 	_doll.resized.connect(_layout_doll)
 	stack.add_child(_doll)
-	_doll.add_child(_label("KIT", 22, GOLD))
+	_doll.add_child(_label(Lang.t("KIT"), 22, GOLD))
 
 	for slot in Company.SLOTS:
 		var b := Button.new()
@@ -347,7 +347,7 @@ func _build_middle() -> Control:
 	var pv := VBoxContainer.new()
 	pv.add_theme_constant_override("separation", 4)
 	pack.add_child(pv)
-	pv.add_child(_label("PACK", 15, DIM))
+	pv.add_child(_label(Lang.t("PACK"), 15, DIM))
 	for key in Company.PACK:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 6)
@@ -356,7 +356,7 @@ func _build_middle() -> Control:
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		r.add_child(l)
 		_pack_rows[key] = l
-		for spec in [["-", -1], ["+", 1], ["FILL", 99]]:
+		for spec in [["-", -1], ["+", 1], [Lang.t("FILL"), 99]]:
 			var b := _button(spec[0], 18, _on_pack.bind(key, spec[1]))
 			b.custom_minimum_size = Vector2(56 if spec[1] != 99 else 70, 42)
 			r.add_child(b)
@@ -379,7 +379,7 @@ func _build_middle() -> Control:
 	_picker_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_picker_list.add_theme_constant_override("separation", 8)
 	scroll.add_child(_picker_list)
-	pvb.add_child(_button("CANCEL", 20, _close_picker))
+	pvb.add_child(_button(Lang.t("CANCEL"), 20, _close_picker))
 	return panel
 
 
@@ -462,24 +462,24 @@ func _fill_kit(m: Dictionary) -> void:
 	for slot in Company.SLOTS:
 		var id := String(gear.get(slot, ""))
 		var b: Button = _cards[slot]
-		b.text = "%s\n%s\n%s" % [String(Company.SLOT_NAMES[slot]).to_upper(), Company.item_name(id), _effect(id, slot)]
+		b.text = "%s\n%s\n%s" % [Lang.t(String(Company.SLOT_NAMES[slot])).to_upper(), Company.item_name(id), _effect(id, slot)]
 	var pack: Dictionary = m["pack"]
 	for key in Company.PACK:
 		var spec: Dictionary = Company.PACK[key]
 		var n := int(pack[key])
 		var l: Label = _pack_rows[key]
-		var nm := String(spec["name"])
+		var nm := Lang.t(String(spec["name"]))
 		var unit := String(spec["unit"])
 		var warn_empty := n == 0
 		if key == "ammo":
 			# What's in his pouch depends on his weapon.
 			var sk := Company.shot_key(m)
-			nm = {"ammo": "Cartridges", "arrows": "Arrows", "bolts": "Bolts", "": "Shot"}[sk]
+			nm = Lang.t({"ammo": "Cartridges", "arrows": "Arrows", "bolts": "Bolts", "": "Shot"}[sk])
 			unit = {"ammo": "cartridge", "arrows": "arrow", "bolts": "bolt", "": "shot"}[sk]
 			if sk == "":
 				warn_empty = false
-				nm = "Shot (pike: none needed)"
-		l.text = "%s   %d / %d %s%s" % [nm, n, int(spec["max"]), unit, "" if n == 1 else "s"]
+				nm = Lang.t("Shot (pike: none needed)")
+		l.text = "%s   %d / %d %s" % [nm, n, int(spec["max"]), Lang.t(unit + ("" if n == 1 else "s"))]
 		l.add_theme_color_override("font_color", RED if warn_empty else Color.WHITE)
 	_doll.queue_redraw()
 
@@ -487,56 +487,56 @@ func _fill_kit(m: Dictionary) -> void:
 ## One short line on what an item does.
 static func _effect(id: String, slot: String) -> String:
 	if id == "":
-		return "clubs with the musket butt" if slot == "secondary" else "bare-headed"
+		return Lang.t("clubs with the musket butt") if slot == "secondary" else Lang.t("bare-headed")
 	var it: Dictionary = Company.ITEMS[id]
 	var bits: PackedStringArray = []
 	if it.has("steady"):
-		bits.append("+%d steadiness" % int(float(it["steady"]) * 100))
+		bits.append(Lang.t("+%d steadiness") % int(float(it["steady"]) * 100))
 	if it.has("armour"):
-		bits.append("turns %d%% of a hack" % int(float(it["armour"]) * 100))
+		bits.append(Lang.t("turns %d%% of a hack") % int(float(it["armour"]) * 100))
 	if it.has("pace"):
-		bits.append("%+d%% pace" % int(float(it["pace"]) * 100))
+		bits.append(Lang.t("%+d%% pace") % int(float(it["pace"]) * 100))
 	if it.has("missile"):
-		bits.append({"arrow": "shoots arrows, %d m" % int(it.get("range", 40)), "bolt": "shoots bolts, %d m" % int(it.get("range", 40))}.get(String(it["missile"]), ""))
+		bits.append({"arrow": Lang.t("shoots arrows, %d m") % int(it.get("range", 40)), "bolt": Lang.t("shoots bolts, %d m") % int(it.get("range", 40))}.get(String(it["missile"]), ""))
 		if it.has("dmg"):
-			bits.append("+%d%% damage" % int((float(it["dmg"]) - 1.0) * 100))
-		bits.append("quick to loose" if float(it["reload"]) < 0.8 else "slow to span")
+			bits.append(Lang.t("+%d%% damage") % int((float(it["dmg"]) - 1.0) * 100))
+		bits.append(Lang.t("quick to loose") if float(it["reload"]) < 0.8 else Lang.t("slow to span"))
 	elif it.has("spread"):
 		if float(it["spread"]) < 1.0:
-			bits.append("accurate, slow to load")
+			bits.append(Lang.t("accurate, slow to load"))
 		elif float(it["spread"]) > 1.0:
-			bits.append("misfires, scatters")
+			bits.append(Lang.t("misfires, scatters"))
 		else:
-			bits.append("reliable")
+			bits.append(Lang.t("reliable"))
 	if it.has("melee"):
-		bits.append("%d damage" % int(it["melee"]))
-	return ", ".join(bits) if bits.size() > 0 else "no effect"
+		bits.append(Lang.t("%d damage") % int(it["melee"]))
+	return ", ".join(bits) if bits.size() > 0 else Lang.t("no effect")
 
 
 func _open_picker(slot: String) -> void:
 	if _sel.is_empty():
 		return
 	_picker_slot = slot
-	_picker_title.text = "%s: from the wagon" % String(Company.SLOT_NAMES[slot]).to_upper()
+	_picker_title.text = Lang.t("%s: from the wagon") % Lang.t(String(Company.SLOT_NAMES[slot])).to_upper()
 	for c in _picker_list.get_children():
 		c.queue_free()
 	var current := String(_sel["gear"].get(slot, ""))
-	_picker_list.add_child(_label("Wearing: %s" % Company.item_name(current), 18, DIM))
+	_picker_list.add_child(_label(Lang.t("Wearing: %s") % Company.item_name(current), 18, DIM))
 	var options := Company.stored_for(slot)
 	for o in options:
 		var id: String = o[0]
 		if id == current:
 			continue
-		var b := _button("%s   ×%d\n%s" % [Company.item_name(id), int(o[1]), Company.ITEMS[id]["desc"]], 18,
+		var b := _button("%s   ×%d\n%s" % [Company.item_name(id), int(o[1]), Lang.t(Company.ITEMS[id]["desc"])], 18,
 			_on_pick.bind(id))
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.custom_minimum_size = Vector2(0, 76)
 		_picker_list.add_child(b)
 	if current != "" and slot != "primary" and slot != "torso":
-		_picker_list.add_child(_button("Take it off (back to the wagon)", 18, _on_pick.bind("")))
+		_picker_list.add_child(_button(Lang.t("Take it off (back to the wagon)"), 18, _on_pick.bind("")))
 	if options.is_empty() or (options.size() == 1 and options[0][0] == current):
-		_picker_list.add_child(_label("Nothing spare for this slot in the wagon.", 18, DIM))
+		_picker_list.add_child(_label(Lang.t("Nothing spare for this slot in the wagon."), 18, DIM))
 	_picker.visible = true
 
 
@@ -577,7 +577,7 @@ func _build_right() -> Control:
 	col.add_child(men)
 	var mv := VBoxContainer.new()
 	men.add_child(mv)
-	mv.add_child(_label("THE MEN  ·  %d" % Company.roster.size(), 20, GOLD))
+	mv.add_child(_label(Lang.t("THE MEN  ·  %d") % Company.roster.size(), 20, GOLD))
 	var scroll := UI.scroll()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -607,16 +607,16 @@ func _build_right() -> Control:
 	var acts := HBoxContainer.new()
 	acts.add_theme_constant_override("separation", 6)
 	wv.add_child(acts)
-	var issue := _button("LOGISTICS", 17, func(): _logistics.open())
+	var issue := _button(Lang.t("LOGISTICS"), 17, func(): _logistics.open())
 	issue.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acts.add_child(issue)
-	var you := _button("YOU", 17, func():
+	var you := _button(Lang.t("YOU"), 17, func():
 		Company.save()
 		get_tree().set_meta("officer_back", "res://scenes/company.tscn")
 		Loading.change("res://scenes/officer.tscn"))
 	you.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acts.add_child(you)
-	var back := _button("BACK", 17, _on_back)
+	var back := _button(Lang.t("BACK"), 17, _on_back)
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acts.add_child(back)
 	return col
@@ -634,17 +634,17 @@ func _fill_list() -> void:
 		b.button_pressed = m == _sel
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.add_theme_font_size_override("font_size", 16)
-		var status := "wounded %dd" % wd if wd > 0 else ("sick" if int(m["sick"]) > 0 else "fit")
+		var status := Lang.t("wounded %dd") % wd if wd > 0 else (Lang.t("sick") if int(m["sick"]) > 0 else Lang.t("fit"))
 		var warn := ""
 		var shot := Company.shot_key(m)
 		if int(pack["ammo"]) == 0 and shot != "":
-			warn = " · NO %s" % Company.shot_word(m).to_upper()
+			warn = Lang.t(" · NO %s") % Company.shot_word(m).to_upper()
 		elif int(pack["rations"]) == 0:
-			warn = " · NO FOOD"
+			warn = Lang.t(" · NO FOOD")
 		var pts := "  [+%d]" % int(m["points"]) if int(m["points"]) > 0 else ""
-		var role: String = {"musket": "", "pike": " · pike", "bow": " · bow", "crossbow": " · crossbow"}[Company.role_of(m)]
+		var role: String = {"musket": "", "pike": Lang.t(" · pike"), "bow": Lang.t(" · bow"), "crossbow": Lang.t(" · crossbow")}[Company.role_of(m)]
 		var shot_txt := ("%d %s · " % [int(pack["ammo"]), Company.shot_word(m)]) if shot != "" else ""
-		b.text = "%s%s%s\n%s · morale %d · %s%d food%s" % [Company.title(m), pts, role, status, int(m["morale"]),
+		b.text = Lang.t("%s%s%s\n%s · morale %d · %s%d food%s") % [Company.title(m), pts, role, status, int(m["morale"]),
 			shot_txt, int(pack["rations"]), warn]
 		if wd > 0 or warn != "":
 			b.add_theme_color_override("font_color", RED if warn != "" else Color(1, 0.75, 0.45))
@@ -661,11 +661,11 @@ func _refresh_wagon() -> void:
 		spare += int(s["items"][id])
 		names.append("%s ×%d" % [Company.item_name(id), int(s["items"][id])])
 	var load := Company.wagon_load()
-	var t := "[color=#%s][b]THE WAGON[/b][/color]  %d cr · %d/%d kg · tap for logistics\n" % [
+	var t := Lang.t("[color=#%s][b]THE WAGON[/b][/color]  %d cr · %d/%d kg · tap for logistics\n") % [
 		GOLD.to_html(false), Company.money, int(load[0]), int(Company.wagon_kg())]
-	t += "Water [b]%d[/b]%s · Food [b]%d[/b] · Shot [b]%d[/b] · Rum [b]%d[/b]\n" % [
-		int(s["water"]), " (foul)" if bool(s["foul"]) else "", int(s["rations"]), int(s["ammo"]), int(s["rum"])]
-	t += "[color=#%s]%s[/color]" % [DIM.to_html(false), ", ".join(names) if spare > 0 else "No spare kit."]
+	t += Lang.t("Water [b]%d[/b]%s · Food [b]%d[/b] · Shot [b]%d[/b] · Rum [b]%d[/b]\n") % [
+		int(s["water"]), Lang.t(" (foul)") if bool(s["foul"]) else "", int(s["rations"]), int(s["ammo"]), int(s["rum"])]
+	t += "[color=#%s]%s[/color]" % [DIM.to_html(false), ", ".join(names) if spare > 0 else Lang.t("No spare kit.")]
 	_wagon.text = t
 
 

@@ -70,9 +70,9 @@ func _ready() -> void:
 	margin.add_child(root)
 	var head := HBoxContainer.new()
 	root.add_child(head)
-	head.add_child(UI.heading("Field battle", 36))
+	head.add_child(UI.heading(Lang.t("Field battle"), 36))
 	var sub := Label.new()
-	sub.text = "   Regiments against regiments. You lead your company on foot; COMMAND gives every regiment its orders."
+	sub.text = Lang.t("   Regiments against regiments. You lead your company on foot; COMMAND gives every regiment its orders.")
 	sub.add_theme_color_override("font_color", UI.SLATE)
 	sub.add_theme_font_size_override("font_size", 17)
 	sub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -87,18 +87,18 @@ func _ready() -> void:
 
 	# The ground and the size of a regiment.
 	var left := _panel(cols, 0.8)
-	left.add_child(_sub("Battlefield"))
+	left.add_child(_sub(Lang.t("Battlefield")))
 	var maps := GridContainer.new()
 	maps.columns = 2
 	maps.add_theme_constant_override("h_separation", 6)
 	maps.add_theme_constant_override("v_separation", 6)
 	left.add_child(maps)
 	for m in Terrain.MAPS:
-		var b := _toggle(Terrain.MAP_NAMES[m], func(): _set_map(m))
+		var b := _toggle(Lang.t(Terrain.MAP_NAMES[m]), func(): _set_map(m))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		maps.add_child(b)
 		_map_buttons[m] = b
-	left.add_child(_sub("Men in a regiment"))
+	left.add_child(_sub(Lang.t("Men in a regiment")))
 	var sizes := HBoxContainer.new()
 	sizes.add_theme_constant_override("separation", 6)
 	left.add_child(sizes)
@@ -107,7 +107,7 @@ func _ready() -> void:
 		b2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sizes.add_child(b2)
 		_size_buttons[int(sz[0])] = b2
-	left.add_child(_sub("Pace"))
+	left.add_child(_sub(Lang.t("Pace")))
 	var paces := HBoxContainer.new()
 	paces.add_theme_constant_override("separation", 6)
 	left.add_child(paces)
@@ -117,13 +117,13 @@ func _ready() -> void:
 		paces.add_child(b3)
 		_pace_buttons[float(pc[0])] = b3
 	var size_note := Label.new()
-	size_note.text = "Horse come in half that, brutes fewer; a battery is two guns."
+	size_note.text = Lang.t("Horse come in half that, brutes fewer; a battery is two guns.")
 	size_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	size_note.add_theme_font_size_override("font_size", 14)
 	size_note.add_theme_color_override("font_color", UI.SLATE)
 	left.add_child(size_note)
 	_auto = CheckButton.new()
-	_auto.text = "Auto-pause on trouble"
+	_auto.text = Lang.t("Auto-pause on trouble")
 	_auto.button_pressed = bool(cfg.get("auto_pause", false))
 	_auto.add_theme_font_size_override("font_size", 18)
 	_auto.toggled.connect(func(on): cfg["auto_pause"] = on)
@@ -131,9 +131,9 @@ func _ready() -> void:
 
 	# Your army.
 	var mid := _panel(cols, 1.25)
-	mid.add_child(_sub("Your army"))
+	mid.add_child(_sub(Lang.t("Your army")))
 	var note := Label.new()
-	note.text = "With your own company of musketeers, which you lead."
+	note.text = Lang.t("With your own company of musketeers, which you lead.")
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", UI.SLATE)
 	mid.add_child(note)
@@ -142,11 +142,11 @@ func _ready() -> void:
 
 	# The enemy.
 	var right := _panel(cols, 1.25)
-	right.add_child(_sub("The enemy"))
+	right.add_child(_sub(Lang.t("The enemy")))
 	var armies := HBoxContainer.new()
 	armies.add_theme_constant_override("separation", 8)
 	right.add_child(armies)
-	for a in [["lizards", "Lizard warband"], ["humans", "Rival army"]]:
+	for a in [["lizards", Lang.t("Lizard warband")], ["humans", Lang.t("Rival army")]]:
 		var b3 := _toggle(a[1], func(): _set_army(a[0]))
 		b3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		armies.add_child(b3)
@@ -160,7 +160,7 @@ func _ready() -> void:
 	foot.add_theme_constant_override("separation", 14)
 	root.add_child(foot)
 	var back := Button.new()
-	back.text = "Back"
+	back.text = Lang.t("Back")
 	back.custom_minimum_size = Vector2(180, 64)
 	back.add_theme_font_size_override("font_size", 24)
 	back.pressed.connect(func(): get_tree().change_scene_to_file(MENU))
@@ -173,7 +173,7 @@ func _ready() -> void:
 	_total.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	foot.add_child(_total)
 	var go := Button.new()
-	go.text = "Fight"
+	go.text = Lang.t("Fight")
 	go.theme_type_variation = "PrimaryButton"
 	go.custom_minimum_size = Vector2(240, 64)
 	go.add_theme_font_size_override("font_size", 28)
@@ -226,12 +226,12 @@ func _row(side: String, kind: String, info: Array) -> Control:
 	txt.add_theme_constant_override("separation", -2)
 	row.add_child(txt)
 	var n := Label.new()
-	n.text = info[0]
+	n.text = Lang.t(info[0])
 	n.add_theme_font_size_override("font_size", 20)
 	n.add_theme_color_override("font_color", UI.PIPECLAY)
 	txt.add_child(n)
 	var d := Label.new()
-	d.text = info[1]
+	d.text = Lang.t(info[1])
 	d.add_theme_font_size_override("font_size", 14)
 	d.add_theme_color_override("font_color", UI.SLATE)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -334,9 +334,9 @@ func _refresh() -> void:
 		return
 	var a := _men("you")
 	var b := _men("foe")
-	var t := "%d of yours against %d" % [a, b]
+	var t := Lang.t("%d of yours against %d") % [a, b]
 	if a + b > 360:
-		t += "  ·  a big battle: it may run slowly on a phone"
+		t += Lang.t("  ·  a big battle: it may run slowly on a phone")
 	_total.text = t
 	_total.add_theme_color_override("font_color", Color(1.0, 0.75, 0.4) if a + b > 360 else UI.PIPECLAY)
 

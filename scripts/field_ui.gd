@@ -38,6 +38,7 @@ const UI := preload("res://scripts/ui.gd")
 const Terrain := preload("res://scripts/field_terrain.gd")
 
 const SLOW := 0.2
+const ORDINAL1 := "1st"
 const BLUE := Color(0.55, 0.72, 1.0)
 const RED := Color(1.0, 0.45, 0.38)
 const CARD_W := 132.0
@@ -144,7 +145,7 @@ func _setup_view() -> void:
 	if bool(field.cfg.get("ambush", false)):
 		# No time to deploy: they're on you.
 		deploying = false
-		battle.hud.show_message("AMBUSH! No time to form up!", 4.0)
+		battle.hud.show_message(Lang.t("AMBUSH! No time to form up!"), 4.0)
 		return
 	if field.prologue:
 		deploying = false
@@ -216,7 +217,7 @@ func _set_speed(s: String) -> void:
 
 func _begin() -> void:
 	deploying = false
-	battle.hud.show_message("Form the line! The battle begins.", 3.0)
+	battle.hud.show_message(Lang.t("Form the line! The battle begins."), 3.0)
 	close()
 
 
@@ -278,11 +279,11 @@ func _update_banners() -> void:
 		l.global_position = c + Vector3.UP * (5.0 + dist * (0.025 if not r.is_gun() else 0.06))
 		var st := ""
 		match r.state:
-			"wavering": st = "  WAVERING"
-			"routing": st = "  ROUTING"
-			"shattered": st = "  BROKEN"
+			"wavering": st = Lang.t("  WAVERING")
+			"routing": st = Lang.t("  ROUTING")
+			"shattered": st = Lang.t("  BROKEN")
 		var you := "★ " if r.player_led else ""
-		l.text = "%s%s %d%s" % [you, r.info["short"], r.members.size(), st]
+		l.text = "%s%s %d%s" % [you, Lang.t(r.info["short"]), r.members.size(), st]
 		var col := BLUE if r.side == 0 else RED
 		if r in selected:
 			col = UI.BRASS.lightened(0.3)
@@ -461,18 +462,18 @@ func _buttons() -> Array:
 		return out
 	var bw := 112.0
 	var y := 14.0
-	out.append({"id": "pause", "rect": Rect2(14, y, bw, 52), "label": "PAUSE", "on": speed == "pause"})
-	out.append({"id": "slow", "rect": Rect2(14 + (bw + 8), y, bw, 52), "label": "SLOW", "on": speed == "slow"})
-	out.append({"id": "play", "rect": Rect2(14 + 2 * (bw + 8), y, bw, 52), "label": "PLAY", "on": speed == "play"})
+	out.append({"id": "pause", "rect": Rect2(14, y, bw, 52), "label": Lang.t("PAUSE"), "on": speed == "pause"})
+	out.append({"id": "slow", "rect": Rect2(14 + (bw + 8), y, bw, 52), "label": Lang.t("SLOW"), "on": speed == "slow"})
+	out.append({"id": "play", "rect": Rect2(14 + 2 * (bw + 8), y, bw, 52), "label": Lang.t("PLAY"), "on": speed == "play"})
 	if deploying:
-		out.append({"id": "begin", "rect": Rect2(s.x * 0.5 - 150, y, 300, 60), "label": "BEGIN THE BATTLE", "primary": true})
+		out.append({"id": "begin", "rect": Rect2(s.x * 0.5 - 150, y, 300, 60), "label": Lang.t("BEGIN THE BATTLE"), "primary": true})
 	elif battle.player.alive:
-		out.append({"id": "close", "rect": Rect2(s.x - 214, y, 200, 52), "label": "TO YOUR MEN", "primary": true})
+		out.append({"id": "close", "rect": Rect2(s.x - 214, y, 200, 52), "label": Lang.t("TO YOUR MEN"), "primary": true})
 	out.append({"id": "autopause", "rect": Rect2(s.x - 214 - (0 if deploying or not battle.player.alive else 210), y + (0 if deploying or not battle.player.alive else 0), 200, 52),
-		"label": "AUTO-PAUSE " + ("ON" if auto_pause else "OFF"), "on": auto_pause})
+		"label": Lang.t("AUTO-PAUSE ") + ("ON" if auto_pause else Lang.t("OFF")), "on": auto_pause})
 	if field.over != "":
-		out.append({"id": "restart", "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 - 36, 260, 72), "label": "RESTART", "primary": true})
-		out.append({"id": "menu", "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 + 46, 260, 60), "label": "MENU"})
+		out.append({"id": "restart", "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 - 36, 260, 72), "label": Lang.t("RESTART"), "primary": true})
+		out.append({"id": "menu", "rect": Rect2(s.x * 0.5 - 130, s.y * 0.5 + 46, 260, 60), "label": Lang.t("MENU")})
 	# Zoom and turn, for one thumb.
 	var zx := s.x - 70.0
 	var zy := 92.0
@@ -484,25 +485,25 @@ func _buttons() -> Array:
 		var ox := s.x - 214.0
 		var oy := zy + 10.0
 		var r0 = selected[0]
-		var list: Array = [["halt", "HALT"], ["charge", "CHARGE"]]
+		var list: Array = [["halt", Lang.t("HALT")], ["charge", Lang.t("CHARGE")]]
 		var any_ranged := selected.any(func(r): return r.is_ranged())
 		if any_ranged:
-			list.append(["fire", "FIRE: AT WILL" if r0.fire_at_will else "FIRE: HOLDING"])
-			list.append(["volley", "VOLLEY"])
+			list.append(["fire", Lang.t("FIRE: AT WILL") if r0.fire_at_will else Lang.t("FIRE: HOLDING")])
+			list.append(["volley", Lang.t("VOLLEY")])
 		if selected.any(func(r): return r.can_square()):
-			list.append(["square", "SQUARE: " + ("FORMED" if r0.square else "OFF")])
-		list.append(["run", "RUN: " + ("ON" if r0.run else "OFF")])
-		list.append(["fallback", "FALL BACK"])
+			list.append(["square", Lang.t("SQUARE: ") + (Lang.t("FORMED") if r0.square else Lang.t("OFF"))])
+		list.append(["run", Lang.t("RUN: ") + ("ON" if r0.run else Lang.t("OFF"))])
+		list.append(["fallback", Lang.t("FALL BACK")])
 		if selected.size() == 1 and r0.player_led and battle.player.alive:
-			list.append(["follow", "FOLLOW ME"])
+			list.append(["follow", Lang.t("FOLLOW ME")])
 		ox = s.x - 214.0 - 66.0
 		oy = 92.0
 		for k in list:
 			out.append({"id": "o_" + k[0], "rect": Rect2(ox, oy, 200, 48), "label": k[1]})
 			oy += 54.0
-	out.append({"id": "all", "rect": Rect2(14, s.y - CARD_H - 18 - 58, 120, 48), "label": "ALL"})
+	out.append({"id": "all", "rect": Rect2(14, s.y - CARD_H - 18 - 58, 120, 48), "label": Lang.t("ALL")})
 	if not selected.is_empty():
-		out.append({"id": "none", "rect": Rect2(142, s.y - CARD_H - 18 - 58, 120, 48), "label": "NONE"})
+		out.append({"id": "none", "rect": Rect2(142, s.y - CARD_H - 18 - 58, 120, 48), "label": Lang.t("NONE")})
 	return out
 
 
@@ -799,7 +800,7 @@ func fp_tap(p: Vector2) -> bool:
 	if r != null and r.side == 1:
 		order_attack(r)
 		battle.player.point_at(r.centroid + Vector3.UP * 1.5)
-		battle.hud.show_message("%s — at %s!" % [names, r.title.to_lower() if not r.title.begins_with("1st") else "those " + String(r.info["name"]).to_lower()], 2.0)
+		battle.hud.show_message(Lang.t("%s — at %s!") % [names, r.title.to_lower() if r.title != Lang.t(ORDINAL1) + " " + Lang.t(r.info["name"]) else Lang.t("those ") + Lang.t(String(r.info["name"])).to_lower()], 2.0)
 		battle.play_sound_ui("shout", -2.0)
 		return true
 	var g = _ground_at(p, c)
@@ -807,17 +808,17 @@ func fp_tap(p: Vector2) -> bool:
 		return false
 	_order_move(g, Vector3.ZERO)
 	battle.player.point_at(g + Vector3.UP * 1.0)
-	battle.hud.show_message("%s — forward, to there!" % names, 2.0)
+	battle.hud.show_message(Lang.t("%s — forward, to there!") % names, 2.0)
 	battle.play_sound_ui("shout", -2.0)
 	return true
 
 
 func _names(regs: Array) -> String:
 	if regs.size() == 1:
-		return "Company" if regs[0].player_led else String(regs[0].title)
+		return Lang.t("Company") if regs[0].player_led else String(regs[0].title)
 	if regs.size() == 2:
-		return "%s and %s" % [regs[0].title, regs[1].title]
-	return "%d regiments" % regs.size()
+		return Lang.t("%s and %s") % [regs[0].title, regs[1].title]
+	return Lang.t("%d regiments") % regs.size()
 
 
 ## March the selection to `to` (keeping their places side by side if more
@@ -1041,16 +1042,16 @@ func _draw() -> void:
 		return
 	var s := size
 	# Title.
-	var title: String = "DEPLOY YOUR ARMY" if deploying else ("COMMAND  ·  " + {"pause": "PAUSED", "slow": "SLOWED", "play": "RUNNING"}[speed])
+	var title: String = Lang.t("DEPLOY YOUR ARMY") if deploying else (Lang.t("COMMAND  ·  ") + {"pause": Lang.t("PAUSED"), "slow": Lang.t("SLOWED"), "play": Lang.t("RUNNING")}[speed])
 	if not battle.player.alive:
-		title = "YOU ARE DOWN  ·  COMMAND FROM ABOVE"
+		title = Lang.t("YOU ARE DOWN  ·  COMMAND FROM ABOVE")
 	if field.over != "":
-		title = "VICTORY" if field.over == "won" else "DEFEAT"
+		title = Lang.t("VICTORY") if field.over == "won" else Lang.t("DEFEAT")
 	_text_c(title, Vector2(s.x * 0.5, 104 if deploying else 44), 30, UI.BRASS, display)
 	if deploying and _hint_t > 0.0 or deploying:
-		_text_c("Select a regiment, then tap the ground (a column of twos) or drag along it (a line as long as the drag).", Vector2(s.x * 0.5, 138), 18, UI.PIPECLAY)
+		_text_c(Lang.t("Select a regiment, then tap the ground (a column of twos) or drag along it (a line as long as the drag)."), Vector2(s.x * 0.5, 138), 18, UI.PIPECLAY)
 	elif not selected.is_empty() and _hint_t > -30.0:
-		_text_c("Tap the ground to march · drag along the ground to form a line · tap an enemy to attack", Vector2(s.x * 0.5, 76), 17, Color(UI.PIPECLAY, 0.85))
+		_text_c(Lang.t("Tap the ground to march · drag along the ground to form a line · tap an enemy to attack"), Vector2(s.x * 0.5, 76), 17, Color(UI.PIPECLAY, 0.85))
 	if not lesson.is_empty():
 		_draw_lesson()
 	for b in _buttons():
@@ -1135,10 +1136,10 @@ func _draw_card(r, rect: Rect2) -> void:
 	draw_style_box(sb, rect)
 	var x := rect.position.x + 8.0
 	var w := rect.size.x - 16.0
-	_text_l(String(r.info["short"]) + (" ★" if r.player_led else ""), Vector2(x, rect.position.y + 24), 20, UI.BRASS if sel else UI.PIPECLAY, display)
+	_text_l(Lang.t(String(r.info["short"])) + (" ★" if r.player_led else ""), Vector2(x, rect.position.y + 24), 20, UI.BRASS if sel else UI.PIPECLAY, display)
 	var name: String = r.title
 	if r.player_led:
-		name = "Your company"
+		name = Lang.t("Your company")
 	_text_l(name, Vector2(x, rect.position.y + 44), 14, Color(UI.SLATE.lightened(0.3)), null, w)
 	# Men left, and nerve.
 	var by := rect.position.y + 54.0
@@ -1148,20 +1149,20 @@ func _draw_card(r, rect: Rect2) -> void:
 	var m: float = clampf(r.morale / maxf(1.0, r.max_morale), 0.0, 1.0)
 	var mc := Color(0.45, 0.75, 0.4).lerp(Color(0.9, 0.3, 0.2), 1.0 - m)
 	draw_rect(Rect2(x, by + 11, w * m, 7), mc)
-	var st := "%d men" % r.members.size() if not r.is_gun() else "%d guns" % r.members.size()
+	var st := Lang.t("%d men") % r.members.size() if not r.is_gun() else Lang.t("%d guns") % r.members.size()
 	var stc := Color(UI.PIPECLAY, 0.8)
 	match r.state:
 		"wavering":
-			st = "WAVERING"
+			st = Lang.t("WAVERING")
 			stc = Color(1.0, 0.75, 0.3)
 		"routing":
-			st = "ROUTING"
+			st = Lang.t("ROUTING")
 			stc = Color(1.0, 0.4, 0.3)
 		"shattered":
-			st = "BROKEN"
+			st = Lang.t("BROKEN")
 			stc = Color(1.0, 0.4, 0.3)
 	if r.engaged() and not r.broken():
-		st += " · FIGHTING"
+		st += Lang.t(" · FIGHTING")
 	_text_l(st, Vector2(x, rect.position.y + CARD_H - 8), 14, stc, null, w)
 
 

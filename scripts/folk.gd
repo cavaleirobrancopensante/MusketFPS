@@ -156,10 +156,10 @@ static func compass(from: Vector2, to: Vector2) -> String:
 static func days_away(cells: float) -> String:
 	var days := cells / 22.0
 	if days < 0.6:
-		return "less than a day away"
+		return Lang.t("less than a day away")
 	if days < 1.5:
-		return "a day away"
-	return "%d days away" % int(round(days))
+		return Lang.t("a day away")
+	return Lang.t("%d days away") % int(round(days))
 
 
 # ---------------------------------------------------------------- the people
@@ -235,7 +235,7 @@ static func _job(rng: RandomNumberGenerator, kind: String, fac: String, sur: Dic
 	if sur["coast"]:
 		pool += ["fisher", "fisher", "net-mender", "boatwright"]
 	if float(sur["forest"]) > 0.15:
-		pool += ["woodcutter", "charcoal burner", "hunter"]
+		pool += ["woodcutter", Lang.t("charcoal burner"), "hunter"]
 	if float(sur["hills"]) > 0.15:
 		pool += ["shepherd", "shepherd"]
 	if float(sur["swamp"]) > 0.12:
@@ -255,27 +255,27 @@ static func _story(rng: RandomNumberGenerator, need: String, kin: String, job: S
 	var nest: Dictionary = sur["nest"]
 	match need:
 		"revenge":
-			out.append("The lizards took %s %s %s." % [his, kin, ["last spring", "two winters ago", "this summer", "on the road to market"][rng.randi() % 4]])
-			out.append("They were dragged off toward %s, the nest." % nest["name"])
+			out.append(Lang.t("The lizards took %s %s %s.") % [his, kin, [Lang.t("last spring"), Lang.t("two winters ago"), Lang.t("this summer"), Lang.t("on the road to market")][rng.randi() % 4]])
+			out.append(Lang.t("They were dragged off toward %s, the nest.") % nest["name"])
 		"food":
-			out.append("There are %d hungry mouths at home and the harvest failed." % rng.randi_range(2, 6))
+			out.append(Lang.t("There are %d hungry mouths at home and the harvest failed.") % rng.randi_range(2, 6))
 		"debt":
-			out.append("%s owes money to %s and can't pay." % [he.capitalize(), ["the miller", "a moneylender", "the lord's steward", "the innkeeper"][rng.randi() % 4]])
+			out.append(Lang.t("%s owes money to %s and can't pay.") % [he.capitalize(), [Lang.t("the miller"), Lang.t("a moneylender"), Lang.t("the lord's steward"), Lang.t("the innkeeper")][rng.randi() % 4]])
 		"escape":
-			out.append("%s has never been further than a day's walk from here, and hates it." % he.capitalize())
+			out.append(Lang.t("%s has never been further than a day's walk from here, and hates it.") % he.capitalize())
 		"coin":
-			out.append("%s works for next to nothing and wants better." % he.capitalize())
+			out.append(Lang.t("%s works for next to nothing and wants better.") % he.capitalize())
 		_:
-			out.append("%s seems content enough with %s lot." % [he.capitalize(), his])
+			out.append(Lang.t("%s seems content enough with %s lot.") % [he.capitalize(), his])
 	var flavour := {
-		"ferryman": "%s ferries people across the river for a copper a head." % he.capitalize(),
-		"fisher": "%s goes out on the water before dawn." % he.capitalize(),
-		"charcoal burner": "%s smells of smoke; %s kilns are out in the woods." % [he.capitalize(), his],
-		"hunter": "%s knows the forest paths better than anyone." % he.capitalize(),
-		"guard": "%s keeps the gate and doesn't trust you." % he.capitalize(),
-		"priest": "%s serves the shrine and watches you closely." % he.capitalize(),
-		"miner": "%s has dug in the deep halls since boyhood." % he.capitalize(),
-		"smith": "%s eyes your musket's lock with a craftsman's interest." % he.capitalize(),
+		"ferryman": Lang.t("%s ferries people across the river for a copper a head.") % he.capitalize(),
+		"fisher": Lang.t("%s goes out on the water before dawn.") % he.capitalize(),
+		"charcoal burner": Lang.t("%s smells of smoke; %s kilns are out in the woods.") % [he.capitalize(), his],
+		"hunter": Lang.t("%s knows the forest paths better than anyone.") % he.capitalize(),
+		"guard": Lang.t("%s keeps the gate and doesn't trust you.") % he.capitalize(),
+		"priest": Lang.t("%s serves the shrine and watches you closely.") % he.capitalize(),
+		"miner": Lang.t("%s has dug in the deep halls since boyhood.") % he.capitalize(),
+		"smith": Lang.t("%s eyes your musket's lock with a craftsman's interest.") % he.capitalize(),
 	}
 	if flavour.has(job):
 		out.append(flavour[job])
@@ -304,8 +304,8 @@ static func state(p: Dictionary) -> Dictionary:
 static func known_as(p: Dictionary) -> String:
 	var s := state(p)
 	if bool(s["named"]):
-		return "%s, the %s" % [p["name"], p["job"]]
-	return "a %s" % p["job"] if String(p["job"])[0] not in "aeiou" else "an %s" % p["job"]
+		return Lang.t("%s, the %s") % [p["name"], p["job"]]
+	return "a %s" % p["job"] if String(p["job"])[0] not in "aeiou" else Lang.t("an %s") % p["job"]
 
 
 static func pron(p: Dictionary) -> Array:
@@ -317,26 +317,26 @@ static func what_you_know(p: Dictionary) -> String:
 	var s := state(p)
 	var bits: PackedStringArray = []
 	if int(s["met"]) == 0:
-		return "You've never spoken."
-	bits.append("Met %d time%s." % [int(s["met"]), "" if int(s["met"]) == 1 else "s"])
+		return Lang.t("You've never spoken.")
+	bits.append(Lang.t("Met %d time%s.") % [int(s["met"]), "" if int(s["met"]) == 1 else "s"])
 	if int(s["met"]) >= 2 or int(s["trust"]) > 20:
-		bits.append("Seems %s." % " and ".join(PackedStringArray((p["traits"] as Array).map(func(t): return TRAIT_WORDS[t]))))
+		bits.append(Lang.t("Seems %s.") % Lang.t(" and ").join(PackedStringArray((p["traits"] as Array).map(func(t): return Lang.t(TRAIT_WORDS[t])))))
 	var story: Array = p["story"]
 	for k in mini(int(s["facts"]), story.size()):
 		bits.append(String(story[k]))
 	if not (s["task"] as Dictionary).is_empty() and not bool(s["task"].get("done", false)):
-		bits.append("Asked of you: " + task_text(p))
+		bits.append(Lang.t("Asked of you: ") + task_text(p))
 	return " ".join(bits)
 
 
 static func task_text(p: Dictionary) -> String:
 	var t: Dictionary = state(p)["task"]
 	match String(t.get("kind", "")):
-		"food": return "bring %d rations for the family." % int(t["n"])
-		"debt": return "pay the %d crowns owed." % int(t["n"])
+		"food": return Lang.t("bring %d rations for the family.") % int(t["n"])
+		"debt": return Lang.t("pay the %d crowns owed.") % int(t["n"])
 		"revenge":
-			return "fight the lizards and come back to tell of it."
-		"coin": return "pay %d crowns up front." % int(t["n"])
+			return Lang.t("fight the lizards and come back to tell of it.")
+		"coin": return Lang.t("pay %d crowns up front.") % int(t["n"])
 	return ""
 
 
@@ -376,7 +376,7 @@ static func exchange(p: Dictionary, action: String, words: bool, ctx: Dictionary
 	var He := he.capitalize()
 	var his: String = pr[1]
 	var him: String = pr[2]
-	var nm: String = p["name"] if bool(s["named"]) else "The %s" % p["job"]
+	var nm: String = p["name"] if bool(s["named"]) else Lang.t("The %s") % p["job"]
 	var tw := town(int(p["sid"]))
 	var r := {"you": "", "see": "", "say": [], "note": "", "learned": [], "end": false, "joined": false, "tone": "puzzled"}
 	var spec: Dictionary = ACTIONS[action]
@@ -384,19 +384,19 @@ static func exchange(p: Dictionary, action: String, words: bool, ctx: Dictionary
 		var said: PackedStringArray = []
 		for c in spec["words"]:
 			said.append(Tongue.word(lang, String(c)))
-		r["you"] = "You say “%s”." % " ".join(said)
+		r["you"] = Lang.t("You say “%s”.") % " ".join(said)
 	else:
-		r["you"] = String(spec["signs"])
+		r["you"] = Lang.t(String(spec["signs"]))
 
 	# Costs.
 	if action == "gift_food":
 		if int(Company.stores["rations"]) < 1:
-			r["note"] = "There's no bread left in the wagon."
+			r["note"] = Lang.t("There's no bread left in the wagon.")
 			return r
 		Company.stores["rations"] = int(Company.stores["rations"]) - 1
 	elif action == "gift_coin":
 		if Company.money < 2:
-			r["note"] = "You haven't two crowns to give."
+			r["note"] = Lang.t("You haven't two crowns to give.")
 			return r
 		Company.money -= 2
 
@@ -424,7 +424,7 @@ static func exchange(p: Dictionary, action: String, words: bool, ctx: Dictionary
 		r["say"] = mis[1]
 		dt = int(mis[2])
 		r["tone"] = mis[3]
-		r["note"] = "They didn't understand you."
+		r["note"] = Lang.t("They didn't understand you.")
 	else:
 		var res := _understood(action, p, s, roll, trust, words, ctx)
 		r.merge(res, true)
@@ -450,7 +450,7 @@ static func exchange(p: Dictionary, action: String, words: bool, ctx: Dictionary
 		(r["learned"] as Array).append(heard)
 	if int(s["trust"]) <= -45 and not bool(r["end"]):
 		r["end"] = true
-		r["see"] = String(r["see"]) + " " + ("%s turns away and won't look at you again." % nm)
+		r["see"] = String(r["see"]) + " " + (Lang.t("%s turns away and won't look at you again.") % nm)
 		tw["rep"] = int(tw["rep"]) - 2
 	return r
 
@@ -461,39 +461,39 @@ static func _misread(action: String, p: Dictionary, roll: int) -> Array:
 	var opts: Array = []
 	match action:
 		"greet":
-			opts = [["{nm} squints, then copies your bow, too deep, as if mocking.", ["what", "stranger"], 0, "puzzled"],
-				["{nm} takes your raised hand for a warding sign and makes one back, quickly.", ["go", "strange"], -4, "afraid"],
-				["{nm} laughs. It seems you've waved the way children wave goodbye.", ["goodbye", "stranger"], 2, "amused"]]
+			opts = [[Lang.t("{nm} squints, then copies your bow, too deep, as if mocking."), ["what", "stranger"], 0, "puzzled"],
+				[Lang.t("{nm} takes your raised hand for a warding sign and makes one back, quickly."), ["go", "strange"], -4, "afraid"],
+				[Lang.t("{nm} laughs. It seems you've waved the way children wave goodbye."), ["goodbye", "stranger"], 2, "amused"]]
 		"name":
-			opts = [["{nm} repeats your name back, wrongly, and points at your coat instead.", ["you", "soldier"], 1, "puzzled"],
-				["{nm} thinks you're asking for money and pats empty pockets.", ["no", "coin"], -1, "puzzled"]]
+			opts = [[Lang.t("{nm} repeats your name back, wrongly, and points at your coat instead."), ["you", "soldier"], 1, "puzzled"],
+				[Lang.t("{nm} thinks you're asking for money and pats empty pockets."), ["no", "coin"], -1, "puzzled"]]
 		"listen":
-			opts = [["{nm} talks a long while. You catch nothing, and {he} can tell.", ["you", "not", "know"], -1, "cold"],
-				["{nm} seems pleased just to be listened to, though you follow none of it.", ["i", "home", "family", "work"], 3, "warm"]]
+			opts = [[Lang.t("{nm} talks a long while. You catch nothing, and {he} can tell."), ["you", "not", "know"], -1, "cold"],
+				[Lang.t("{nm} seems pleased just to be listened to, though you follow none of it."), ["i", "home", "family", "work"], 3, "warm"]]
 		"gift_food", "gift_coin":
-			opts = [["{nm} thinks you want to sell it and shakes {his} head firmly.", ["no", "trade"], -1, "puzzled"],
-				["{nm} takes it, unsure, as if it might be a trick.", ["why", "gift"], 2, "puzzled"],
-				["{nm} is insulted: here, gifts from strangers are for beggars.", ["no", "i", "not"], -6, "angry"] if "proud" in tr else ["{nm} accepts it with a puzzled half-smile.", ["thanks", "strange"], 3, "warm"]]
+			opts = [[Lang.t("{nm} thinks you want to sell it and shakes {his} head firmly."), ["no", "trade"], -1, "puzzled"],
+				[Lang.t("{nm} takes it, unsure, as if it might be a trick."), ["why", "gift"], 2, "puzzled"],
+				[Lang.t("{nm} is insulted: here, gifts from strangers are for beggars."), ["no", "i", "not"], -6, "angry"] if "proud" in tr else [Lang.t("{nm} accepts it with a puzzled half-smile."), ["thanks", "strange"], 3, "warm"]]
 		"ask_lizards":
-			opts = [["Your hissing frightens {nm}, who backs off making a sign against evil.", ["no", "go", "danger"], -6, "afraid"],
-				["{nm} laughs at your claws, thinking it's a children's game.", ["strange", "you"], 2, "amused"],
-				["{nm} points at the river, then the sky. You can't tell what about.", ["river", "god"], 0, "puzzled"]]
+			opts = [[Lang.t("Your hissing frightens {nm}, who backs off making a sign against evil."), ["no", "go", "danger"], -6, "afraid"],
+				[Lang.t("{nm} laughs at your claws, thinking it's a children's game."), ["strange", "you"], 2, "amused"],
+				[Lang.t("{nm} points at the river, then the sky. You can't tell what about."), ["river", "god"], 0, "puzzled"]]
 		"ask_land":
-			opts = [["{nm} looks at your dust-map, rubs it out with a foot, and draws something else.", ["no", "road"], 0, "puzzled"],
-				["{nm} thinks you want to buy land and calls for the steward.", ["lord", "come"], -3, "cold"]]
+			opts = [[Lang.t("{nm} looks at your dust-map, rubs it out with a foot, and draws something else."), ["no", "road"], 0, "puzzled"],
+				[Lang.t("{nm} thinks you want to buy land and calls for the steward."), ["lord", "come"], -3, "cold"]]
 		"ask_work":
-			opts = [["{nm} thinks you're begging and offers you a crust.", ["food", "you", "hungry"], 1, "puzzled"],
-				["{nm} thinks you want to be hired and laughs at the idea of a stranger working here.", ["no", "work", "stranger"], -1, "amused"]]
+			opts = [[Lang.t("{nm} thinks you're begging and offers you a crust."), ["food", "you", "hungry"], 1, "puzzled"],
+				[Lang.t("{nm} thinks you want to be hired and laughs at the idea of a stranger working here."), ["no", "work", "stranger"], -1, "amused"]]
 		"musket":
 			if "fearful" in tr:
-				opts = [["{nm} cries out at the sight of the weapon and runs. Heads turn all along the street.", ["danger", "weapon", "help"], -15, "afraid"]]
+				opts = [[Lang.t("{nm} cries out at the sight of the weapon and runs. Heads turn all along the street."), ["danger", "weapon", "help"], -15, "afraid"]]
 			else:
-				opts = [["{nm} thinks you're threatening {him} and steps back, hand on a knife.", ["no", "weapon", "go"], -8, "angry"],
-					["{nm} takes the musket for a strange walking staff and isn't impressed.", ["strange"], 0, "puzzled"]]
+				opts = [[Lang.t("{nm} thinks you're threatening {him} and steps back, hand on a knife."), ["no", "weapon", "go"], -8, "angry"],
+					[Lang.t("{nm} takes the musket for a strange walking staff and isn't impressed."), ["strange"], 0, "puzzled"]]
 		"join":
-			opts = [["{nm} thinks you're asking the way to the gate and points it out helpfully.", ["go", "road"], 0, "puzzled"],
-				["{nm} thinks you're ordering {him} about and bristles.", ["no", "i", "not"], -5, "angry"]]
-	return opts[(roll + opts.size()) % opts.size()] if not opts.is_empty() else ["{nm} just stares.", [], 0, "puzzled"]
+			opts = [[Lang.t("{nm} thinks you're asking the way to the gate and points it out helpfully."), ["go", "road"], 0, "puzzled"],
+				[Lang.t("{nm} thinks you're ordering {him} about and bristles."), ["no", "i", "not"], -5, "angry"]]
+	return opts[(roll + opts.size()) % opts.size()] if not opts.is_empty() else [Lang.t("{nm} just stares."), [], 0, "puzzled"]
 
 
 ## They understood. Returns parts of the result (and "dt").
@@ -505,85 +505,85 @@ static func _understood(action: String, p: Dictionary, s: Dictionary, roll: int,
 	match action:
 		"greet":
 			if int(s["met"]) > 0:
-				r["see"] = "{nm} recognises you and nods." if trust < 30 else "{nm}'s face lights up: the stranger is back."
+				r["see"] = Lang.t("{nm} recognises you and nods.") if trust < 30 else Lang.t("{nm}'s face lights up: the stranger is back.")
 				r["say"] = ["hello", "friend"] if trust >= 30 else ["hello", "stranger"]
 				r["dt"] = 2 if trust < 30 else 4
 			elif "suspicious" in tr and good < 12:
-				r["see"] = "{nm} nods stiffly and keeps a hand on {his} belt."
+				r["see"] = Lang.t("{nm} nods stiffly and keeps a hand on {his} belt.")
 				r["say"] = ["stranger", "what", "want"]
 				r["dt"] = 1
 				r["tone"] = "cold"
 			elif "shy" in tr:
-				r["see"] = "{nm} colours, ducks {his} head and murmurs something."
+				r["see"] = Lang.t("{nm} colours, ducks {his} head and murmurs something.")
 				r["say"] = ["hello"]
 				r["dt"] = 3
 			else:
-				r["see"] = ["{nm} returns the bow and touches {his} heart.", "{nm} grins and says something loud and friendly.", "{nm} nods, wary but polite."][roll % 3]
+				r["see"] = [Lang.t("{nm} returns the bow and touches {his} heart."), Lang.t("{nm} grins and says something loud and friendly."), Lang.t("{nm} nods, wary but polite.")][roll % 3]
 				r["say"] = ["hello", "stranger"]
 				r["dt"] = 4 if "merry" in tr or "kind" in tr else 2
 		"name":
 			s["named"] = true
-			r["see"] = "“%s,” {he} says, touching {his} chest, and tries your name with a frown." % p["name"]
+			r["see"] = Lang.t("“%s,” {he} says, touching {his} chest, and tries your name with a frown.") % p["name"]
 			r["say"] = ["i", "name", "you", "name"]
-			r["note"] = "You learn %s's name." % p["name"]
+			r["note"] = Lang.t("You learn %s's name.") % p["name"]
 			r["dt"] = 3
 		"listen":
 			var story: Array = p["story"]
 			r["dt"] = 2 + (2 if "talkative" in tr else 0)
 			if int(s["facts"]) < story.size() and (trust >= 0 or "talkative" in tr):
-				r["see"] = "{nm} talks, half to you and half to {him}elf. You follow some of it."
-				r["note"] = "You learn: " + String(story[int(s["facts"])])
+				r["see"] = Lang.t("{nm} talks, half to you and half to {him}elf. You follow some of it.")
+				r["note"] = Lang.t("You learn: ") + String(story[int(s["facts"])])
 				s["facts"] = int(s["facts"]) + 1
 			else:
-				r["see"] = ["{nm} talks about the weather, the price of bread, a neighbour's goat.", "{nm} tells a long story, laughing at the end of it.", "{nm} complains, at length, about the lord's men."][roll % 3]
+				r["see"] = [Lang.t("{nm} talks about the weather, the price of bread, a neighbour's goat."), Lang.t("{nm} tells a long story, laughing at the end of it."), Lang.t("{nm} complains, at length, about the lord's men.")][roll % 3]
 			r["say"] = _ramble(need, p)
 		"gift_food":
 			if need == "food":
-				r["see"] = "{nm} takes the bread with both hands and holds it to {his} chest. For a moment {he} can't speak."
+				r["see"] = Lang.t("{nm} takes the bread with both hands and holds it to {his} chest. For a moment {he} can't speak.")
 				r["say"] = ["thanks", "family", "food", "thanks"]
 				r["dt"] = 18
 				s["need_met"] = true
 			elif "proud" in tr and roll < 8:
-				r["see"] = "{nm} takes it, but stiffly: {he} is no beggar."
+				r["see"] = Lang.t("{nm} takes it, but stiffly: {he} is no beggar.")
 				r["say"] = ["i", "not", "hungry"]
 				r["dt"] = -2
 				r["tone"] = "cold"
 			else:
-				r["see"] = "{nm} takes the bread and tears off a corner at once."
+				r["see"] = Lang.t("{nm} takes the bread and tears off a corner at once.")
 				r["say"] = ["thanks", "bread", "good"]
 				r["dt"] = 7
 		"gift_coin":
 			if "greedy" in tr or need in ["debt", "coin"]:
-				r["see"] = "{nm} bites the coin, turns it over, and smiles properly for the first time."
+				r["see"] = Lang.t("{nm} bites the coin, turns it over, and smiles properly for the first time.")
 				r["say"] = ["coin", "good", "thanks", "friend"]
 				r["dt"] = 12
 			elif "proud" in tr:
-				r["see"] = "{nm} pushes the coins back into your hand."
+				r["see"] = Lang.t("{nm} pushes the coins back into your hand.")
 				r["say"] = ["no", "i", "not", "coin"]
 				r["dt"] = -3
 				r["tone"] = "cold"
 				Company.money += 2
 			else:
-				r["see"] = "{nm} pockets the coins with a nod."
+				r["see"] = Lang.t("{nm} pockets the coins with a nod.")
 				r["say"] = ["thanks"]
 				r["dt"] = 6
 		"ask_lizards":
 			var sur: Dictionary = ctx["sur"]
 			var nest: Dictionary = sur["nest"]
 			if nest.is_empty() or (trust < -10 and not "talkative" in tr):
-				r["see"] = "{nm} shakes {his} head and won't talk of them."
+				r["see"] = Lang.t("{nm} shakes {his} head and won't talk of them.")
 				r["say"] = ["no", "lizard", "danger"]
 				r["tone"] = "afraid"
 			else:
 				var here := settlement(int(p["sid"]))
 				var dir := compass(Vector2(here["x"], here["y"]), Vector2(nest["x"], nest["y"]))
-				r["see"] = "{nm} spits, then points %s: the lizards' nest, %s." % [dir, days_away(float(sur["nest_dist"]))]
+				r["see"] = Lang.t("{nm} spits, then points %s: the lizards' nest, %s.") % [dir, days_away(float(sur["nest_dist"]))]
 				r["say"] = ["lizard", "nest", "far" if float(sur["nest_dist"]) > 20 else "near", "danger", "kill"]
-				r["note"] = "Marked on your map: %s, a lizard nest." % nest["name"]
+				r["note"] = Lang.t("Marked on your map: %s, a lizard nest.") % nest["name"]
 				r["reveal"] = int(nest["id"])
 				r["dt"] = 3
 				if need == "revenge":
-					r["see"] = String(r["see"]) + " {His} voice breaks as {he} says it. They took {his} %s." % p["kin"]
+					r["see"] = String(r["see"]) + Lang.t(" {His} voice breaks as {he} says it. They took {his} %s.") % p["kin"]
 					r["say"] = ["lizard", "taken", p["kin"], "nest", "kill"]
 					r["dt"] = 8
 					s["facts"] = maxi(int(s["facts"]), 1)
@@ -591,62 +591,62 @@ static func _understood(action: String, p: Dictionary, s: Dictionary, roll: int,
 			var sur2: Dictionary = ctx["sur"]
 			var other: Dictionary = sur2["town"]
 			if other.is_empty():
-				r["see"] = "{nm} shrugs."
+				r["see"] = Lang.t("{nm} shrugs.")
 			else:
 				var here2 := settlement(int(p["sid"]))
-				r["see"] = "{nm} draws in the dust: a road %s to %s, %s." % [compass(Vector2(here2["x"], here2["y"]), Vector2(other["x"], other["y"])), other["name"], days_away(float(sur2["town_dist"]))]
+				r["see"] = Lang.t("{nm} draws in the dust: a road %s to %s, %s.") % [compass(Vector2(here2["x"], here2["y"]), Vector2(other["x"], other["y"])), other["name"], days_away(float(sur2["town_dist"]))]
 				r["say"] = ["road", "go", String(other["kind"]) if String(other["kind"]) in ["village", "town"] else "town", "far" if float(sur2["town_dist"]) > 20 else "near"]
-				r["note"] = "Marked on your map: %s." % other["name"]
+				r["note"] = Lang.t("Marked on your map: %s.") % other["name"]
 				r["reveal"] = int(other["id"])
 				r["dt"] = 2
 		"ask_work":
 			if bool(s["need_met"]):
-				r["see"] = "{nm} shakes {his} head: you've done enough already."
+				r["see"] = Lang.t("{nm} shakes {his} head: you've done enough already.")
 				r["say"] = ["no", "thanks", "friend"]
 			elif need == "none" or trust < 0:
-				r["see"] = "{nm} has nothing to ask of a stranger." if trust < 0 else "{nm} thinks, and can't think of anything."
+				r["see"] = Lang.t("{nm} has nothing to ask of a stranger.") if trust < 0 else Lang.t("{nm} thinks, and can't think of anything.")
 				r["say"] = ["no", "not", "want"]
 			else:
 				var task := {"kind": need if need in ["food", "debt", "revenge", "coin"] else "coin"}
 				match String(task["kind"]):
 					"food":
 						task["n"] = int(p["food_n"])
-						r["see"] = "{nm} mimes eating, then holds up %d fingers and points at the houses: the family." % int(p["food_n"])
+						r["see"] = Lang.t("{nm} mimes eating, then holds up %d fingers and points at the houses: the family.") % int(p["food_n"])
 						r["say"] = ["family", "hungry", "food", "help"]
 					"debt":
 						task["n"] = int(p["debt"])
-						r["see"] = "{nm} counts on {his} fingers, %d, and nods toward a big house: a debt." % int(p["debt"])
+						r["see"] = Lang.t("{nm} counts on {his} fingers, %d, and nods toward a big house: a debt.") % int(p["debt"])
 						r["say"] = ["i", "debt", "coin", "help"]
 					"revenge":
 						task["mark"] = Company.victories
-						r["see"] = "{nm} makes your lizard claws, then a fist, then points at your musket. Kill them."
+						r["see"] = Lang.t("{nm} makes your lizard claws, then a fist, then points at your musket. Kill them.")
 						r["say"] = ["lizard", "kill", "you", "fight", p["kin"]]
 					"coin":
 						task["n"] = 8 + int(p["age"]) % 7
-						r["see"] = "{nm} rubs finger and thumb together and looks at your purse: pay first." if need == "coin" else "{nm} looks at the road out of town for a long time, then at your purse."
+						r["see"] = Lang.t("{nm} rubs finger and thumb together and looks at your purse: pay first.") if need == "coin" else Lang.t("{nm} looks at the road out of town for a long time, then at your purse.")
 						r["say"] = ["coin", "give", "i", "go"]
 				s["task"] = task
-				r["note"] = "Asked of you: " + task_text(p)
+				r["note"] = Lang.t("Asked of you: ") + task_text(p)
 				r["dt"] = 2
 		"musket":
 			var first_time := not bool(s["seen_musket"])
 			s["seen_musket"] = true
 			if "fearful" in tr and roll < 14:
-				r["see"] = "{nm} goes white and backs away from the thing."
+				r["see"] = Lang.t("{nm} goes white and backs away from the thing.")
 				r["say"] = ["no", "weapon", "danger"]
 				r["dt"] = -6
 				r["tone"] = "afraid"
 			elif "pious" in tr and roll < 10:
-				r["see"] = "{nm} makes a holy sign over it. Thunder that men carry is not natural."
+				r["see"] = Lang.t("{nm} makes a holy sign over it. Thunder that men carry is not natural.")
 				r["say"] = ["god", "no", "thunder", "bad"]
 				r["dt"] = -4
 				r["tone"] = "cold"
 			elif "bold" in tr or "curious" in tr or "hothead" in tr or p["job"] in ["smith", "hunter", "guard"]:
-				r["see"] = "{nm} runs a finger along the barrel, works the lock, and looks at you differently." if first_time else "{nm} asks, with gestures, to hold it again."
+				r["see"] = Lang.t("{nm} runs a finger along the barrel, works the lock, and looks at you differently.") if first_time else Lang.t("{nm} asks, with gestures, to hold it again.")
 				r["say"] = ["weapon", "thunder", "good", "kill", "lizard"]
 				r["dt"] = 9 if first_time else 3
 			else:
-				r["see"] = "{nm} looks at it politely, not knowing what it is."
+				r["see"] = Lang.t("{nm} looks at it politely, not knowing what it is.")
 				r["say"] = ["weapon", "strange"]
 				r["dt"] = 1
 		"join":
@@ -670,7 +670,7 @@ static func _ask_join(p: Dictionary, s: Dictionary, roll: int, trust: int, words
 	var need: String = p["need"]
 	var r := {"see": "", "say": [], "note": "", "dt": 0, "tone": "warm"}
 	if not bool(p["recruitable"]):
-		r["see"] = "{nm} laughs: too old, or too needed here, to march off with strangers." if int(p["age"]) > 46 or p["job"] in ["priest", "clerk", "midwife", "rune-carver"] else "{nm} is too young; {his} mother would kill {him}."
+		r["see"] = Lang.t("{nm} laughs: too old, or too needed here, to march off with strangers.") if int(p["age"]) > 46 or p["job"] in ["priest", "clerk", "midwife", "rune-carver"] else Lang.t("{nm} is too young; {his} mother would kill {him}.")
 		r["say"] = ["no", "i", "stay", "home"]
 		return r
 	# Why they might come: trust above all; a need you've met; a reason of
@@ -698,20 +698,20 @@ static func _ask_join(p: Dictionary, s: Dictionary, roll: int, trust: int, words
 	if Company.standing.has(town_f):
 		score += clampi(int(Company.standing[town_f]) / 2, -20, 15)
 	if score >= 0:
-		r["see"] = ["{nm} looks at your men, at the musket, at the road. Then {he} nods once.", "{nm} says something to a neighbour, fetches {his} weapon from the doorway and comes to stand by you.", "{nm} clasps your forearm, soldier-fashion."][roll % 3]
+		r["see"] = [Lang.t("{nm} looks at your men, at the musket, at the road. Then {he} nods once."), Lang.t("{nm} says something to a neighbour, fetches {his} weapon from the doorway and comes to stand by you."), Lang.t("{nm} clasps your forearm, soldier-fashion.")][roll % 3]
 		r["say"] = ["yes", "i", "go", "fight", "we"]
 		r["joined"] = true
 		r["dt"] = 10
 		r["tone"] = "warm"
 	elif score > -25:
-		var why := "the family" if need == "food" else ("the debt" if need == "debt" else "you're a stranger")
-		r["see"] = "{nm} hesitates and shakes {his} head, glancing back at the houses. Not yet: " + why + "."
+		var why := Lang.t("the family") if need == "food" else (Lang.t("the debt") if need == "debt" else Lang.t("you're a stranger"))
+		r["see"] = Lang.t("{nm} hesitates and shakes {his} head, glancing back at the houses. Not yet: ") + why + "."
 		r["say"] = ["no", "not", "tomorrow", "maybe"] if need != "food" else ["no", "family", "hungry"]
-		r["note"] = "Not yet. Earn more trust, or help with what {he} needs."
+		r["note"] = Lang.t("Not yet. Earn more trust, or help with what {he} needs.")
 		r["dt"] = -1
 		r["tone"] = "cold"
 	else:
-		r["see"] = "{nm} laughs in your face. Follow a stranger to die among the lizards?"
+		r["see"] = Lang.t("{nm} laughs in your face. Follow a stranger to die among the lizards?")
 		r["say"] = ["no", "you", "stranger", "go"]
 		r["dt"] = -4
 		r["tone"] = "angry"
@@ -721,12 +721,12 @@ static func _ask_join(p: Dictionary, s: Dictionary, roll: int, trust: int, words
 ## Something else that happens in a conversation: [text, trust change, words].
 static func _surprise(p: Dictionary, s: Dictionary, roll: int) -> Array:
 	var opts := [
-		["A child runs up, stares at your coat, and is dragged away by {his} mother.", 1, ["son", "stranger"]],
-		["A dog barks at you; {nm} shouts at it and apologises with a shrug.", 2, ["sorry"]],
-		["Someone calls from a window. {nm} calls back, laughing, and points at you.", 1, ["stranger", "come", "see"]],
-		["A guard strolls past and looks you over. {nm} goes quiet until he's gone.", -2, ["soldier", "lord"]],
-		["{nm} offers you a drink from a skin. It's sour and strong.", 4, ["drink", "good"]],
-		["{nm} points at the sky and says a word: rain coming.", 1, ["night", "water"]],
+		[Lang.t("A child runs up, stares at your coat, and is dragged away by {his} mother."), 1, ["son", "stranger"]],
+		[Lang.t("A dog barks at you; {nm} shouts at it and apologises with a shrug."), 2, ["sorry"]],
+		[Lang.t("Someone calls from a window. {nm} calls back, laughing, and points at you."), 1, ["stranger", "come", "see"]],
+		[Lang.t("A guard strolls past and looks you over. {nm} goes quiet until he's gone."), -2, ["soldier", "lord"]],
+		[Lang.t("{nm} offers you a drink from a skin. It's sour and strong."), 4, ["drink", "good"]],
+		[Lang.t("{nm} points at the sky and says a word: rain coming."), 1, ["night", "water"]],
 	]
 	return opts[roll % opts.size()]
 
@@ -754,10 +754,10 @@ static func finish_task(p: Dictionary) -> String:
 	town(int(p["sid"]))["rep"] = int(town(int(p["sid"]))["rep"]) + 3
 	var pr := pron(p)
 	match String(t["kind"]):
-		"food": return "You bring the rations. The family comes out to see. %s won't forget it." % p["name"]
-		"debt": return "You pay the debt. %s watches the money change hands as if it were a miracle." % p["name"]
-		"revenge": return "You tell of the fight, with your hands and the few words you have. %s listens, and grips your arm." % p["name"]
-		"coin": return "You pay. %s weighs the coins and nods: a bargain." % p["name"]
+		"food": return Lang.t("You bring the rations. The family comes out to see. %s won't forget it.") % p["name"]
+		"debt": return Lang.t("You pay the debt. %s watches the money change hands as if it were a miracle.") % p["name"]
+		"revenge": return Lang.t("You tell of the fight, with your hands and the few words you have. %s listens, and grips your arm.") % p["name"]
+		"coin": return Lang.t("You pay. %s weighs the coins and nods: a bargain.") % p["name"]
 	return ""
 
 
@@ -775,7 +775,7 @@ static func native_kit(p: Dictionary) -> Dictionary:
 		head = "hood" if rng.randf() < 0.4 else ""
 	var g := {"head": head, "torso": "tunic", "primary": "war_spear", "secondary": ""}
 	var role := "spear"
-	if job in ["hunter", "shepherd", "woodcutter", "charcoal burner", "eel-catcher", "herder"]:
+	if job in ["hunter", "shepherd", "woodcutter", Lang.t("charcoal burner"), "eel-catcher", "herder"]:
 		role = "bow"
 	elif job == "guard":
 		role = "bow" if fac == "vell" else "crossbow"
@@ -788,7 +788,7 @@ static func native_kit(p: Dictionary) -> Dictionary:
 	match role:
 		"bow":
 			g["primary"] = "war_bow" if fac == "vell" and (job in ["hunter", "guard", "woodcutter"] or rng.randf() < 0.3) else "hunting_bow"
-			g["secondary"] = "hatchet" if job in ["woodcutter", "charcoal burner"] or rng.randf() < 0.4 else "long_knife"
+			g["secondary"] = "hatchet" if job in ["woodcutter", Lang.t("charcoal burner")] or rng.randf() < 0.4 else "long_knife"
 		"crossbow":
 			g["primary"] = "dwarf_crossbow" if fac == "dwarves" else "crossbow"
 			g["secondary"] = "long_knife"

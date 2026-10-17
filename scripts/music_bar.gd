@@ -59,10 +59,10 @@ func _build(at: Vector2) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	v.add_child(row)
-	row.add_child(_button("PREV", func(): Music.prev()))
-	_pause = _button("PAUSE", func(): Music.toggle_pause())
+	row.add_child(_button(Lang.t("PREV"), func(): Music.prev()))
+	_pause = _button(Lang.t("PAUSE"), func(): Music.toggle_pause())
 	row.add_child(_pause)
-	row.add_child(_button("NEXT", func(): Music.next()))
+	row.add_child(_button(Lang.t("NEXT"), func(): Music.next()))
 	_shuffle = _button("", func(): Music.set_shuffle(not Music.shuffle))
 	row.add_child(_shuffle)
 	var row2 := HBoxContainer.new()
@@ -85,7 +85,7 @@ func _build(at: Vector2) -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 4)
 	sc.add_child(_list)
-	v.add_child(_button("CLOSE", func(): _panel.visible = false))
+	v.add_child(_button(Lang.t("CLOSE"), func(): _panel.visible = false))
 	Music.track_changed.connect(func(_t): _refresh(); _fill_list())
 	Music.state_changed.connect(_refresh)
 	_refresh()
@@ -114,14 +114,14 @@ func _refresh() -> void:
 	if _panel == null or not _panel.visible:
 		return
 	var t: Dictionary = Music.current
-	_title.text = "♪ " + (String(t["title"]) if not t.is_empty() else "Nothing playing")
-	_sub.text = Music.label(t) + ("" if Music.auto else "  ·  manual")
+	_title.text = "♪ " + (String(t["title"]) if not t.is_empty() else Lang.t("Nothing playing"))
+	_sub.text = Music.label(t) + ("" if Music.auto else Lang.t("  ·  manual"))
 	if Music.last_error != "":
 		_sub.text = Music.last_error
-	_pause.text = "PLAY" if Music.paused else "PAUSE"
-	_shuffle.text = "RANDOM" if Music.shuffle else "IN ORDER"
-	_auto.text = "AUTO: ON" if Music.auto else "AUTO: OFF"
-	_onoff.text = "MUSIC: ON" if Music.enabled else "MUSIC: OFF"
+	_pause.text = Lang.t("PLAY") if Music.paused else Lang.t("PAUSE")
+	_shuffle.text = Lang.t("RANDOM") if Music.shuffle else Lang.t("IN ORDER")
+	_auto.text = Lang.t("AUTO: ON") if Music.auto else Lang.t("AUTO: OFF")
+	_onoff.text = Lang.t("MUSIC: ON") if Music.enabled else Lang.t("MUSIC: OFF")
 	_vol.text = "%d%%" % int(round(Music.volume * 100))
 
 
@@ -133,7 +133,7 @@ func _fill_list() -> void:
 	for t in Music.tracks:
 		var b := Button.new()
 		var playing: bool = not Music.current.is_empty() and Music.current["id"] == t["id"]
-		b.text = "%s%s   ·   %s" % ["▶ " if playing else "", t["title"], Music.THEME_NAMES.get(t["theme"], "")]
+		b.text = "%s%s   ·   %s" % ["▶ " if playing else "", t["title"], Lang.t(Music.THEME_NAMES.get(t["theme"], ""))]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
 		b.add_theme_font_size_override("font_size", 18)

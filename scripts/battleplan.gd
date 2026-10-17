@@ -75,7 +75,7 @@ func _ready() -> void:
 	side.custom_minimum_size = Vector2(340, 0)
 	side.add_theme_constant_override("separation", 8)
 	row.add_child(side)
-	side.add_child(_label("BATTLE PLAN", 26, GOLD))
+	side.add_child(_label(Lang.t("BATTLE PLAN"), 26, GOLD))
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 6)
 	side.add_child(tr)
@@ -89,9 +89,9 @@ func _ready() -> void:
 			_tag = Company.tags[i]
 		_refresh.call_deferred())
 	tr.add_child(_tags)
-	tr.add_child(_button("NEW", _on_new_tag, 80))
+	tr.add_child(_button(Lang.t("NEW"), _on_new_tag, 80))
 	_new_tag = LineEdit.new()
-	_new_tag.placeholder_text = "Name the new tag, e.g. Ranged 2"
+	_new_tag.placeholder_text = Lang.t("Name the new tag, e.g. Ranged 2")
 	_new_tag.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
 	_new_tag.add_theme_font_size_override("font_size", 18)
 	_new_tag.visible = false
@@ -101,7 +101,7 @@ func _ready() -> void:
 	mr.add_theme_constant_override("separation", 6)
 	side.add_child(mr)
 	for m in ["line", "man", "wagon"]:
-		var b := _button(m.to_upper(), _set_mode.bind(m), 0)
+		var b := _button(Lang.t(m.to_upper()), _set_mode.bind(m), 0)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.toggle_mode = true
 		mr.add_child(b)
@@ -119,16 +119,16 @@ func _ready() -> void:
 	var br := HBoxContainer.new()
 	br.add_theme_constant_override("separation", 6)
 	side.add_child(br)
-	var reset := _button("ONE LINE", _preset_line, 0)
+	var reset := _button(Lang.t("ONE LINE"), _preset_line, 0)
 	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.add_child(reset)
-	var pk := _button("PIKES AHEAD", _preset_pikes, 0)
+	var pk := _button(Lang.t("PIKES AHEAD"), _preset_pikes, 0)
 	pk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.add_child(pk)
-	var mx := _button("MIXED", _preset_mixed, 0)
+	var mx := _button(Lang.t("MIXED"), _preset_mixed, 0)
 	mx.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.add_child(mx)
-	var done := _button("FIGHT!" if _fighting else "DONE", _on_done, 0)
+	var done := _button(Lang.t("FIGHT!") if _fighting else Lang.t("DONE"), _on_done, 0)
 	done.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.add_child(done)
 	_field.resized.connect(_field.queue_redraw)
@@ -219,20 +219,20 @@ func _refresh() -> void:
 	_tags.clear()
 	for t in Company.tags:
 		var n := _men().filter(func(m): return m["tag"] == t).size()
-		_tags.add_item("%s (%d)" % [t, n])
+		_tags.add_item("%s (%d)" % [Lang.t(t), n])
 	var idx := Company.tags.find(_tag)
 	if idx < 0:
 		_tag = Company.tags[0]
 		idx = 0
 	_tags.select(idx)
-	_tags.set_item_text(idx, _tag + " (%d)" % _men().filter(func(m): return m["tag"] == _tag).size())
+	_tags.set_item_text(idx, Lang.t(_tag) + " (%d)" % _men().filter(func(m): return m["tag"] == _tag).size())
 	for c in _list.get_children():
 		c.queue_free()
 	for m in _men():
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 4)
 		var name_b := Button.new()
-		name_b.text = Company.surname_title(m) + {"musket": "", "pike": " (pike)", "bow": " (bow)", "crossbow": " (xbow)"}[Company.role_of(m)]
+		name_b.text = Company.surname_title(m) + {"musket": "", "pike": Lang.t(" (pike)"), "bow": Lang.t(" (bow)"), "crossbow": Lang.t(" (xbow)")}[Company.role_of(m)]
 		name_b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		name_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_b.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
@@ -242,11 +242,11 @@ func _refresh() -> void:
 		name_b.pressed.connect(func(): _sel = m; _set_mode("man"))
 		r.add_child(name_b)
 		var tag_b := Button.new()
-		tag_b.text = String(m["tag"])
+		tag_b.text = Lang.t(String(m["tag"]))
 		tag_b.custom_minimum_size = Vector2(120, UI.MIN_TOUCH)
 		tag_b.add_theme_font_size_override("font_size", 14)
 		tag_b.add_theme_color_override("font_color", _tag_color(m["tag"]))
-		tag_b.tooltip_text = "Put him in " + _tag
+		tag_b.tooltip_text = Lang.t("Put him in ") + Lang.t(_tag)
 		tag_b.pressed.connect(func(): m["tag"] = _tag; Company.save(); _refresh())
 		r.add_child(tag_b)
 		_list.add_child(r)
@@ -259,18 +259,18 @@ func _set_mode(m: String) -> void:
 		(_mode_btns[k] as Button).button_pressed = k == m
 	match m:
 		"line":
-			_hint.text = "LINE: drag across the field and the %s form a line along it (more ranks if it's short). Tap a name's tag button to put a man in %s." % [_tag, _tag]
+			_hint.text = Lang.t("LINE: drag across the field and the %s form a line along it (more ranks if it's short). Tap a name's tag button to put a man in %s.") % [Lang.t(_tag), Lang.t(_tag)]
 		"man":
-			_hint.text = "MAN: tap the field to put %s there. Pick another man from the list." % (Company.surname_title(_sel) if _sel != null else "the picked man")
+			_hint.text = Lang.t("MAN: tap the field to put %s there. Pick another man from the list.") % (Company.surname_title(_sel) if _sel != null else Lang.t("the picked man"))
 		"wagon":
-			_hint.text = "WAGON: tap to place the wagon. The men in the Wagon tag haul it (two at the shafts) and guard it. When looters come, each does what his nerve allows: runs, stands and shoots, or fights."
+			_hint.text = Lang.t("WAGON: tap to place the wagon. The men in the Wagon tag haul it (two at the shafts) and guard it. When looters come, each does what his nerve allows: runs, stands and shoots, or fights.")
 	_refresh()
 
 
 func _on_new_tag() -> void:
 	if not _new_tag.visible:
 		_new_tag.visible = true
-		_new_tag.text = "Group %d" % (Company.tags.size() + 1)
+		_new_tag.text = Lang.t("Group %d") % (Company.tags.size() + 1)
 		_new_tag.grab_focus()
 		_new_tag.select_all()
 		return
@@ -353,7 +353,7 @@ func _release(px: Vector2) -> void:
 ## now, so nobody crosses), in as many ranks as it takes.
 func _form_line(tag: String, a: Vector2, b: Vector2) -> void:
 	if tag == "Wagon":
-		_hint.text = "The Wagon tag hauls and guards the wagon: move the wagon (WAGON) and they go with it."
+		_hint.text = Lang.t("The Wagon tag hauls and guards the wagon: move the wagon (WAGON) and they go with it.")
 		return
 	var men := _men().filter(func(m): return m["tag"] == tag)
 	if men.is_empty():
@@ -381,7 +381,7 @@ func _form_line(tag: String, a: Vector2, b: Vector2) -> void:
 		p += back * RANK_GAP * rank
 		men[i]["plan"] = [snappedf(p.x, 0.25), snappedf(p.y, 0.25)]
 	if ranks > 1:
-		_hint.text = "%s: %d men in %d ranks." % [tag, men.size(), ranks]
+		_hint.text = Lang.t("%s: %d men in %d ranks.") % [tag, men.size(), ranks]
 
 
 func _preset_line() -> void:
@@ -439,8 +439,8 @@ func _draw_field() -> void:
 		f.draw_line(_to_px(Vector2(-X_RANGE, y)), _to_px(Vector2(X_RANGE, y)), Color(1, 1, 1, 0.07 if y != 0 else 0.15), 1)
 	var font := ThemeDB.fallback_font
 	var top := _to_px(Vector2(0, Y_FWD))
-	f.draw_string(font, top + Vector2(-60, 26), "▲ ENEMY", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.55, 0.45, 0.85))
-	f.draw_string(font, Vector2(10, f.size.y - 12), "5 m squares", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.5))
+	f.draw_string(font, top + Vector2(-60, 26), Lang.t("▲ ENEMY"), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.55, 0.45, 0.85))
+	f.draw_string(font, Vector2(10, f.size.y - 12), Lang.t("5 m squares"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.5))
 	# The line being drawn.
 	if _pressed and _drag_what == null and _mode == "line":
 		f.draw_line(_press, _line_end, Color(1, 1, 1, 0.8), 3)
@@ -448,7 +448,7 @@ func _draw_field() -> void:
 	var wp := _to_px(Vector2(Company.wagon_plan[0], Company.wagon_plan[1]))
 	f.draw_rect(Rect2(wp - Vector2(0.75, 1.5) * k, Vector2(1.5, 3.0) * k), Color(0.6, 0.48, 0.32))
 	f.draw_rect(Rect2(wp - Vector2(0.75, 1.5) * k, Vector2(1.5, 3.0) * k), Color(1, 1, 1, 0.6), false, 2)
-	f.draw_string(font, wp + Vector2(k * 1.2, 6), "WAGON", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.8))
+	f.draw_string(font, wp + Vector2(k * 1.2, 6), Lang.t("WAGON"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.8))
 	# You.
 	var me := _to_px(Vector2.ZERO)
 	f.draw_colored_polygon(_star(me, 11.0), GOLD)

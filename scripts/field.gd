@@ -506,7 +506,7 @@ func _build_nest(nb: Dictionary) -> void:
 	if test_mode:
 		var tr: Array = []
 		for r in nest.defender_regs:
-			tr.append("%s %d at %s" % [r.kind, r.members.size(), r.pos.round()])
+			tr.append(Lang.t("%s %d at %s") % [r.kind, r.members.size(), r.pos.round()])
 		print("NEST centre ", nest.centre.round(), " gate ", nest.gate_point().round(), " openings ", nest.openings().size(), " garrison ", tr, " sallies ", nest._sallies)
 
 
@@ -527,7 +527,7 @@ func garrison(nest, mob: int, throwers: int) -> void:
 	var right := toward.cross(Vector3.UP)
 	if throwers > 0:
 		var t = _make_reg(1, "liz_skirm", throwers, c + toward * (nest.R - 3.0), toward, false)
-		t.title = "Throwers on the stakes"
+		t.title = Lang.t("Throwers on the stakes")
 		t.hold_fast = true
 		nest.defender_regs.append(t)
 	var brutes := mob / 14 if mob >= 28 else 0
@@ -542,7 +542,7 @@ func garrison(nest, mob: int, throwers: int) -> void:
 		var n := mob / chunks + (1 if i < mob % chunks else 0)
 		var x := (float(i) - (chunks - 1) * 0.5) * 8.0
 		var r = _make_reg(1, "liz_warrior", n, c + right * x + toward * 1.5, toward, false)
-		r.title = "The nest's %s" % ["warriors", "second mob", "third mob"][mini(i, 2)]
+		r.title = Lang.t("The nest's %s") % ["warriors", Lang.t("second mob"), Lang.t("third mob")][mini(i, 2)]
 		r.hold_fast = true
 		r.covered = true
 		nest.defender_regs.append(r)
@@ -561,7 +561,7 @@ func sally(nest, n: int) -> Array:
 		var k := n / chunks + (1 if i < n % chunks else 0)
 		var at := gp + outward * (6.0 + i * 6.0) + right * (float(i % 2) * 2.0 - 1.0) * 3.0 * float(mini(i, 1))
 		var r = _make_reg(1, "liz_warrior", k, at, outward, false)
-		r.title = "Sally from the gate"
+		r.title = Lang.t("Sally from the gate")
 		if ui != null:
 			ui.add_banner(r)
 		out.append_array(r.members)
@@ -691,9 +691,9 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	at = terrain.free_spot(at)
 	r.pos = at
 	var same := regs.filter(func(x): return x.side == side and x.kind == kind).size()
-	r.title = "Your company" if yours else "%s %s" % [ORDINAL[mini(same, ORDINAL.size() - 1)], r.info["name"]]
+	r.title = Lang.t("Your company") if yours else "%s %s" % [Lang.t(ORDINAL[mini(same, ORDINAL.size() - 1)]), Lang.t(r.info["name"])]
 	if allied:
-		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], {"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse"}.get(kind, String(r.info["name"]).to_lower())]
+		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], Lang.t({"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse"}.get(kind, String(r.info["name"]).to_lower()))]
 	_making_allied = allied
 	regs.append(r)
 	_deaths[r] = 0
@@ -898,7 +898,7 @@ func _flank_check(r) -> void:
 		var dot: float = to.normalized().dot(r.forward)
 		if dot < -0.35:
 			if r.shock("rear%d" % o.id, 25.0):
-				alert(r, "%s %s attacked from behind!" % [r.title, r.verb("is", "are")], r.side == 0)
+				alert(r, Lang.t("%s %s attacked from behind!") % [r.title, r.verb("is", "are")], r.side == 0)
 		elif dot < 0.35 and not r.is_cav():
 			r.shock("flank%d" % o.id, 14.0)
 
@@ -909,7 +909,7 @@ func on_regiment_broke(r, was: String) -> void:
 	_broke_told[r] = true
 	if was in ["routing", "shattered"]:
 		return
-	alert(r, "%s %s and %s!" % [r.title, r.verb("breaks", "break"), r.verb("runs", "run")], r.side == 0)
+	alert(r, Lang.t("%s %s and %s!") % [r.title, r.verb("breaks", "break"), r.verb("runs", "run")], r.side == 0)
 	# Friends nearby see it go.
 	for o in regs:
 		if o != r and o.side == r.side and not o.broken() and o.centroid.distance_to(r.centroid) < 45.0:
@@ -1067,22 +1067,22 @@ func player_order(what: String) -> void:
 		"follow":
 			r.order_hold()
 			r.order = "follow"
-			battle.hud.show_message("Company — follow me!", 1.5)
+			battle.hud.show_message(Lang.t("Company — follow me!"), 1.5)
 		"hold":
 			r.order_hold()
 			r.pos = Vector3(battle.player.global_position.x, 0, battle.player.global_position.z)
 			r.forward = battle._player_forward()
-			battle.hud.show_message("Company — halt! Hold here!", 1.5)
+			battle.hud.show_message(Lang.t("Company — halt! Hold here!"), 1.5)
 		"charge":
 			r.order_charge(r.nearest_foe_reg)
-			battle.hud.show_message("CHARGE! At them, lads!", 1.5)
+			battle.hud.show_message(Lang.t("CHARGE! At them, lads!"), 1.5)
 		"fire":
 			r.fire_at_will = not r.fire_at_will
-			battle.hud.show_message("Fire at will!" if r.fire_at_will else "Hold your fire... wait for the order!", 1.5)
+			battle.hud.show_message(Lang.t("Fire at will!") if r.fire_at_will else Lang.t("Hold your fire... wait for the order!"), 1.5)
 		"volley":
 			r.fire_target = r.fire_target if r.fire_target != null else r.nearest_foe_reg
 			r.order_volley()
-			battle.hud.show_message("PRESENT... FIRE!", 1.0)
+			battle.hud.show_message(Lang.t("PRESENT... FIRE!"), 1.0)
 
 
 func on_player_down() -> void:
@@ -1093,7 +1093,7 @@ func on_player_down() -> void:
 		player_reg.player_led = false
 		if player_reg.order == "follow":
 			player_reg.order_hold()
-	alert(player_reg, "You are down! Command from above.", true)
+	alert(player_reg, Lang.t("You are down! Command from above."), true)
 	if ui != null:
 		ui.open(true)
 
@@ -1109,7 +1109,7 @@ func _check_end() -> void:
 		if int(_report_t) % 10 == 0 or over != "" or _report_t < 4.0:
 			var parts: PackedStringArray = []
 			for r in regs:
-				parts.append("%s%d:%s/%d %s %d%%m %s" % ["Y" if r.side == 0 else "T", r.id, r.kind, r.members.size(), r.state.substr(0, 4) if not r.square else "SQUA", int(r.morale), r.order.substr(0, 4)])
+				parts.append("%s%d:%s/%d %s %d%%m %s" % ["Y" if r.side == 0 else "T", r.id, r.kind, r.members.size(), r.state.substr(0, 4) if not r.square else Lang.t("SQUA"), int(r.morale), r.order.substr(0, 4)])
 			print("FIELD t%d fps%d %s | %s" % [int(clock), Engine.get_frames_per_second(), status_line(), " ".join(parts)])
 		if over != "" and _report_t > 3.0:
 			print("FIELD END ", over, " at ", int(clock), " shots ", battle.projectiles.stats)
@@ -1123,11 +1123,11 @@ func _check_end() -> void:
 	var theirs := regs.filter(func(r): return r.side == 1 and not r.broken())
 	if theirs.is_empty() and (battle.nest == null or battle.nest.done()):
 		over = "won"
-		battle.hud.show_message("VICTORY! The field is ours." if campaign else "VICTORY! Their army is running.", 9999.0)
+		battle.hud.show_message(Lang.t("VICTORY! The field is ours.") if campaign else Lang.t("VICTORY! Their army is running."), 9999.0)
 		_finish(true)
 	elif mine.is_empty():
 		over = "lost"
-		battle.hud.show_message("DEFEAT. The company is broken and scattered." if campaign else "DEFEAT. Your army is broken.", 9999.0)
+		battle.hud.show_message(Lang.t("DEFEAT. The company is broken and scattered.") if campaign else Lang.t("DEFEAT. Your army is broken."), 9999.0)
 		_finish(false)
 
 
@@ -1149,7 +1149,7 @@ func _name_households(nb: Dictionary) -> void:
 	if not al.is_empty():
 		for r in regs:
 			if r.allied and r.kind == "cav":
-				r.title = "%s's household" % World.lord_short(al)
+				r.title = Lang.t("%s's household") % World.lord_short(al)
 				break
 
 
@@ -1159,7 +1159,7 @@ func _name_enemy_household(nb: Dictionary) -> void:
 		return
 	for r in regs:
 		if r.side == 1 and r.kind == "cav":
-			r.title = "%s's household" % World.lord_short(l)
+			r.title = Lang.t("%s's household") % World.lord_short(l)
 			break
 
 
@@ -1186,7 +1186,7 @@ func status_line() -> String:
 			b += r.members.size()
 			if not r.broken():
 				rb += 1
-	var where: String = Terrain.MAP_NAMES.get(terrain.kind, "")
+	var where: String = Lang.t(Terrain.MAP_NAMES.get(terrain.kind, ""))
 	if prologue:
-		where = "RETREAT" if story != null and story.phase == "retreat" else Lore.BEACH
-	return "%s   Yours %d (%d units)   Theirs %d (%d units)" % [where, a, ra, b, rb]
+		where = Lang.t("RETREAT") if story != null and story.phase == "retreat" else Lore.BEACH
+	return Lang.t("%s   Yours %d (%d units)   Theirs %d (%d units)") % [where, a, ra, b, rb]
