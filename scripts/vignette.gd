@@ -550,11 +550,13 @@ func _stage() -> void:
 			w3.position = Vector3(4.6, 0, -3.4)
 			w3.rotation.y = 0.9
 			_root.add_child(w3)
-			# The colours, planted by the wagon: Calder's blue with a white cross.
+			# The colours, planted by the wagon (your own: colours.gd).
 			_cyl(0.03, 0.035, 3.2, Vector3(2.6, 1.6, -4.4), Color(0.45, 0.32, 0.18))
-			_box(Vector3(1.1, 0.75, 0.02), Vector3(3.17, 2.75, -4.4), Color(0.13, 0.2, 0.45))
-			_box(Vector3(1.1, 0.11, 0.025), Vector3(3.17, 2.75, -4.4), Color(0.9, 0.88, 0.8))
-			_box(Vector3(0.11, 0.75, 0.025), Vector3(2.95, 2.75, -4.4), Color(0.9, 0.88, 0.8))
+			var CF := preload("res://scripts/colours.gd")
+			var fl: Dictionary = CF.flag()
+			for fi in 10:
+				for fj in 6:
+					_box(Vector3(0.11, 0.125, 0.02), Vector3(2.67 + (fi + 0.5) * 0.11, 3.125 - (fj + 0.5) * 0.125, -4.4), CF.col_at(fl, (fi + 0.5) / 10.0, (fj + 0.5) / 6.0))
 			# The sentry, musket shouldered, looking out into the dark.
 			_soldier(Vector3(-1.4, 0, -2.2), Vector3(-0.5, 0, -1), {"anim": "idle"})
 			# Two awake by the fire, the rest asleep on their blankets.

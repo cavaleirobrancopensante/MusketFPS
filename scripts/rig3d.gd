@@ -26,7 +26,8 @@ extends Node3D
 ## buttons, teeth) are skipped beyond DETAIL_RANGE. Past 40 m units switch to
 ## sprites (see unit.gd).
 
-const COAT := Color(0.16, 0.24, 0.55)
+const Colours := preload("res://scripts/colours.gd")
+const COAT := Color(0.16, 0.24, 0.55) # (Calder's blue: yours is Colours.coat())
 const COAT_OFFICER := Color(0.1, 0.13, 0.3)
 const WHITE := Color(0.9, 0.88, 0.8)
 const SKIN := Color(0.85, 0.66, 0.5)
@@ -144,7 +145,7 @@ var seat_yaw := 0.0
 ## Mounts: the head carried lower (your own horse, seen from the saddle).
 var neck_dip := 0.0
 ## Mounts (kind "horse" or "raptor"): saddle cloth colour.
-var saddle_col := Color(0.16, 0.24, 0.55)
+var saddle_col := Color(0.16, 0.24, 0.55) # (set from gear: yours is your coat)
 var _mlegs: Array = [] # [upper id, lower id, hoof id, attach Vector3, phase offset]
 var _neck: Node3D
 var _mtail: Array = []
@@ -310,7 +311,7 @@ func _build_soldier() -> void:
 	weapon = _weapon_of(String(g["primary"]))
 	if kind == "civilian":
 		weapon = "none"
-	var coat := COAT_OFFICER if officer and torso == "officer_coat" else COAT
+	var coat := Colours.officer_coat() if officer and torso == "officer_coat" else Colours.coat()
 	var cuff := RED if officer and torso == "officer_coat" else WHITE
 	if coat_override != null and torso in ["coat", "buffcoat"]:
 		coat = coat_override
@@ -506,7 +507,7 @@ func _build_hat(hat: String) -> void:
 			_part(head, _cyl_mesh(0.1, 0.115, 0.11), STEEL.darkened(0.15), Vector3(0, 0.24, 0))
 			_part(head, _cyl_mesh(0.2, 0.2, 0.014), STEEL.darkened(0.1), Vector3(0, 0.19, 0)) # the broad brim
 		"cap":
-			_part(head, _cyl_mesh(0.125, 0.115, 0.075), COAT, Vector3(0, 0.215, 0.01))
+			_part(head, _cyl_mesh(0.125, 0.115, 0.075), Colours.coat(), Vector3(0, 0.215, 0.01))
 			_part(head, _cyl_mesh(0.117, 0.117, 0.025), RED, Vector3(0, 0.19, 0.0))
 			_part(head, _box_mesh(Vector3(0.16, 0.015, 0.07)), BLACK, Vector3(0, 0.185, -0.12), Vector3(-12, 0, 0))
 		_:

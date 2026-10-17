@@ -225,6 +225,10 @@ var guns := 0
 var light_gun := 0
 ## "easy", "normal", "hard" or "ironman" (officer.gd's DIFFICULTY).
 var difficulty := "normal"
+## Your regiment's colours (colours.gd): {"coat", "field", "charge" (each
+## [r, g, b]), "pattern"}. Empty: Calder's blue, and the blue flag with the
+## white cross.
+var colours := {}
 ## Ironman: a battle is under way (saved when it starts). Coming back to a
 ## campaign with this set means you left it: it counts as lost.
 var in_battle := false
@@ -286,6 +290,7 @@ var results_unseen := false # the aftermath screen hasn't shown last_result yet
 func new_campaign(start: Dictionary = {}) -> void:
 	active = true
 	difficulty = String(start.get("difficulty", "normal"))
+	colours = (start.get("colours", {}) as Dictionary).duplicate()
 	in_battle = false
 	day = 1
 	money = int(round(START_MONEY * float(Officer.DIFFICULTY.get(difficulty, {}).get("money", 1.0))))
@@ -1552,7 +1557,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "in_battle": in_battle, "standing": standing, "contract": contract,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
@@ -1587,6 +1592,7 @@ func load_campaign() -> bool:
 	guns = int(data.get("guns", 0))
 	light_gun = int(data.get("light_gun", 0))
 	difficulty = String(data.get("difficulty", "normal"))
+	colours = data.get("colours", {})
 	in_battle = bool(data.get("in_battle", false))
 	standing = data.get("standing", {"aurest": 0, "vell": 0})
 	contract = data.get("contract", {})

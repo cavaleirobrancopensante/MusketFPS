@@ -111,7 +111,7 @@ func _ready() -> void:
 	think_every = 2
 	if sprite_kind == "":
 		sprite_kind = "soldier" if mount == "horse" else "lizard"
-	rig_gear = {"saddle_col": coat if coat != null and mount == "horse" else (Color(0.16, 0.24, 0.55) if mount == "horse" else Color(0.5, 0.36, 0.2))}
+	rig_gear = {"saddle_col": coat if coat != null and mount == "horse" else (preload("res://scripts/colours.gd").coat() if mount == "horse" else Color(0.5, 0.36, 0.2))}
 	match variant:
 		"knight":
 			hp = 430.0

@@ -259,14 +259,14 @@ func _sprite_spec(kind: String, side: int) -> Dictionary:
 	match kind:
 		"cav":
 			return {"mount": "horse", "gear": {"head": ("kettle_hat" if nation != "" else "tricorne") if side == 1 else "shako", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
-				"coat": red if side == 1 else null, "saddle": red if side == 1 else Color(0.16, 0.24, 0.55), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
+				"coat": red if side == 1 else null, "saddle": red if side == 1 else preload("res://scripts/colours.gd").coat(), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
 		"knight":
 			var kc = red if side == 1 else (ally_coat if side == 2 else Color(0.55, 0.14, 0.12))
 			return {"mount": "horse", "gear": {"head": "great_helm", "torso": "plate", "primary": "lance", "secondary": "", "sword": ""},
 				"coat": kc, "saddle": kc, "barding": true, "hand": "", "cell_m": 3.6, "anims": Impostor.RIDER_ANIMS}
 		"lancer", "dragoon":
 			return {"mount": "horse", "gear": {"head": "shako", "torso": "coat", "primary": "lance" if kind == "lancer" else "carbine",
-				"secondary": "" if kind == "lancer" else "bayonet", "sword": ""}, "coat": null, "saddle": Color(0.16, 0.24, 0.55), "hand": "",
+				"secondary": "" if kind == "lancer" else "bayonet", "sword": ""}, "coat": null, "saddle": preload("res://scripts/colours.gd").coat(), "hand": "",
 				"cell_m": 3.6, "anims": Impostor.RIDER_ANIMS}
 		"liz_raptor":
 			return {"mount": "raptor", "saddle": Color(0.5, 0.36, 0.2), "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}

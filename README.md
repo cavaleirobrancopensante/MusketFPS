@@ -58,6 +58,13 @@ each language still lacks.
     speed is in the blow, and you reach further); at speed you ride men
     down. Blows often land on the horse; if it's killed you're thrown, and
     a town's market sells another. MOUNT/DISMOUNT. Riding +3, Bladework +1.
+- **Your colours**: the coat your men wear (Calder blue, scarlet, rifle
+  green, grey, white, buff, black, brown, purple; your own coat is a
+  darker shade of it) and your flag: a pattern (cross, centre cross,
+  saltire, quarters, stripes, bands, border, plain), a field colour and a
+  device colour, previewed as you pick. They follow you everywhere: the
+  cutscene, every battle, the saddle cloths, the camp on the menu, your
+  marker on the map (`scripts/colours.gd`).
 - **Attributes and skills**: 4 attribute points and 5 skill points to
   spend (− gives one back), on top of what your branch gives. Two new
   skills: Riding and Gunnery.

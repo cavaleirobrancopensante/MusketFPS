@@ -455,7 +455,7 @@ func _label_for(st: Dictionary, c: Vector3) -> void:
 
 
 func _build_player() -> void:
-	_player = _figure(Color(0.16, 0.24, 0.55), Color(0.92, 0.92, 0.95), 1.3)
+	_player = _figure(preload("res://scripts/colours.gd").coat(), Color(0.92, 0.92, 0.95), 1.3, true)
 	add_child(_player)
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
@@ -478,7 +478,7 @@ func _build_player() -> void:
 
 
 ## A party on the map: a little group of figures and a banner.
-func _figure(body: Color, banner: Color, scale_f: float) -> Node3D:
+func _figure(body: Color, banner: Color, scale_f: float, yours := false) -> Node3D:
 	var n := Node3D.new()
 	var m := StandardMaterial3D.new()
 	m.albedo_color = body
@@ -502,6 +502,12 @@ func _figure(body: Color, banner: Color, scale_f: float) -> Node3D:
 	fm.size = Vector3(1.2, 0.8, 0.06)
 	var fmat := StandardMaterial3D.new()
 	fmat.albedo_color = banner
+	if yours:
+		# Your own colours, as you made them.
+		var C := preload("res://scripts/colours.gd")
+		fmat.albedo_color = Color.WHITE
+		fmat.albedo_texture = C.flag_texture(C.flag(), 30, 20)
+		fmat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	fm.material = fmat
 	flag.mesh = fm
 	flag.position = Vector3(0.65, 2.8, 0)

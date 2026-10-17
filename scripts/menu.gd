@@ -405,6 +405,12 @@ static func _test_start() -> Dictionary:
 			st["branch"] = a.substr(9)
 		elif a.begins_with("--difficulty="):
 			st["difficulty"] = a.substr(13)
+		elif a.begins_with("--colours="):
+			# --colours=COAT,PATTERN,FIELD,CHARGE (indexes into colours.gd's lists)
+			var p := a.substr(10).split(",")
+			var C := preload("res://scripts/colours.gd")
+			st["colours"] = {"coat": C.to_arr(C.COATS[int(p[0])][1]), "pattern": C.PATTERNS[int(p[1])],
+				"field": C.to_arr(C.FLAG_COLOURS[int(p[2])]), "charge": C.to_arr(C.FLAG_COLOURS[int(p[3])])}
 	return st
 
 

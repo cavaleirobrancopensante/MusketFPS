@@ -414,14 +414,16 @@ func _build_flotilla() -> void:
 
 ## The colours: Calder's blue with a white cross, in strips that wave.
 func _build_flag(parent: Node3D, at: Vector3) -> void:
+	# Your colours (colours.gd), in eight upright strips of six cells.
+	var C := preload("res://scripts/colours.gd")
+	var f: Dictionary = C.flag()
 	for i in 8:
 		var s := Node3D.new()
 		s.position = at + Vector3(0, 0, 0.13 * i - 0.5)
 		parent.add_child(s)
-		var white_col := i == 2 or i == 3
-		Props._box(s, Vector3(0.02, 0.8, 0.135), Color(0.9, 0.88, 0.8) if white_col else Color(0.13, 0.2, 0.45), Vector3.ZERO)
-		if not white_col:
-			Props._box(s, Vector3(0.025, 0.14, 0.135), Color(0.9, 0.88, 0.8), Vector3.ZERO)
+		for j in 6:
+			var col := C.col_at(f, (i + 0.5) / 8.0, (j + 0.5) / 6.0)
+			Props._box(s, Vector3(0.02, 0.135, 0.135), col, Vector3(0, 0.4 - (j + 0.5) * 0.1333, 0))
 		_flag.append([s, i, s.position])
 
 

@@ -12,6 +12,7 @@ extends Control
 
 const UI := preload("res://scripts/ui.gd")
 const Officer := preload("res://scripts/officer.gd")
+const Colours := preload("res://scripts/colours.gd")
 const INTRO := "res://scenes/intro.tscn"
 const MENU := "res://scenes/menu.tscn"
 
@@ -39,6 +40,15 @@ var _attr_rows := {}
 var _skill_rows := {}
 var _attr_pts: Label
 var _skill_pts: Label
+# Your colours (colours.gd): the coat, and the flag.
+var coat_i := 0
+var field_i := 0
+var charge_i := 1
+var pattern_i := 0
+var _swatches := {} # "coat"/"field"/"charge" -> [Button...]
+var _flag_view: TextureRect
+var _uniform_view: Control
+var _pattern_l: Label
 
 
 func _ready() -> void:
@@ -153,9 +163,100 @@ func _left_column() -> Control:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(b)
 		_diff_btns[d] = b
-	_diff_text = _label("", 16, DIM)
+	_diff_text = _label("", 15, DIM)
 	v.add_child(_diff_text)
+	# Your colours: the coat and the flag, previewed side by side.
+	v.add_child(UI.heading(Lang.t("Your colours"), 22))
+	var prev := HBoxContainer.new()
+	prev.add_theme_constant_override("separation", 12)
+	prev.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(prev)
+	_uniform_view = Uniform.new()
+	_uniform_view.custom_minimum_size = Vector2(76, 78)
+	_uniform_view.owner_screen = self
+	prev.add_child(_uniform_view)
+	_flag_view = TextureRect.new()
+	_flag_view.custom_minimum_size = Vector2(117, 78)
+	_flag_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_flag_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_flag_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	prev.add_child(_flag_view)
+	v.add_child(_swatch_row(Lang.t("Coat"), "coat", Colours.COATS.map(func(e): return e[1])))
+	var pr := HBoxContainer.new()
+	pr.add_theme_constant_override("separation", 6)
+	v.add_child(pr)
+	var pl := _label(Lang.t("Flag"), 15, DIM)
+	pl.custom_minimum_size = Vector2(54, 0)
+	pl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	pr.add_child(pl)
+	pr.add_child(_small("‹", func(): pattern_i = (pattern_i + Colours.PATTERNS.size() - 1) % Colours.PATTERNS.size(); _refresh()))
+	_pattern_l = _label("", 17)
+	_pattern_l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_pattern_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pattern_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pr.add_child(_pattern_l)
+	pr.add_child(_small("›", func(): pattern_i = (pattern_i + 1) % Colours.PATTERNS.size(); _refresh()))
+	v.add_child(_swatch_row(Lang.t("Field"), "field", Colours.FLAG_COLOURS))
+	v.add_child(_swatch_row(Lang.t("Device"), "charge", Colours.FLAG_COLOURS))
 	return _wrap(v)
+
+
+## A row of colour swatches to pick from.
+func _swatch_row(title: String, key: String, cols: Array) -> Control:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 3)
+	var l := _label(title, 15, DIM)
+	l.custom_minimum_size = Vector2(54, 0)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	h.add_child(l)
+	var list: Array = []
+	for i in cols.size():
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(26, 30)
+		b.focus_mode = Control.FOCUS_NONE
+		b.set_meta("col", cols[i])
+		b.pressed.connect(func():
+			match key:
+				"coat": coat_i = i
+				"field": field_i = i
+				"charge": charge_i = i
+			_refresh())
+		h.add_child(b)
+		list.append(b)
+	_swatches[key] = list
+	return h
+
+
+func _colours() -> Dictionary:
+	return {"coat": Colours.to_arr(Colours.COATS[coat_i][1]), "field": Colours.to_arr(Colours.FLAG_COLOURS[field_i]),
+		"charge": Colours.to_arr(Colours.FLAG_COLOURS[charge_i]), "pattern": Colours.PATTERNS[pattern_i]}
+
+
+func _flag_now() -> Dictionary:
+	return {"field": Colours.FLAG_COLOURS[field_i], "charge": Colours.FLAG_COLOURS[charge_i], "pattern": Colours.PATTERNS[pattern_i]}
+
+
+func _refresh_colours() -> void:
+	var sel := {"coat": coat_i, "field": field_i, "charge": charge_i}
+	for key in _swatches:
+		var list: Array = _swatches[key]
+		for i in list.size():
+			var b: Button = list[i]
+			var c: Color = b.get_meta("col")
+			for st in ["normal", "hover", "pressed"]:
+				var sb := StyleBoxFlat.new()
+				sb.bg_color = c
+				sb.set_corner_radius_all(4)
+				if i == int(sel[key]):
+					sb.set_border_width_all(3)
+					sb.border_color = UI.BRASS
+				else:
+					sb.set_border_width_all(1)
+					sb.border_color = Color(1, 1, 1, 0.25)
+				b.add_theme_stylebox_override(st, sb)
+	_flag_view.texture = Colours.flag_texture(_flag_now(), 60, 40)
+	_pattern_l.text = Lang.t(Colours.PATTERN_NAMES[Colours.PATTERNS[pattern_i]])
+	_uniform_view.queue_redraw()
 
 
 func _middle_column() -> Control:
@@ -318,6 +419,7 @@ func _on_skill(k: String, d: int) -> void:
 
 
 func _refresh() -> void:
+	_refresh_colours()
 	for d in _diff_btns:
 		(_diff_btns[d] as Button).button_pressed = d == difficulty
 	_diff_text.text = Lang.t(Officer.DIFFICULTY[difficulty]["text"])
@@ -360,9 +462,47 @@ func _on_begin() -> void:
 	Settings.delete_slot(Settings.slot)
 	Company.new_campaign({"difficulty": difficulty, "branch": branch, "name": _name_edit.text,
 		"attrs": attrs.duplicate(), "attr_points": maxi(0, _attr_left()),
-		"skills": skills, "skill_points": maxi(0, _skill_left())})
+		"skills": skills, "skill_points": maxi(0, _skill_left()), "colours": _colours()})
 	World.reset() # a new land for a new campaign
 	Loading.change(INTRO) # the shipwreck, then the beach
+
+
+## Your men in the coat you chose: a musketeer, and you beside him in the
+## officer's darker coat.
+class Uniform extends Control:
+	var owner_screen = null
+
+	func _draw() -> void:
+		if owner_screen == null:
+			return
+		var coat: Color = Colours.COATS[owner_screen.coat_i][1]
+		var off := coat.darkened(0.42) if coat.get_luminance() > 0.12 else coat.lightened(0.08)
+		_man(Vector2(size.x * 0.3, size.y), coat, false)
+		_man(Vector2(size.x * 0.72, size.y), off, true)
+
+	func _man(foot: Vector2, coat: Color, officer: bool) -> void:
+		var u := size.y / 78.0
+		var white := Color(0.92, 0.9, 0.84)
+		var black := Color(0.08, 0.08, 0.09)
+		draw_rect(Rect2(foot + Vector2(-7, -22) * u, Vector2(6, 20) * u), white) # legs
+		draw_rect(Rect2(foot + Vector2(1, -22) * u, Vector2(6, 20) * u), white)
+		draw_rect(Rect2(foot + Vector2(-7, -9) * u, Vector2(6, 9) * u), black) # gaiters
+		draw_rect(Rect2(foot + Vector2(1, -9) * u, Vector2(6, 9) * u), black)
+		draw_rect(Rect2(foot + Vector2(-10, -50) * u, Vector2(20, 30) * u), coat) # coat
+		draw_rect(Rect2(foot + Vector2(-14, -48) * u, Vector2(5, 20) * u), coat) # arms
+		draw_rect(Rect2(foot + Vector2(9, -48) * u, Vector2(5, 20) * u), coat)
+		if officer:
+			draw_rect(Rect2(foot + Vector2(-10, -30) * u, Vector2(20, 3) * u), Color(0.75, 0.12, 0.1)) # sash
+			draw_rect(Rect2(foot + Vector2(-13, -51) * u, Vector2(7, 3) * u), Color(0.85, 0.66, 0.2)) # epaulettes
+			draw_rect(Rect2(foot + Vector2(6, -51) * u, Vector2(7, 3) * u), Color(0.85, 0.66, 0.2))
+		else:
+			draw_line(foot + Vector2(-9, -49) * u, foot + Vector2(9, -22) * u, white, 2.5 * u) # crossbelts
+			draw_line(foot + Vector2(9, -49) * u, foot + Vector2(-9, -22) * u, white, 2.5 * u)
+		draw_circle(foot + Vector2(0, -57) * u, 6.5 * u, Color(0.93, 0.76, 0.62)) # head
+		if officer:
+			draw_colored_polygon(PackedVector2Array([foot + Vector2(-13, -60) * u, foot + Vector2(0, -71) * u, foot + Vector2(13, -60) * u]), black) # bicorne
+		else:
+			draw_rect(Rect2(foot + Vector2(-6, -74) * u, Vector2(12, 12) * u), black) # shako
 
 
 ## A branch's badge: crossed muskets, a pike head, a gun, a horse's head.

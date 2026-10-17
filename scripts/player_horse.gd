@@ -45,7 +45,7 @@ static func make(b, at: Vector3, facing_yaw: float, hp_now: float, hp_max: float
 func _ready() -> void:
 	rig = Rig3D.new()
 	rig.kind = "horse"
-	rig.gear = {"saddle_col": Color(0.16, 0.24, 0.55)}
+	rig.gear = {"saddle_col": preload("res://scripts/colours.gd").coat()}
 	add_child(rig)
 	rotation.y = yaw
 
