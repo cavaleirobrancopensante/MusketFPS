@@ -202,6 +202,8 @@ func charge_foe(u) -> Node3D:
 
 ## Where its men run when it breaks: straight back to their own edge.
 func flee_point(u) -> Vector3:
+	if side == 0 and field.story != null:
+		return field.story.flee_point(u) # (the beach: the cliff path, not the sea)
 	var p: Vector3 = u.global_position
 	var z: float = field.terrain.HALF + 10.0 if side == 0 else -field.terrain.HALF - 10.0
 	return Vector3(p.x * 0.8, 0, z)
@@ -522,7 +524,7 @@ func morale_tick(dt: float, losses: int) -> void:
 		if calm and nearest_foe_d > 40.0:
 			morale += 4.0 * dt
 			_rally_t += dt
-			if _rally_t > 6.0 and morale > max_morale * 0.45 and strength() > 0.4:
+			if _rally_t > 6.0 and morale > max_morale * 0.45 and strength() > 0.4 and not (side == 0 and field.story != null):
 				_set_state("formed")
 				field._broke_told.erase(self)
 				_shaken.clear()

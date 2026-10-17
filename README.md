@@ -38,24 +38,38 @@ little over a minute; Skip jumps ahead):
 
 All names are placeholders in `scripts/lore.gd`.
 
-Then **Wreck Beach**. You are the **Ensign** of Major Harrow's company,
-behind earthworks with the sea at your back, a company on either side and
-four guns in the embrasures. The guns fire round shot at range (it ploughs
-through ranks and skips on) and canister close in. Lizards wading over the
-earthworks are slowed. The Major gives the orders: FOLLOW, HOLD, CHARGE and
-VOLLEY are locked while he lives, and he calls the volleys.
+Then **Wreck Beach**, fought as a field battle (the same system as every
+fight in the campaign: regiments, morale, the command view). You are the
+**Ensign** of Major Harrow's company, behind earthworks with the sea at
+your back: your company in the centre, a company on either side, and a
+battery of two guns in the embrasures between them. The guns fire round
+shot at range and canister close in; lizards wading over the earthworks
+are slowed. The Major gives the orders: FOLLOW, HOLD, CHARGE and VOLLEY are
+locked while he lives, the command view isn't yours yet, and he calls the
+volleys.
 
 The battle is the tutorial: each beat shows a **HOW TO** box for the
 controls it needs (moving and looking, firing and aiming, the bayonet and
-blocking, grenades, going to the Major, and the orders once they're yours).
+blocking, grenades, going to the Major, the orders and the command view).
 
-In the second wave a lizard javelin brings the Major down. Go to him (follow
-the gold marker): he makes you captain with his last words. The left breaks,
-the guns are overrun, and you lead what's left along the beach to **the
-cliff path** (the red colour marks it) and inland. You start the campaign
-as castaways: low morale, a few days' food, and the ship's stores (muskets,
-powder, two guns, rum) in the lizards' hands. Getting them back is the
-first great objective.
+1. **The Major's battle:** two waves out of the forest.
+2. **The javelin:** in the second wave it brings the Major down. Go to him
+   (follow the gold marker): with his last words he gives you the regiment.
+3. **Your command:** the command view opens, paused, with a short lesson
+   (select a regiment by its card or on the field; tap the ground to march,
+   drag to march and face, tap an enemy to attack). A third wave comes on,
+   brutes in the centre and raptor riders on the right. Fight it from above
+   or in the line, as you like.
+4. **The collapse:** after a while (sooner if the regiment bleeds) a horde
+   comes round the left end of the works, the left company breaks and the
+   guns are overrun.
+5. **The retreat:** lead what's left along the beach to **the cliff path**
+   (the red colour marks it) while the horde comes on behind. Broken
+   companies run for the path too.
+
+You start the campaign as castaways: low morale, a few days' food, and the
+ship's stores (muskets, powder, two guns, rum) in the lizards' hands.
+Getting them back is the first great objective.
 
 ### The map
 
@@ -92,6 +106,12 @@ with every seed.
   pedlars, refugees and deserters in the nations' lands, a crag to climb in
   the hills, fishing on the rivers, floods at the fords, ruins, dwarf
   prospectors. Each has choices with consequences.
+- **What you can see of a party** depends on how close it is and on your
+  **Tactics**: far off, only that something is there (**?**); nearer, a
+  rough count ("about 10–16"); close, the exact number; and close with
+  Tactics 3 or more, what it's made of (warriors, javelins, brutes,
+  raptor riders). Scouts report rough counts. The warband you meet is the
+  army you fight: its make-up becomes the enemy regiments.
 - **Scouts:** send one man a day's ride, or two men twice as far, in any of
   eight directions. They come back to the company wherever it is with what
   they found (land, towns, warbands) and map it, unless they don't come
@@ -107,9 +127,18 @@ with every seed.
   caravans travel between towns and holds; villagers go to market; dwarf
   traders come down from the mountains. Parties that meet fight it out,
   and you hear of what you see.
-- **Encounters:** a lizard warband that catches you means battle (fought on
-  ground that matches the map: forest, hills, swamp, beach, plains) or a
-  chance to slip away, better in cover. Tap any party to go after it.
+- **Encounters:** a lizard warband that catches you means battle or a
+  chance to slip away, better in cover. Tap any party to go after it. The
+  battle is a field battle (see **Field battle** under Tests: the same
+  regiments, morale and command view) on a map picked by where you stand:
+  a town or village nearby, a river, forest or swamp, hills or mountains,
+  or open ground. Your fit men muster by weapon (muskets with you, pikes,
+  bows and crossbows as regiments of their own; a handful of one kind
+  stands with your company), the guns join when you have them back, and
+  the wagon stands behind with its crew. Bigger fights deploy further
+  apart; an ambush starts close, with no time to deploy. Men who run off
+  the field come back after it. (The night camp and the nest assaults are
+  still the company battle.)
 - **Settlements:** visit villages, towns, cities and holds to buy food and
   rum, refill water and rest. Raided villages have nothing left. You can
   only buy where someone sells (the wagon's Logistics shows what's on offer
@@ -703,7 +732,8 @@ aftermath node.
 | `scripts/officer_sheet.gd` | Your character sheet screen (YOU) |
 | `scripts/company_screen.gd` | The Company screen: portrait, kit, pack, attributes, the men |
 | `scripts/logistics_popup.gd` | The wagon: stocks, days left, sharing out, sutler, grog |
-| `scripts/battle.gd` | The battle: world, waves, the company's line and orders, the beach prologue (guns, tutorial), smoke, sound |
+| `scripts/battle.gd` | The battle: world, the company's line and orders, the beach's scenery, dialogue and hints, smoke, sound (the old company battle still fights the night camp and the nest assaults) |
+| `scripts/field_prologue.gd` | Wreck Beach as a field battle: the Major's battle, his fall, your command (with the lesson), the collapse and the retreat |
 | `scripts/projectiles.gd` | Musket balls, grenades and future arrows/javelins: flight, hits, tracers |
 | `scripts/player.gd` | Movement, looking, camera, musket, melee and blocking |
 | `scripts/player_body.gd` | Poses your own officer's body from your actions |

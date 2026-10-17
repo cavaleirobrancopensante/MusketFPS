@@ -66,6 +66,9 @@ var display: Font
 var _pressed_id := ""
 var _pressed_t := 0.0
 var _hint_t := 0.0
+## A lesson shown in the middle while the view is open (the prologue's first
+## command): a title, then lines. Cleared when you leave the view.
+var lesson: Array = []
 
 
 func setup(f) -> void:
@@ -98,21 +101,34 @@ func setup(f) -> void:
 	_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 	battle.add_child(_overlay)
 	for r in field.regs:
-		var l := Label3D.new()
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		l.fixed_size = true
-		l.pixel_size = 0.0011
-		l.no_depth_test = true
-		l.font = display
-		l.font_size = 30
-		l.outline_size = 9
-		l.outline_modulate = Color(0.05, 0.06, 0.1, 0.9)
-		l.modulate = BLUE if r.side == 0 else RED
-		l.render_priority = 11
-		l.process_mode = Node.PROCESS_MODE_ALWAYS
-		battle.add_child(l)
-		_banners[r] = l
+		add_banner(r)
 	battle.batcher.process_mode = Node.PROCESS_MODE_ALWAYS
+	_setup_view()
+
+
+## A regiment's name over it, seen from up here (one that joins the battle
+## later gets one too).
+func add_banner(r) -> void:
+	if _banners.has(r):
+		return
+	var l := Label3D.new()
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.fixed_size = true
+	l.pixel_size = 0.0011
+	l.no_depth_test = true
+	l.font = display
+	l.font_size = 30
+	l.outline_size = 9
+	l.outline_modulate = Color(0.05, 0.06, 0.1, 0.9)
+	l.modulate = BLUE if r.side == 0 else RED
+	l.render_priority = 11
+	l.process_mode = Node.PROCESS_MODE_ALWAYS
+	l.visible = active
+	battle.add_child(l)
+	_banners[r] = l
+
+
+func _setup_view() -> void:
 	# Start over your own army, looking at theirs.
 	var p0: Vector3 = field.player_reg.pos if field.player_reg != null else Vector3(0, 0, 60)
 	focus = Vector3(p0.x, 0, p0.z - 34.0)
@@ -120,6 +136,16 @@ func setup(f) -> void:
 	if field.test_mode or ("--shots" in OS.get_cmdline_user_args() and not "--deploy" in OS.get_cmdline_user_args()):
 		deploying = false
 		return
+	if bool(field.cfg.get("ambush", false)):
+		# No time to deploy: they're on you.
+		deploying = false
+		battle.hud.show_message("AMBUSH! No time to form up!", 4.0)
+		return
+	if field.prologue:
+		deploying = false
+		return
+	dist = clampf(field.deploy_z * 1.8, 70.0, 150.0)
+	focus = Vector3(p0.x, 0, p0.z - field.deploy_z * 0.5)
 	open(true)
 	_hint_t = 12.0
 
@@ -147,6 +173,7 @@ func close() -> void:
 		_set_speed("play")
 		return # (you're down: the view is all you have)
 	active = false
+	lesson = []
 	selected.clear()
 	_press.clear()
 	_two.clear()
@@ -233,7 +260,8 @@ func _update_banners() -> void:
 			continue
 		l.visible = true
 		var c: Vector3 = r.centroid
-		l.global_position = c + Vector3.UP * (5.0 + dist * 0.025)
+		# (a battery's name above the infantry's: on the beach they share a centre)
+		l.global_position = c + Vector3.UP * (5.0 + dist * (0.025 if not r.is_gun() else 0.06))
 		var st := ""
 		match r.state:
 			"wavering": st = "  WAVERING"
@@ -927,10 +955,42 @@ func _draw() -> void:
 		_text_c("Tap a regiment (or its card), then tap or drag where it should stand. Drag sets which way it faces.", Vector2(s.x * 0.5, 138), 18, UI.PIPECLAY)
 	elif not selected.is_empty() and _hint_t > -30.0:
 		_text_c("Tap the ground to march · drag to march and face · tap an enemy to attack", Vector2(s.x * 0.5, 76), 17, Color(UI.PIPECLAY, 0.85))
+	if not lesson.is_empty():
+		_draw_lesson()
 	for b in _buttons():
 		_draw_button(b)
 	for c in _cards():
 		_draw_card(c[0], c[1])
+
+
+func _draw_lesson() -> void:
+	var w := minf(size.x - 80.0, 820.0)
+	var lines: Array = []
+	for i in range(1, lesson.size()):
+		lines.append_array(_wrap(String(lesson[i]), w - 48.0, 19))
+	var h := 64.0 + lines.size() * 27.0 + 14.0
+	var rect := Rect2(size.x * 0.5 - w * 0.5, 132.0, w, h)
+	draw_style_box(_box(Color(UI.NIGHT, 0.86), Color(UI.BRASS, 0.7)), rect)
+	_text_c(String(lesson[0]), Vector2(size.x * 0.5, rect.position.y + 42.0), 26, UI.BRASS, display)
+	var y := rect.position.y + 76.0
+	for l in lines:
+		draw_string(font, Vector2(rect.position.x + 24.0, y), l, HORIZONTAL_ALIGNMENT_LEFT, w - 48.0, 19, UI.PIPECLAY)
+		y += 27.0
+
+
+func _wrap(text: String, width: float, fs: int) -> Array:
+	var out: Array = []
+	var line := ""
+	for word in text.split(" "):
+		var t := word if line == "" else line + " " + word
+		if font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > width and line != "":
+			out.append(line)
+			line = word
+		else:
+			line = t
+	if line != "":
+		out.append(line)
+	return out
 
 
 func _box(bg: Color, edge: Color, radius := 6) -> StyleBoxFlat:

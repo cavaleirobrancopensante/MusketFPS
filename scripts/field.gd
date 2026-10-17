@@ -27,6 +27,7 @@ const FieldSoldier := preload("res://scripts/field_soldier.gd")
 const FieldLizard := preload("res://scripts/field_lizard.gd")
 const Rider := preload("res://scripts/rider.gd")
 const GunPost := preload("res://scripts/gun_post.gd")
+const Lore := preload("res://scripts/lore.gd")
 const Look := preload("res://scripts/look.gd")
 
 ## Unit types. men: share of the chosen unit size; ranks deep; spacing
@@ -66,6 +67,9 @@ var _check_t := 0.0
 var _broke_told := {}
 var _flank_side := 1.0
 var deploy_z := 62.0
+var enemy_z := 62.0
+var campaign := false # a fight from the campaign map (your own men; results go back)
+var prologue := false # the beach: the tutorial battle (see the prologue section)
 ## How fast the battle goes (the setup's PACE): marching, loading and blows
 ## all scale with it, so there's time to fight and to command.
 var pace := 0.75
@@ -81,9 +85,29 @@ func setup(b, c: Dictionary) -> void:
 	terrain = Terrain.new(String(c.get("map", "flat")))
 	pace = float(c.get("pace", 0.75))
 	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--fieldtest"):
+		if a.begins_with("--fieldtest") or a == "--autotest":
 			test_mode = true
 	deploy_z = 92.0 if terrain.kind == "town" else 80.0
+	campaign = bool(c.get("campaign", false))
+	prologue = bool(c.get("prologue", false))
+	if prologue:
+		# The beach: your line just behind the works, the forest 80 m off.
+		deploy_z = 8.0
+		enemy_z = 72.0
+		cfg["you"] = {"musket": 1}
+		cfg["foe"] = {"liz_warrior": 1, "liz_skirm": 1, "liz_brute": 1, "liz_raptor": 1}
+		ai_sides = [1]
+		return
+	if campaign:
+		# Small fights start closer: a company and a warband don't need a
+		# quarter of a mile between them.
+		var total := Company.fit_men().size() + int(Company.next_battle.get("enemy", Company.next_enemy_count()))
+		deploy_z = clampf(26.0 + total * 0.35, 38.0, 80.0)
+		if terrain.kind == "town":
+			deploy_z = maxf(deploy_z, 70.0)
+		enemy_z = deploy_z * (0.55 if bool(c.get("ambush", false)) else 1.0)
+	else:
+		enemy_z = deploy_z
 	if test_mode or bool(c.get("auto", false)):
 		ai_sides = [0, 1]
 
@@ -96,10 +120,17 @@ func build_world(parent: Node3D) -> void:
 		cols = {"grass_dark": Color(0.2, 0.27, 0.09), "grass_light": Color(0.42, 0.47, 0.2), "dirt": Color(0.45, 0.38, 0.25), "dirt_amount": 0.3, "grass": 0.8}
 	elif terrain.kind == "forest":
 		cols = {"grass_dark": Color(0.1, 0.19, 0.06), "grass_light": Color(0.26, 0.36, 0.12), "dirt": Color(0.32, 0.25, 0.15), "dirt_amount": 0.35, "grass": 0.7}
+	elif terrain.kind == "beach":
+		# Sand where the line stands; "dirt" is the green going inland.
+		cols = {"grass_dark": Color(0.6, 0.53, 0.37), "grass_light": Color(0.74, 0.67, 0.49), "dirt": Color(0.16, 0.27, 0.12), "dirt_amount": 0.04, "grass": 0.0}
 	terrain.build(parent, cols)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
-	var h: Callable = func(p: Vector3) -> bool: return terrain.cell(p) == terrain.BLOCKED or (terrain.has_water and terrain.height(p.x, p.z) < terrain.WATER + 0.05)
+	if terrain.kind == "beach":
+		battle._build_beach() # (the sea, the wreck, the works, the strange forest, the path)
+		Look.far_hills(parent, rng, Terrain.OUTER - 10.0, Color(0.3, 0.42, 0.4), 18)
+		return
+	var h: Callable = func(p: Vector3) -> bool: return terrain.cell(p) == terrain.BLOCKED or (terrain.has_water and terrain.height(p.x, p.z) < terrain.water_y + 0.05)
 	var g = Look.grass(parent, Vector3(0, 0, deploy_z - 10.0), 85.0, float(cols.get("grass", 1.0)), cols, [], rng, h)
 	if g != null:
 		var mm: MultiMesh = g.multimesh
@@ -186,23 +217,131 @@ func spawn_armies() -> void:
 	var you: Dictionary = cfg.get("you", {"musket": 1})
 	var foe: Dictionary = cfg.get("foe", {"liz_warrior": 2})
 	# Your own company first: musketeers, and you with them.
-	var mine: Array = [["musket", true]]
+	var mine: Array = [["musket", true, _count("musket", size)]]
 	for k in HUMAN_KINDS:
 		for i in int(you.get(k, 0)):
-			mine.append([k, false])
+			mine.append([k, false, _count(k, size)])
 	var theirs: Array = []
 	for k in (LIZARD_KINDS if String(cfg.get("foe_army", "lizards")) == "lizards" else HUMAN_KINDS):
 		for i in int(foe.get(k, 0)):
-			theirs.append([k, false])
+			theirs.append([k, false, _count(k, size)])
 	if theirs.is_empty():
-		theirs.append(["liz_warrior", false])
-	_deploy(0, mine, size)
-	_deploy(1, theirs, size)
+		theirs.append(["liz_warrior", false, _count("liz_warrior", size)])
+	_deploy(0, mine)
+	_deploy(1, theirs)
 	# You: in the gap in the middle of your company's front rank.
 	var p: Vector3 = player_reg.pos
 	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
 	player_reg.order = "follow"
+
+
+## The prologue (field_prologue.gd): the beach, the Major's battle, then yours.
+const Prologue := preload("res://scripts/field_prologue.gd")
+var story = null
+
+
+func spawn_prologue() -> void:
+	story = Prologue.new(self)
+	add_child(story)
+	story.spawn()
+
+
+## The campaign's battle: your fit men split by what they carry (muskets,
+## pikes and spears, bows, crossbows) into regiments, the musketeers being
+## your own company; the ship's guns if you have them back; the wagon and
+## its crew behind; and the warband as it was reported.
+func spawn_campaign() -> void:
+	var nb: Dictionary = Company.next_battle
+	var groups := {"musket": [], "pike": [], "bow": [], "xbow": []}
+	var porters: Array = []
+	for m in Company.fit_men():
+		if String(m.get("tag", "")) == "Wagon":
+			porters.append(m)
+			continue
+		var role := Company.role_of(m)
+		groups["xbow" if role == "crossbow" else role].append(m)
+	var lead := "musket"
+	if (groups["musket"] as Array).is_empty():
+		for k in groups:
+			if (groups[k] as Array).size() > (groups[lead] as Array).size():
+				lead = k
+	# A handful of one kind isn't a regiment: they stand with the company.
+	for k in groups:
+		if k != lead and (groups[k] as Array).size() < 4:
+			(groups[lead] as Array).append_array(groups[k])
+			groups[k] = []
+	var mine: Array = []
+	for k in ["musket", "pike", "bow", "xbow"]:
+		var list: Array = groups[k]
+		var first := true
+		for chunk in _chunks(list, 30):
+			mine.append([k, k == lead and first, chunk.size(), chunk])
+			first = false
+	if mine.is_empty():
+		mine.append(["musket", true, 1, []])
+	if Company.guns > 0:
+		mine.append(["gun", false, Company.guns])
+	var comp: Dictionary = nb.get("comp", {})
+	if comp.is_empty():
+		comp = World.party_comp({"kind": "warband", "size": int(nb.get("enemy", Company.next_enemy_count())), "id": 0})
+	var theirs: Array = []
+	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10}
+	for k in ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor"]:
+		var n := int(comp.get(k, 0))
+		while n > 0:
+			var take := mini(n, int(cap[k]))
+			if n - take > 0 and n - take < 4:
+				take = n # (no straggling little mob)
+			theirs.append([k, false, take])
+			n -= take
+	_deploy(0, mine)
+	_deploy(1, theirs)
+	var p: Vector3 = player_reg.pos
+	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
+	battle.player.rotation.y = 0.0
+	player_reg.order = "follow"
+	# The wagon behind the line, its crew hauling and guarding it.
+	battle.line_anchor = Vector3(p.x, 0, p.z)
+	battle.line_forward = Vector3.FORWARD
+	battle._build_wagon()
+	var crew := 0
+	for rec in porters:
+		var s = battle.SoldierScript.new()
+		s.battle = battle
+		s.frames = battle.soldier_frames
+		s.record = rec
+		s.porter = crew
+		crew += 1
+		s.position = battle.porter_spot(s.porter)
+		battle.soldiers.append(s)
+		battle.add_child(s)
+	if battle.wagon != null:
+		battle.wagon.position.y = terrain.height(battle.wagon.position.x, battle.wagon.position.z)
+	# Some lizards would rather rob the wagon than fight.
+	for e in battle.enemies:
+		if e is FieldLizard and e.variant == "warrior":
+			e.looter = randf() < 0.3
+	battle._all_men = []
+	for r in regs:
+		if r.side == 0:
+			for m in r.members:
+				if m.get("record") != null:
+					battle._all_men.append(m)
+	for s in battle.soldiers:
+		if s.porter >= 0:
+			battle._all_men.append(s)
+
+
+static func _chunks(list: Array, size: int) -> Array:
+	var out: Array = []
+	if list.is_empty():
+		return out
+	var n := ceili(float(list.size()) / size)
+	var each := ceili(float(list.size()) / n)
+	for i in n:
+		out.append(list.slice(i * each, mini(list.size(), (i + 1) * each)))
+	return out
 
 
 func _count(kind: String, size: int) -> int:
@@ -216,9 +355,10 @@ func _count(kind: String, size: int) -> int:
 ## ends, blades between the muskets), guns out in front, horse on the
 ## wings, skirmishers ahead of lizards. A line too wide for the field goes
 ## in two.
-func _deploy(side: int, list: Array, size: int) -> void:
+## Entries: [kind, yours (bool), men, (records: the campaign's men)].
+func _deploy(side: int, list: Array) -> void:
 	var fwd := Vector3.FORWARD if side == 0 else Vector3.BACK
-	var z := deploy_z if side == 0 else -deploy_z
+	var z := deploy_z if side == 0 else -enemy_z
 	var right := fwd.cross(Vector3.UP)
 	var inf: Array = []
 	var guns: Array = []
@@ -253,7 +393,7 @@ func _deploy(side: int, list: Array, size: int) -> void:
 	var widths := func(arr: Array) -> float:
 		var w := 0.0
 		for e in arr:
-			w += _width_of(e[0], size) + 8.0
+			w += _width_n(e[0], int(e[2])) + 8.0
 		return w
 	if widths.call(line) > 230.0:
 		var half := line.size() / 2
@@ -265,31 +405,31 @@ func _deploy(side: int, list: Array, size: int) -> void:
 		var x := -total * 0.5
 		line_ends = maxf(line_ends, total * 0.5)
 		for e in row:
-			var w := _width_of(e[0], size)
+			var w := _width_n(e[0], int(e[2]))
 			var at := Vector3(0, 0, z) + right * (x + w * 0.5) + fwd * (-ri * 28.0)
-			_make_reg(side, e[0], _count(e[0], size), at, fwd, bool(e[1]))
+			_make_reg(side, e[0], int(e[2]), at, fwd, bool(e[1]), e[3] if e.size() > 3 else [])
 			x += w + 8.0
 	for i in guns.size():
 		var gx := (float(i) - (guns.size() - 1) * 0.5) * 34.0
-		_make_reg(side, "gun", 2, Vector3(0, 0, z) + right * gx + fwd * 14.0, fwd, false)
+		_make_reg(side, "gun", int(guns[i][2]), Vector3(0, 0, z) + right * gx + fwd * 14.0, fwd, false)
 	for i in skirm.size():
 		var sx := (float(i) - (skirm.size() - 1) * 0.5) * 36.0
-		_make_reg(side, "liz_skirm", _count("liz_skirm", size), Vector3(0, 0, z) + right * sx + fwd * 18.0, fwd, false)
+		_make_reg(side, "liz_skirm", int(skirm[i][2]), Vector3(0, 0, z) + right * sx + fwd * 18.0, fwd, false)
 	for i in cav.size():
 		var sgn := -1.0 if i % 2 == 0 else 1.0
-		var wing := line_ends + 14.0 + _width_of(cav[i][0], size) * 0.5 + (i / 2) * (_width_of(cav[i][0], size) + 10.0)
+		var cw := _width_n(cav[i][0], int(cav[i][2]))
+		var wing := line_ends + 14.0 + cw * 0.5 + (i / 2) * (cw + 10.0)
 		wing = minf(wing, Terrain.HALF - 12.0)
-		_make_reg(side, cav[i][0], _count(cav[i][0], size), Vector3(0, 0, z) + right * sgn * wing - fwd * 4.0, fwd, false)
+		_make_reg(side, cav[i][0], int(cav[i][2]), Vector3(0, 0, z) + right * sgn * wing - fwd * 4.0, fwd, false, cav[i][3] if cav[i].size() > 3 else [])
 
 
-func _width_of(kind: String, size: int) -> float:
+func _width_n(kind: String, n: int) -> float:
 	var info: Dictionary = KINDS[kind]
-	var n := _count(kind, size)
 	var files := ceili(float(n) / int(info["ranks"]))
 	return maxf(4.0, (files - 1) * float(info["spacing"]))
 
 
-func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours: bool):
+func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours: bool, recs: Array = [], spacing := 0.0):
 	var r = Regiment.new()
 	r.field = self
 	r.id = regs.size()
@@ -297,7 +437,7 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	r.kind = kind
 	r.info = KINDS[kind]
 	r.files = ceili(float(n) / int(r.info["ranks"]))
-	r.spacing = float(r.info["spacing"])
+	r.spacing = spacing if spacing > 0.0 else float(r.info["spacing"])
 	r.rank_gap = float(r.info["gap"])
 	r.max_morale = float(r.info["morale"])
 	r.morale = r.max_morale
@@ -313,7 +453,7 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	if yours:
 		player_reg = r
 	for i in n:
-		var u = _make_unit(side, kind)
+		var u = _make_unit(side, kind) if i >= recs.size() else FieldSoldier.from_record(battle, self, recs[i], side)
 		if kind != "gun":
 			_dress(u, kind, side)
 		u.reg = r
@@ -391,6 +531,8 @@ func off_field(p: Vector3) -> bool:
 
 func unit_died(u) -> void:
 	_drop(u)
+	if side_of(u) == 1:
+		battle.slain += 1
 	if u.reg != null:
 		_deaths[u.reg] = int(_deaths.get(u.reg, 0)) + 1
 
@@ -404,6 +546,14 @@ func unit_fled(u) -> void:
 	_drop(u)
 	u.remove_from_group("enemies")
 	u.remove_from_group("friendlies")
+	if (campaign or prologue) and side_of(u) == 0 and u.get("record") != null:
+		# One of your own men, off the field: he comes back after the battle.
+		u.down_status = "fit"
+		u.visible = false
+		u.set_physics_process(false)
+		u.set_process(false)
+		u.position.y -= 200.0
+		return
 	u.queue_free()
 
 
@@ -649,6 +799,9 @@ func player_order(what: String) -> void:
 
 
 func on_player_down() -> void:
+	if story != null:
+		story.player_down()
+		return
 	if player_reg != null:
 		player_reg.player_led = false
 		if player_reg.order == "follow":
@@ -674,22 +827,31 @@ func _check_end() -> void:
 		if over != "" and _report_t > 3.0:
 			print("FIELD END ", over, " at ", int(clock))
 			get_tree().quit()
-		if clock > 300.0:
+		if clock > (600.0 if prologue else 300.0):
 			print("FIELD END timeout")
 			get_tree().quit()
-	if over != "":
+	if over != "" or prologue:
 		return
 	var mine := regs.filter(func(r): return r.side == 0 and not r.broken())
 	var theirs := regs.filter(func(r): return r.side == 1 and not r.broken())
 	if theirs.is_empty():
 		over = "won"
-		battle.hud.show_message("VICTORY! Their army is running.", 9999.0)
-		battle.game_state = "won"
-		battle.hud.show_restart()
+		battle.hud.show_message("VICTORY! The field is ours." if campaign else "VICTORY! Their army is running.", 9999.0)
+		_finish(true)
 	elif mine.is_empty():
 		over = "lost"
-		battle.hud.show_message("DEFEAT. Your army is broken.", 9999.0)
-		battle.game_state = "lost"
+		battle.hud.show_message("DEFEAT. The company is broken and scattered." if campaign else "DEFEAT. Your army is broken.", 9999.0)
+		_finish(false)
+
+
+## The end: in the campaign, the battle is reported to the company (men,
+## kills, the wagon, pay) and CONTINUE goes on to the aftermath.
+func _finish(won: bool) -> void:
+	if Company.active:
+		battle.victory = won
+		battle._end_battle(won)
+	else:
+		battle.game_state = "won" if won else "lost"
 		battle.hud.show_restart()
 
 
@@ -707,4 +869,7 @@ func status_line() -> String:
 			b += r.members.size()
 			if not r.broken():
 				rb += 1
-	return "%s   Yours %d (%d units)   Theirs %d (%d units)" % [Terrain.MAP_NAMES.get(terrain.kind, ""), a, ra, b, rb]
+	var where: String = Terrain.MAP_NAMES.get(terrain.kind, "")
+	if prologue:
+		where = "RETREAT" if story != null and story.phase == "retreat" else Lore.BEACH
+	return "%s   Yours %d (%d units)   Theirs %d (%d units)" % [where, a, ra, b, rb]

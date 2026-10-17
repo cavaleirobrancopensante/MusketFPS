@@ -159,22 +159,28 @@ exist.
 - Enemy variety: lizard skirmishers (javelins), shield brutes, raptor riders,
   shamans; human pikes, archers, knights; dwarf crossbows and axes.
 
-### The Total War layer (in Tests, not yet in the campaign)
+### The Total War layer (one battle system)
 
-The **Field battle** test is the start of it: regiments (muskets, pikes,
-bows, crossbows, cavalry, cannon; lizard warriors, javelin throwers, brutes,
-raptor riders) on five maps (open field, hills, a river with a bridge and a
-ford, a town of streets and a square, woods), morale and rout on both sides, deployment, an
-enemy general, and the command view (slowed or paused time, unit cards,
-tap and drag orders, auto-pause) beside first person. Next, when it feels
-right on a phone:
+The **Field battle** (built first in Tests) is now how the campaign fights:
+regiments (muskets, pikes, bows, crossbows, cavalry, cannon; lizard
+warriors, javelin throwers, brutes, raptor riders) on five maps (open
+field, hills, a river with a bridge and a ford, a town, woods), morale and
+rout on both sides, deployment, an enemy general, and the command view
+beside first person. In the campaign your fit men muster by weapon into
+regiments (your company is the muskets), the guns join when you have them,
+the wagon and its crew stand behind, and the warband you met is the army
+you face. The map's terrain picks the battle map. The prologue on Wreck
+Beach is a field battle too: you get the command partway through.
 
-- Bring it into the campaign: big battles when your company fights beside
-  a nation's army (M5), with you commanding the allied regiments.
+Still on the old company battle: the night camp and the nest assaults.
+Next:
+
+- The night camp and the nest assaults as field battles.
+- Big battles when your company fights beside a nation's army (M5), with
+  you commanding the allied regiments.
 - Formations (line, column, square against horse), skirmish order, and
   dismounting dragoons.
 - Riding yourself: you on a horse, leading the cavalry.
-- Terrain on the campaign map deciding the battle map.
 
 ### M9: Polish and release
 
