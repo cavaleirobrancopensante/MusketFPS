@@ -21,6 +21,16 @@ extends Node
 ##                 the horde comes on behind
 ##   escaped       up the path: the battle ends, the campaign begins
 ##
+## The first beats teach what your kind of officer does (Company.officer
+## "branch", chosen when the campaign began):
+##   line       in the front rank with your musket; the Major calls the volleys
+##   pike       your pike block in the line beside the musketeers; raptor
+##              riders come for it in the first wave: brace
+##   artillery  your galloper in an embrasure, and you laying it: round shot
+##              as they leave the trees, canister when they close
+##   cavalry    mounted behind the works; in the first wave the Major sends
+##              you out to ride down their skirmishers, then back
+##
 ## battle.gd keeps the story's state (story_phase, captain, objective, the
 ## dialogue queue) so the HUD and the autotest read it as before.
 
@@ -48,6 +58,14 @@ var _heard := false
 var _pursuit_t := 0.0
 var _side0 := 1 # men on your side at the start (for Lang.t("the regiment is bleeding"))
 var _wave3_t := -1.0
+var branch := "line"
+var musket_reg = null # the company that gives the Major's volleys
+var pike_reg = null
+var light_gun = null # (artillery) your galloper's battery
+var skirm_reg = null # (cavalry) the skirmishers you're sent after
+var sortie := "" # (cavalry) "", "out", "back", "done"
+var _sortie_t := 0.0
+const HORSE_POST := Vector3(12.0, 0, LINE_Z + 7.0) # where you wait mounted
 
 
 func _init(f) -> void:
@@ -59,15 +77,34 @@ func _init(f) -> void:
 # ---------------------------------------------------------------- the muster
 
 func spawn() -> void:
+	branch = Company.Officer.branch()
 	var men: Array = Company.fit_men()
-	var you = field._make_reg(0, "musket", maxi(1, men.size()), Vector3(0, 0, LINE_Z), Vector3.FORWARD, true, men)
-	you.fire_at_will = false # the Major calls the volleys
+	var you
+	if branch == "pike":
+		# The muskets in the centre of the line, your pikes on their right.
+		var pikes: Array = men.filter(func(m): return Company.role_of(m) == "pike")
+		var muskets: Array = men.filter(func(m): return Company.role_of(m) != "pike")
+		musket_reg = field._make_reg(0, "musket", maxi(1, muskets.size()), Vector3(-5.0, 0, LINE_Z), Vector3.FORWARD, false, muskets)
+		musket_reg.title = Lang.t("Your musketeers")
+		you = field._make_reg(0, "pike", maxi(1, pikes.size()), Vector3(9.0, 0, LINE_Z + 0.5), Vector3.FORWARD, true, pikes)
+		pike_reg = you
+	else:
+		you = field._make_reg(0, "musket", maxi(1, men.size()), Vector3(0, 0, LINE_Z), Vector3.FORWARD, true, men)
+		musket_reg = you
+	musket_reg.fire_at_will = false # the Major calls the volleys
 	left_reg = field._make_reg(0, "musket", SIDE_COMPANY, Vector3(-26.25, 0, LINE_Z), Vector3.FORWARD, false)
 	left_reg.title = Lang.t("Left company")
 	right_reg = field._make_reg(0, "musket", SIDE_COMPANY, Vector3(26.25, 0, LINE_Z), Vector3.FORWARD, false)
 	right_reg.title = Lang.t("Right company")
 	for sx in [-1.0, 1.0]:
 		# Two guns a battery, one in each embrasure either side of a company.
+		if branch == "artillery" and sx < 0.0:
+			# (the inner left embrasure is your galloper's)
+			var b1 = field._make_reg(0, "gun", 1, Vector3(GUN_X[0], 0, GUN_Z), Vector3.FORWARD, false)
+			b1.title = Lang.t("Left battery")
+			batteries.append(b1)
+			light_gun = battle.make_light_gun(Vector3(GUN_X[1], 0, GUN_Z), Vector3.FORWARD)
+			continue
 		var b = field._make_reg(0, "gun", 2, Vector3(sx * 26.25, 0, GUN_Z), Vector3.FORWARD, false, [], 21.5)
 		b.title = Lang.t("Left battery") if sx < 0.0 else Lang.t("Right battery")
 		batteries.append(b)
@@ -77,6 +114,14 @@ func spawn() -> void:
 	var p: Vector3 = you.pos
 	battle.player.position = Vector3(p.x, field.terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
+	if branch == "artillery" and light_gun != null:
+		# At your gun's trail, laying it.
+		var g = light_gun.members[0]
+		var tp: Vector3 = battle.player.trail_point(g)
+		battle.player.position = Vector3(tp.x, field.terrain.height(tp.x, tp.z) + 0.3, tp.z)
+		battle.player.toggle_gun.call_deferred()
+	elif branch == "cavalry":
+		battle.player.position = Vector3(HORSE_POST.x, field.terrain.height(HORSE_POST.x, HORSE_POST.z) + 0.3, HORSE_POST.z)
 	# The Major, behind the line (the old company soldier: he only stands
 	# and gives orders, and he can't be killed until his javelin comes).
 	var c = battle.SoldierScript.new()
@@ -99,9 +144,10 @@ func spawn() -> void:
 	battle._commanding = false
 	battle.story_phase = "line"
 	battle._all_men = []
-	for m in you.members:
-		if m.get("record") != null:
-			battle._all_men.append(m)
+	for r in [you, musket_reg]:
+		for m in r.members:
+			if m.get("record") != null and not m in battle._all_men:
+				battle._all_men.append(m)
 	_side0 = _men_on_our_side()
 	phase_t = 0.0
 
@@ -115,8 +161,15 @@ func _wave(n: int) -> void:
 		1:
 			_lizards("liz_warrior", 12, Vector3(-22, 0, FOREST_Z))
 			_lizards("liz_warrior", 12, Vector3(20, 0, FOREST_Z - 6.0))
-			_lizards("liz_skirm", 6, Vector3(0, 0, FOREST_Z + 12.0))
+			skirm_reg = _lizards("liz_skirm", 8 if branch == "cavalry" else 6, Vector3(0, 0, FOREST_Z + 12.0))
 			battle.hud.show_message(Lang.t("Here they come!"), 2.5)
+			if branch == "pike":
+				# Raptor riders, round for the pikes.
+				var rr = _lizards("liz_raptor", 6, Vector3(48, 0, FOREST_Z + 14.0))
+				rr.order_attack(pike_reg)
+				battle.say(Lore.COMMANDER, Lang.t("Raptor riders on the right! Pikes, make ready: brace and let them come onto the points!"), 5.0)
+			elif branch == "artillery":
+				battle.say(Lore.COMMANDER, Lang.t("Your gun, Ensign! Lay it on them as they leave the trees. Round shot while they're far, canister when they close."), 5.5)
 		2:
 			_lizards("liz_warrior", 14, Vector3(-30, 0, FOREST_Z))
 			_lizards("liz_warrior", 14, Vector3(8, 0, FOREST_Z - 4.0))
@@ -191,7 +244,9 @@ func _set_phase(p: String) -> void:
 	battle.story_phase = p
 
 
-func _line(_delta: float) -> void:
+func _line(delta: float) -> void:
+	if branch == "cavalry":
+		_sortie_tick(delta)
 	if wave == 0 and phase_t > 12.0:
 		_wave(1)
 		phase_t = 0.0
@@ -206,7 +261,7 @@ func _line(_delta: float) -> void:
 			battle._throw_at_captain(close)
 	# The Major's fire discipline: a volley when most are loaded and they're
 	# close enough to hit.
-	var you = field.player_reg
+	var you = musket_reg
 	if you != null and not you.broken() and _volley_cd <= 0.0 and you.nearest_foe_reg != null and you.nearest_foe_d < 45.0:
 		var loaded := 0
 		for m in you.members:
@@ -219,6 +274,31 @@ func _line(_delta: float) -> void:
 			battle.hud.show_message(Lang.t("Harrow: Present... FIRE!"), 1.2)
 
 
+## Cavalry: the Major sends you out after the skirmishers in the first wave,
+## and calls you back.
+func _sortie_tick(delta: float) -> void:
+	var pl = battle.player
+	_sortie_t += delta
+	match sortie:
+		"":
+			if wave == 1 and skirm_reg != null and not skirm_reg.gone() and skirm_reg.centroid.z > FOREST_Z + 22.0:
+				sortie = "out"
+				_sortie_t = 0.0
+				battle.say(Lore.COMMANDER, Lang.t("Ensign! Their javelin men, out in front. Ride them down! Sabre out, at the gallop!"), 5.0)
+		"out":
+			if skirm_reg != null and not skirm_reg.gone() and not skirm_reg.broken():
+				battle.objective = {"label": Lang.t("THE SKIRMISHERS"), "pos": skirm_reg.centroid}
+			if skirm_reg == null or skirm_reg.gone() or skirm_reg.broken() or _sortie_t > 50.0:
+				sortie = "back"
+				_sortie_t = 0.0
+				battle.say(Lore.COMMANDER, Lang.t("Well ridden! Now back behind the works, before their warriors catch you!"), 4.5)
+		"back":
+			battle.objective = {"label": Lang.t("BEHIND THE WORKS"), "pos": HORSE_POST}
+			if pl.global_position.distance_to(HORSE_POST) < 9.0 or _sortie_t > 35.0:
+				sortie = "done"
+				battle.objective = {}
+
+
 func _all_down() -> bool:
 	for r in field.regs:
 		if r.side == 1 and not r.broken():
@@ -229,6 +309,9 @@ func _all_down() -> bool:
 ## battle.gd: the javelin found him.
 func captain_down() -> void:
 	_set_phase("captain_down")
+	battle.player._leave_gun()
+	if sortie in ["out", "back"]:
+		sortie = "done"
 	battle.hud.show_message(Lang.t("%s is down!") % Lore.COMMANDER_SHORT, 3.0)
 	battle.say(battle._sergeant_name(), Lang.t("The Major's hit! Ensign, to the Major!"), 4.0)
 
@@ -339,9 +422,23 @@ func _tutorial() -> void:
 	var b = battle
 	if phase == "line" and wave == 0:
 		b._hint("move", Lang.t("MOVE: drag on the left of the screen.  LOOK: drag on the right.  Walk the earthworks while the guns are readied."), 11.0)
-	if wave >= 1 and phase == "line":
+	match branch:
+		"artillery":
+			if b.player.gun != null:
+				b._hint("gun", Lang.t("THE GUN: look where you want it laid; it turns after you, slowly. Look up or down to raise or lower the barrel: the gold ring shows where the ball will land. FIRE when the crew has loaded."), 14.0)
+				if wave >= 1 and b.nearest_enemy(b.player.global_position, 45.0) != null:
+					b._hint("canister", Lang.t("CANISTER: they're close. Change the shot and sweep them off the works."), 9.0)
+		"pike":
+			if wave >= 1 and phase == "line":
+				b._hint("pike", Lang.t("THE PIKE: THRUST reaches furthest of any blow. Hold BLOCK to brace: whatever runs at you lands on the point. Your pike block stands firm against horse and raptor."), 13.0)
+		"cavalry":
+			if phase == "line" and wave == 0:
+				b._hint("ride", Lang.t("RIDING: push the stick the way you want to go: the further, the faster (walk, trot, gallop). The horse can't turn on the spot at a gallop. DISMOUNT to fight on foot."), 12.0)
+			if sortie == "out":
+				b._hint("ride_down", Lang.t("SABRE from the saddle: the horse's speed goes into the blow, and you reach further. Ride straight through them and they're knocked flying."), 12.0)
+	if wave >= 1 and phase == "line" and branch == "line":
 		b._hint("fire", Lang.t("FIRE: tap to shoot; keep your thumb down and drag to aim.  AIM: sight down the barrel.  Reloading takes a few seconds; the Major calls the company's volleys."), 12.0)
-	if not b._hints.has("melee") and b.player.alive and b.nearest_enemy(b.player.global_position, 14.0) != null:
+	if branch != "pike" and not b.player.mounted and not b._hints.has("melee") and b.player.alive and b.nearest_enemy(b.player.global_position, 14.0) != null:
 		b._hint("melee", Lang.t("BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing."), 12.0)
 	if wave >= 2 and phase == "line":
 		b._hint("grenade", Lang.t("GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men."), 8.0)

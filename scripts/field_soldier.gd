@@ -355,6 +355,8 @@ func stagger(push: Vector3, seconds: float) -> void:
 
 func take_damage(amount: float, from: Node3D = null) -> void:
 	var was := alive
+	if side == 0:
+		amount *= Company.Officer.diff("hurt") # (the difficulty)
 	super.take_damage(amount, from)
 	if was and alive and reg != null:
 		reg.hurt(amount)

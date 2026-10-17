@@ -203,6 +203,14 @@ var stash := {}
 ## Field guns the company has (the ship's, once recovered from the stash):
 ## each goes into battle with its crew (gun_crew.gd).
 var guns := 0
+## The artillery officer's light gun (a galloper): 1 if you have it. It goes
+## into battle as its own little battery, and you can lay it yourself.
+var light_gun := 0
+## "easy", "normal", "hard" or "ironman" (officer.gd's DIFFICULTY).
+var difficulty := "normal"
+## Ironman: a battle is under way (saved when it starts). Coming back to a
+## campaign with this set means you left it: it counts as lost.
+var in_battle := false
 ## How the nations see you: below HOSTILE_AT their patrols hunt you. Attack
 ## a nation's men and it falls; the other side (they're at war) warms a
 ## little.
@@ -256,10 +264,14 @@ var results_unseen := false # the aftermath screen hasn't shown last_result yet
 
 # ---------------------------------------------------------------- new game
 
-func new_campaign() -> void:
+## A new campaign. `start` is what the new-campaign screen chose (all
+## optional): "difficulty", "branch", "name", "attrs", "skills".
+func new_campaign(start: Dictionary = {}) -> void:
 	active = true
+	difficulty = String(start.get("difficulty", "normal"))
+	in_battle = false
 	day = 1
-	money = START_MONEY
+	money = int(round(START_MONEY * float(Officer.DIFFICULTY.get(difficulty, {}).get("money", 1.0))))
 	battles = 0
 	victories = 0
 	last_pay_day = 1
@@ -267,6 +279,7 @@ func new_campaign() -> void:
 	roster.clear()
 	fallen.clear()
 	officer = Officer.blank()
+	_apply_start(start)
 	last_result = {}
 	results_unseen = false
 	# Captain Harrow's company at full strength, before the battle: a sergeant,
@@ -290,6 +303,25 @@ func new_campaign() -> void:
 			m["pack"]["ammo"] = 0
 			m["tag"] = "Pikes"
 		roster.append(m)
+	# The men your kind of officer brings: more muskets for the line, a
+	# block of pikes for a pike officer.
+	var br: Dictionary = Officer.BRANCHES.get(String(officer["branch"]), {})
+	for i in int(br.get("extra_men", 0)):
+		var m := make_recruit()
+		var rank := 1 if i % 3 != 2 else 2
+		m["rank"] = rank
+		m["xp"] = RANK_XP[rank] + randi_range(0, 60)
+		Men.auto_spend(m, (Men.level(m) - 1) * Men.POINTS_PER_LEVEL)
+		m["morale"] = 70
+		m["battles"] = rank * 2
+		m["gear"] = REGULAR_GEAR.duplicate()
+		m["pack"] = {"water": 1, "rations": 8, "ammo": 24}
+		m["tag"] = "Musketeers"
+		if String(br["extra_kind"]) == "pike":
+			m["gear"] = PIKE_GEAR.duplicate()
+			m["pack"]["ammo"] = 0
+			m["tag"] = "Pikes"
+		roster.append(m)
 	tags = DEFAULT_TAGS.duplicate()
 	wagon_plan = [0.0, -12.0]
 	loot = []
@@ -300,11 +332,59 @@ func new_campaign() -> void:
 	prologue = true
 	stash = {}
 	guns = 0
+	light_gun = 1 if String(officer["branch"]) == "artillery" else 0
 	standing = {"aurest": 0, "vell": 0}
 	contract = {}
 	next_battle = {}
 	march_note = ""
 	save()
+
+
+## Your officer as the new-campaign screen made him: his kind (its skills
+## and kit), his name, and the points you spent.
+func _apply_start(start: Dictionary) -> void:
+	var o := officer
+	var branch := String(start.get("branch", "line"))
+	if not Officer.BRANCHES.has(branch):
+		branch = "line"
+	o["branch"] = branch
+	if String(start.get("name", "")).strip_edges() != "":
+		o["name"] = String(start["name"]).strip_edges()
+	var attrs: Dictionary = start.get("attrs", {})
+	for k in attrs:
+		o["attrs"][k] = int(attrs[k])
+	if start.has("attr_points"):
+		o["attr_points"] = int(start["attr_points"])
+	var skills: Dictionary = start.get("skills", {})
+	for k in skills:
+		o["skills"][k] = int(skills[k])
+	if start.has("skill_points"):
+		o["skill_points"] = int(start["skill_points"])
+	if not start.has("skills"):
+		# (no screen: the branch's skills on top of the usual ones)
+		for k in Officer.BRANCHES[branch]["skills"]:
+			o["skills"][k] = int(o["skills"].get(k, 0)) + int(Officer.BRANCHES[branch]["skills"][k])
+	match branch:
+		"pike":
+			o["gear"]["primary"] = "pike"
+			o["gear"]["secondary"] = ""
+		"cavalry":
+			o["horse"] = {"hp": HORSE_HP, "max": HORSE_HP}
+
+
+const HORSE_HP := 220.0
+const HORSE_PRICE := 140
+
+
+## Buy a horse in a town (if you've none). Returns true if bought.
+func buy_horse() -> bool:
+	var cost := price(HORSE_PRICE)
+	if money < cost or not officer.get("horse", {}).is_empty():
+		return false
+	money -= cost
+	officer["horse"] = {"hp": HORSE_HP, "max": HORSE_HP}
+	save()
+	return true
 
 
 func make_recruit() -> Dictionary:
@@ -449,6 +529,7 @@ static func waves_for(count: int) -> Array:
 func apply_battle(result: Dictionary) -> void:
 	var won: bool = result["won"]
 	var men: Dictionary = result["men"]
+	in_battle = false
 	var was_prologue := bool(result.get("prologue", false))
 	var summary := {"enemy": String(result.get("enemy", "lizards")), "allies_left": int(result.get("allies_left", 0)), "won": won, "slain": int(result["slain"]), "fallen": [], "wounded": [],
 		"promoted": [], "levelled": [], "pay": 0, "day": day, "prologue": was_prologue, "lost_gear": 0}
@@ -465,6 +546,14 @@ func apply_battle(result: Dictionary) -> void:
 		summary["officer_level"] = Officer.level()
 	if won:
 		victories += 1
+	# Your horse: back with you (it heals in a few days), or dead on the field.
+	var horse: Dictionary = officer.get("horse", {})
+	if not horse.is_empty() and result.has("horse_hp"):
+		if float(result["horse_hp"]) <= 0.0:
+			officer["horse"] = {}
+			summary["horse_lost"] = true
+		else:
+			horse["hp"] = float(horse.get("max", HORSE_HP))
 	# A won field is yours to strip: the fallen's gear and what the enemy
 	# left go on the loot pile (see the loot screen).
 	var recover := won and not was_prologue
@@ -575,6 +664,8 @@ func apply_battle(result: Dictionary) -> void:
 			var lost := int(ceil(int(items[id]) * 0.5))
 			summary["lost_gear"] += lost
 			items[id] = int(items[id]) - lost
+	if int(summary["pay"]) > 0:
+		summary["pay"] = int(round(int(summary["pay"]) * Officer.diff("money")))
 	money = maxi(0, money + int(summary["pay"]))
 	last_result = summary
 	results_unseen = true
@@ -604,7 +695,7 @@ func _after_prologue(summary: Dictionary) -> void:
 		if randf() < 0.3:
 			pack["rations"] = randi_range(1, 4) # a haversack torn away in the press
 	summary["lost_gear"] = dropped
-	money = 40 # the regiment's pay chest, what's left of it
+	money = int(round(40 * Officer.diff("money"))) # the regiment's pay chest, what's left of it
 	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1},
 		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true,
 		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6}
@@ -1119,6 +1210,14 @@ func _road_day(water := "random") -> Dictionary:
 		var pack: Dictionary = m["pack"]
 		var drank := _take(pack, "water")
 		var fed := _take(pack, "rations")
+		# The difficulty: on easy a ration sometimes goes further, on hard
+		# the march takes more out of them.
+		var hunger := Officer.diff("food")
+		if fed and randf() < absf(hunger - 1.0):
+			if hunger > 1.0:
+				_take(pack, "rations")
+			else:
+				pack["rations"] = int(pack["rations"]) + 1
 		if drank and bool(stores["foul"]):
 			if bool(stores["grog"]) and int(stores["rum"]) > 0:
 				stores["rum"] = int(stores["rum"]) - 1
@@ -1418,7 +1517,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "standing": standing, "contract": contract,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "in_battle": in_battle, "standing": standing, "contract": contract,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
@@ -1451,6 +1550,9 @@ func load_campaign() -> bool:
 	prologue = bool(data.get("prologue", false))
 	stash = data.get("stash", {})
 	guns = int(data.get("guns", 0))
+	light_gun = int(data.get("light_gun", 0))
+	difficulty = String(data.get("difficulty", "normal"))
+	in_battle = bool(data.get("in_battle", false))
 	standing = data.get("standing", {"aurest": 0, "vell": 0})
 	contract = data.get("contract", {})
 	next_battle = data.get("next_battle", {})
@@ -1487,7 +1589,20 @@ func load_campaign() -> bool:
 	for k in ["water", "rations", "ammo", "arrows", "bolts", "powder", "lead"]:
 		stores[k] = int(stores.get(k, 0))
 	active = true
+	if in_battle and difficulty == "ironman" and not prologue:
+		# Ironman: you left a battle half fought. It's lost.
+		next_battle = {}
+		apply_battle({"won": false, "slain": 0, "officer_kills": 0, "men": {}, "left_field": true})
+		last_result["left_field"] = true
+		save()
 	return true
+
+
+## Ironman: the battle's begun; quitting now counts as losing it.
+func battle_begun() -> void:
+	if active and difficulty == "ironman" and not prologue:
+		in_battle = true
+		save()
 
 
 # ---------------------------------------------------------------- contracts

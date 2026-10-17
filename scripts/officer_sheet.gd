@@ -393,7 +393,7 @@ func _refresh() -> void:
 	if not _name_edit.has_focus():
 		_name_edit.text = String(o.get("name", ""))
 	var lv := Officer.level()
-	_rank.text = Lang.t("%s  ·  Level %d") % [Lang.t(String(o.get("rank", "Ensign"))), lv]
+	_rank.text = Lang.t("%s  ·  %s  ·  Level %d") % [Lang.t(String(o.get("rank", "Ensign"))), Lang.t(String(Officer.BRANCHES.get(Officer.branch(), Officer.BRANCHES["line"])["name"])), lv]
 	var into := int(o["xp"]) % Officer.LEVEL_XP
 	_xp_bar.max_value = Officer.LEVEL_XP
 	_xp_bar.value = into

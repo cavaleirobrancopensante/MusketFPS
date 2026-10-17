@@ -27,7 +27,46 @@ each language still lacks.
 
 ## The campaign
 
+### A new campaign: who you are
+
+**NEW CAMPAIGN** (after picking a slot) opens the new-campaign screen
+(`scripts/creation.gd`):
+
+- **Your name**, and the **difficulty**: Easy, Normal, Hard or Ironman.
+  It scales the enemy's numbers and toughness (bigger warbands, braver and
+  harder to kill), the damage you and your men take, money (the starting
+  purse, bounties, the pay chest) and how fast the food goes. Ironman is
+  Hard with one save that keeps itself: leave a battle half fought and,
+  when you come back, it counts as lost.
+- **What kind of officer you are**, each with its own skills, kit, men and
+  first battle (`officer.gd` BRANCHES):
+  - *Officer of the Line*: +4 musketeers, Marksmanship +3, Leadership +1.
+  - *Officer of Pikes*: +6 pikemen and a pike of your own (THRUST reaches
+    furthest; BLOCK braces it, so whatever runs at you lands on the point),
+    Bladework +3, Leadership +1.
+  - *Officer of Artillery*: a light gun (a galloper) and its crew, which
+    you lay and fire yourself: MAN THE GUN at its trail, look to traverse
+    and elevate (it follows slowly), a gold ring shows where the ball will
+    land, BALL or CANISTER. You can take over any of your guns the same
+    way. Gunnery +3 (every crew reloads faster, your shot scatters less),
+    Tactics +1.
+  - *Officer of Horse*: you start mounted. Push the stick the way to go:
+    the further, the faster, with momentum and a turning circle that
+    widens at the gallop. Sabre and pistol from the saddle (the horse's
+    speed is in the blow, and you reach further); at speed you ride men
+    down. Blows often land on the horse; if it's killed you're thrown, and
+    a town's market sells another. MOUNT/DISMOUNT. Riding +3, Bladework +1.
+- **Attributes and skills**: 4 attribute points and 5 skill points to
+  spend (− gives one back), on top of what your branch gives. Two new
+  skills: Riding and Gunnery.
+
 ### Prologue: the wreck and the beach (also the tutorial)
+
+The beach battle starts the same for everyone, but its first beats teach
+your branch: in the front rank with the musket (line); your pike block on
+the right of the line with raptor riders coming for it (pikes); at your gun
+in an embrasure (artillery); mounted behind the works, sent out to ride
+down their skirmishers and called back (cavalry).
 
 **NEW CAMPAIGN** opens with a film played in the engine (letterboxed, a
 little over a minute; Skip jumps ahead):

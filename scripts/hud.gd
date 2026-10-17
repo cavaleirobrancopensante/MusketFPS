@@ -137,7 +137,7 @@ func _on_hurt() -> void:
 
 
 func _melee() -> bool:
-	return player.is_melee()
+	return player.is_melee() and player.gun == null
 
 
 const WEAPON_LABELS := {"musket": "MUSKET", "melee": "BAYONET", "pistol": "PISTOL", "saber": "SABRE",
@@ -167,19 +167,27 @@ func _buttons() -> Array:
 		list.append({"id": "swing2", "circle": true, "pos": c + Vector2(gap, 0), "r": 46.0, "label": Lang.t("RIGHT")})
 		list.append({"id": "swing3", "circle": true, "pos": c + Vector2(0, gap), "r": 46.0, "label": Lang.t("THRUST")})
 		list.append({"id": "block", "circle": true, "pos": Vector2(s.x - 310, s.y - 280), "r": 52.0, "label": Lang.t("BLOCK")})
+	elif player.gun != null:
+		# At the gun: FIRE when it's loaded, the shot it's loaded with.
+		var gp: float = player.gun_progress()
+		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0,
+			"label": Lang.t("FIRE") if gp >= 1.0 else Lang.t("LOADING %d%%") % int(gp * 100.0)})
+		list.append({"id": "shot", "circle": true, "pos": Vector2(s.x - 225, s.y - 315), "r": 62.0,
+			"label": Lang.t("BALL") if player.gun_shot == "roundshot" else Lang.t("CANISTER")})
 	else:
 		list.append({"id": "fire", "circle": true, "pos": c, "r": 80.0, "label": Lang.t("FIRE")})
 		list.append({"id": "aim", "circle": true, "pos": Vector2(s.x - 215, s.y - 305), "r": 46.0, "label": Lang.t("AIM")})
 	# A small button for every weapon you carry, along the very bottom.
-	var ws: Array = player.weapons().duplicate()
+	var ws: Array = player.weapons().duplicate() if player.gun == null else []
 	if _field_ui() != null:
 		ws.append("spyglass")
 	var ww := 118.0 if ws.size() <= 4 else 96.0
 	var x0 := s.x * 0.5 - (ws.size() * (ww + 8.0) - 8.0) * 0.5 - 70.0 # clear of VOLLEY
 	for i in ws.size():
 		list.append({"id": "w_" + String(ws[i]), "circle": false, "rect": Rect2(x0 + i * (ww + 8.0), s.y - 48.0, ww, 40.0),
-			"label": Lang.t(WEAPON_LABELS[ws[i]]), "small": true})
-	list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
+			"label": Lang.t("PIKE") if ws[i] == "melee" and player.has_pike else Lang.t(WEAPON_LABELS[ws[i]]), "small": true})
+	if player.gun == null:
+		list.append({"id": "grenade", "circle": true, "pos": Vector2(s.x - 470, s.y - 120), "r": 44.0,
 		"label": Lang.t("GRENADE %d") % player.grenades})
 	list.append({"id": "volley", "circle": true, "pos": Vector2(s.x - 335, s.y - 95), "r": 56.0, "label": Lang.t("VOLLEY!")})
 	var bw := 150.0
@@ -199,6 +207,15 @@ func _buttons() -> Array:
 			"label": Lang.t("3RD PERSON") if player.third_person else Lang.t("1ST PERSON")})
 	if _field_ui() != null:
 		list.append({"id": "command", "circle": false, "rect": Rect2(300, 92, 170, 46), "label": Lang.t("COMMAND")})
+	# Your horse, and your gun.
+	if player.mounted:
+		list.append({"id": "mount", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("DISMOUNT")})
+	elif player.can_mount():
+		list.append({"id": "mount", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("MOUNT")})
+	elif player.gun != null:
+		list.append({"id": "gun", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("LEAVE THE GUN")})
+	elif player.can_man_gun():
+		list.append({"id": "gun", "circle": false, "rect": Rect2(20, 150, 170, 52), "label": Lang.t("MAN THE GUN")})
 	if Settings.playground:
 		# The range's own controls, down the left side.
 		var pl := [["pg_still1", Lang.t("+1 TARGET")], ["pg_still5", Lang.t("+5 TARGETS")], ["pg_charge5", Lang.t("+5 CHARGING")],
@@ -389,6 +406,12 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			battle.to_menu()
 		"view":
 			player.toggle_view()
+		"mount":
+			player.toggle_mount()
+		"gun":
+			player.toggle_gun()
+		"shot":
+			player.toggle_shot()
 		"command":
 			battle.field.ui.open(false)
 		_:
@@ -446,6 +469,8 @@ func _draw() -> void:
 		draw_line(c + Vector2(-14, 14), c + Vector2(-6, 6), col, 3)
 		draw_line(c + Vector2(14, 14), c + Vector2(6, 6), col, 3)
 	_draw_swing_indicator(c)
+	if player.gun != null:
+		_draw_gun_sight()
 	if block_flash > 0.0:
 		_text_center(Lang.t("BLOCKED"), c + Vector2(0, 60), 30, Color(0.95, 0.78, 0.3, block_flash * 2.0))
 	if shield_flash > 0.0:
@@ -498,6 +523,28 @@ func _draw() -> void:
 		var mc := Vector2(s.x * 0.5, s.y * 0.3)
 		_text_center(message, mc + Vector2(2, 3), 46, Color(0, 0, 0, 0.6 * alpha), display)
 		_text_center(message, mc, 46, Color(UI.PIPECLAY, alpha), display)
+
+
+## At the gun: where a round shot laid like this would land (the gun turns
+## slowly after your look), with the range; or how far canister carries.
+func _draw_gun_sight() -> void:
+	var g = player.gun
+	var cam := player.camera as Camera3D
+	if player.gun_shot == "canister":
+		_text_center(Lang.t("CANISTER: deadly to 30 m, useless past 50"), Vector2(size.x * 0.5, size.y * 0.5 + 70), 18, Color(1, 0.85, 0.5, 0.9))
+		return
+	var terr = battle.field.terrain if battle.field != null else null
+	var hit: Vector3 = g.crew.impact_point(func(x, z): return terr.height(x, z) if terr != null else 0.0)
+	if cam.is_position_behind(hit):
+		return
+	var p := cam.unproject_position(hit)
+	var col := Color(1, 0.8, 0.35, 0.95) if g.crew.ready() else Color(1, 1, 1, 0.5)
+	draw_arc(p, 14.0, 0.0, TAU, 24, col, 2.0)
+	draw_line(p + Vector2(-22, 0), p + Vector2(-8, 0), col, 2.0)
+	draw_line(p + Vector2(22, 0), p + Vector2(8, 0), col, 2.0)
+	draw_line(p + Vector2(0, -22), p + Vector2(0, -8), col, 2.0)
+	var d: float = Vector2(hit.x, hit.z).distance_to(Vector2(g.global_position.x, g.global_position.z))
+	_text_center(Lang.t("%d m") % int(d), p + Vector2(0, 32), 18, col)
 
 
 ## A gold marker over where you need to go (or an arrow at the edge of the

@@ -41,7 +41,7 @@ const MISSILE := {
 const DRAW_TIME := 0.55 # a pistol from the belt or a sabre from the scabbard
 ## How each blade swings, relative to the bayonet the swings were tuned for:
 ## [damage x, reach x, strike speed x, recovery speed x].
-const BLADES := {"melee": [1.0, 1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.0, 1.6]}
+const BLADES := {"melee": [1.0, 1.0, 1.0, 1.0], "saber": [1.0, 0.85, 1.0, 1.6], "pike": [1.1, 1.45, 0.8, 0.85]}
 const RANGE := 90.0
 const BALL_SPEED := 340.0
 const GRENADES_PER_BATTLE := 3
@@ -94,6 +94,7 @@ var has_pistol := true
 var has_saber := true
 var has_bow := false
 var has_crossbow := false
+var has_pike := false # a pike officer's: "melee" is the pike
 ## Bow and crossbow: nocked/spanned, and how long until they are again.
 var m_loaded := {"bow": true, "crossbow": true}
 var m_left := {"bow": 0.0, "crossbow": 0.0}
@@ -144,6 +145,19 @@ var point_t := 0.0
 var point_dir := Vector3.FORWARD # world direction you point
 var _point_yaw := 0.0
 var aim_amount := 0.0 # 0 = hip, 1 = fully sighted
+
+## Your horse (player_horse.gd), if you have one in this battle, and
+## whether you're on it. MOUNT/DISMOUNT takes a moment (mount_t counts down).
+var horse = null
+var mounted := false
+var mount_t := 0.0
+const MOUNT_TIME := 0.9
+const MOUNT_REACH := 3.2
+## The gun you're laying (a field gun's GunPost: your galloper, or any of
+## your batteries' guns), or null; and what's in it.
+var gun = null
+var gun_shot := "roundshot"
+const GUN_REACH := 3.6
 
 var _want_fire := false
 var _last_reload_p := 1.0
@@ -212,6 +226,12 @@ func _apply_sheet() -> void:
 	var g: Dictionary = Company.officer.get("gear", {})
 	has_pistol = String(g.get("pistol", "")) != ""
 	has_saber = String(g.get("sword", "")) != ""
+	has_pike = String(g.get("primary", "")) in ["pike", "spear", "war_spear"]
+	if has_pike:
+		weapon = "melee"
+		switch_from = "melee"
+		switch_target = "melee"
+		loaded = false
 	pistol_loaded = has_pistol and ammo > 1
 
 
@@ -281,6 +301,10 @@ func reload_progress_of(w: String) -> float:
 ## The weapons you can take up, in the order of the buttons along the bottom.
 func weapons() -> Array:
 	var out := ["musket", "melee"]
+	if has_pike:
+		out = ["melee"] # (a pike officer carries no musket)
+	elif mounted:
+		out = ["musket"] # (no bayonet work from the saddle)
 	if has_pistol:
 		out.append("pistol")
 	if has_saber:
@@ -335,19 +359,35 @@ func _update_throw(delta: float) -> void:
 
 
 func _update_camera() -> void:
+	var lift := saddle_lift()
+	if gun != null and not spyglass:
+		# At the gun: down behind the breech, sighting along the barrel (or
+		# standing back from it in third person).
+		var gs: float = 0.74 if gun.light else 1.0
+		if third_person:
+			camera.position = Vector3(0.9, 2.2, 2.6) + Basis(Vector3.RIGHT, pitch) * Vector3(0, 0.3, 1.2)
+		else:
+			camera.position = Vector3(0.0, 1.32 * gs + 0.4, -0.4 * gs)
+		camera.rotation = Vector3(pitch, 0, 0)
+		if _shake > 0.0:
+			var sh := _shake * _shake
+			camera.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * 0.06 * sh
+		return
 	if third_person and rig != null and not spyglass:
 		# Over the right shoulder; the orbit follows your pitch. Aiming pulls
 		# the camera in tight over the shoulder (the HUD keeps a small sight).
+		# On horseback it stands further back, to take in the horse.
 		var k := aim_amount * aim_amount * (3.0 - 2.0 * aim_amount)
-		var pivot := Vector3(lerpf(0.45, 0.72, k), lerpf(1.65, 1.74, k), 0.0)
-		var offset := Basis(Vector3.RIGHT, pitch) * Vector3(0.0, lerpf(0.2, 0.06, k), lerpf(2.6, 1.6, k))
+		var pivot := Vector3(lerpf(0.45, 0.72, k), lerpf(1.65, 1.74, k) + lift, 0.0)
+		var back := lerpf(2.6, 1.6, k) + 1.6 * lift / HORSE_SADDLE
+		var offset := Basis(Vector3.RIGHT, pitch) * Vector3(0.0, lerpf(0.2, 0.06, k), back)
 		var pos := pivot + offset
 		pos.y = maxf(pos.y, 0.35)
 		camera.position = pos
 	else:
 		# Eye at the head; your own torso is hidden in first person, and the
 		# arms rise from below the screen, so nothing of you blocks the view.
-		camera.position = Vector3(0, 1.64, 0.02)
+		camera.position = Vector3(0, 1.64 + lift, 0.02)
 		# Looking down at yourself, the eye leans out over your chest so you
 		# see your coat, belt and boots rather than the inside of your collar.
 		var down := clampf((-pitch - 0.25) / 0.8, 0.0, 1.0)
@@ -365,13 +405,163 @@ func _update_camera() -> void:
 		camera.rotation += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.03 * s
 
 
+# ---------------------------------------------------------------- the horse
+
+const HORSE_SADDLE := 0.8
+
+## How high the saddle lifts you right now (easing up and down as you mount
+## and dismount), with the horse's stride in it.
+func saddle_lift() -> float:
+	if horse == null:
+		return 0.0
+	var k := 1.0 - mount_t / MOUNT_TIME if mounted else mount_t / MOUNT_TIME
+	k = k * k * (3.0 - 2.0 * k)
+	return (HORSE_SADDLE + (horse.bob() if mounted else 0.0)) * k
+
+
+func can_mount() -> bool:
+	return alive and horse != null and not horse.dead and not mounted and mount_t <= 0.0 and gun == null \
+		and global_position.distance_to(horse.global_position) < MOUNT_REACH
+
+
+func can_dismount() -> bool:
+	return alive and mounted and mount_t <= 0.0 and horse != null and horse.speed < 2.5
+
+
+## MOUNT / DISMOUNT.
+func toggle_mount() -> void:
+	if can_dismount():
+		_get_down()
+	elif can_mount():
+		mounted = true
+		horse.player = self
+		global_position = Vector3(horse.global_position.x, global_position.y, horse.global_position.z)
+		rotation.y = horse.yaw
+		mount_t = MOUNT_TIME
+		aim_wanted = false
+		if weapon == "melee" and not has_pike:
+			weapon = "saber" if has_saber else "musket"
+			switch_target = weapon
+		battle.play_sound_ui("swish", -10.0)
+
+
+## Off the horse, to its left side; it stands where it is.
+func _get_down() -> void:
+	mounted = false
+	horse.player = null
+	horse.speed = 0.0
+	var left: Vector3 = horse.forward().cross(Vector3.UP) * -1.3
+	global_position += left
+	mount_t = MOUNT_TIME
+	battle.play_sound_ui("swish", -10.0)
+
+
+## The horse killed under you: you're thrown.
+func _horse_down() -> void:
+	_get_down()
+	mount_t = MOUNT_TIME * 0.5
+	hp = maxf(1.0, hp - 8.0)
+	shake(1.0)
+	battle.hud.show_message(Lang.t("Your horse is down! You're thrown clear."), 2.5)
+
+
+# ---------------------------------------------------------------- the gun
+
+## Where the gunner kneels: behind the trail of `g`.
+static func trail_point(g) -> Vector3:
+	var back := 3.25 * (0.74 if g.light else 1.0)
+	return g.crew.global_transform * Vector3(0, 0, back)
+
+
+## A gun of yours, close enough to take over (nobody else at it).
+func nearest_gun():
+	if battle.field == null:
+		return null
+	var best = null
+	var bd := GUN_REACH
+	for r in battle.field.regs:
+		if r.side != 0 or r.kind != "gun":
+			continue
+		for g in r.members:
+			if not is_instance_valid(g) or not g.alive or g.crew.silent or g.manned:
+				continue
+			var d := global_position.distance_to(trail_point(g))
+			if d < bd:
+				bd = d
+				best = g
+	return best
+
+
+func can_man_gun() -> bool:
+	return alive and gun == null and not mounted and mount_t <= 0.0 and nearest_gun() != null
+
+
+## MAN THE GUN / LEAVE THE GUN.
+func toggle_gun() -> void:
+	if gun != null:
+		_leave_gun()
+		return
+	var g = nearest_gun()
+	if g == null or not alive or mounted:
+		return
+	gun = g
+	g.manned = true
+	g.crew.manned = true
+	g.crew.elev = g.crew.barrel.rotation.x
+	rotation.y = g.crew.rotation.y
+	pitch = 0.04
+	aim_wanted = false
+	spyglass = false
+	battle.play_sound_ui("crank", -14.0)
+
+
+func _leave_gun() -> void:
+	if gun != null and is_instance_valid(gun):
+		gun.manned = false
+		gun.crew.manned = false
+	gun = null
+
+
+## At the trail: the gun turns (slowly) to where you look and the barrel
+## rises and falls with your look; you stay at your post.
+func _lay_gun() -> void:
+	if not is_instance_valid(gun) or not gun.alive or gun.crew.silent:
+		_leave_gun()
+		return
+	var tp: Vector3 = trail_point(gun)
+	global_position = Vector3(tp.x, global_position.y, tp.z)
+	gun.crew.want_yaw = rotation.y
+	gun.crew.elev = clampf(pitch, -0.09, 0.42)
+
+
+func toggle_shot() -> void:
+	gun_shot = "canister" if gun_shot == "roundshot" else "roundshot"
+	battle.play_sound_ui("crack", -18.0)
+
+
+## Give the word: the crew stand clear and the match goes to the vent.
+func _fire_gun() -> void:
+	if not gun.crew.ready():
+		battle.hud.show_message(Lang.t("Still loading!"), 0.8)
+		return
+	if gun.crew.fire_laid(gun_shot, Company.Officer.gun_scatter_mult(), self):
+		gun.reg.fired()
+		_shake = maxf(_shake, 0.7)
+		fired.emit(false)
+
+
+## 0..1: the gun's crew through their drill.
+func gun_progress() -> float:
+	return gun.crew.progress() if gun != null else 1.0
+
+
 # ---------------------------------------------------------------- called by the HUD
 
 func add_look(drag: Vector2) -> void:
 	if not alive:
 		return
 	# Finer turning while aiming, for steady shots.
-	var sens := LOOK_SENS * lerpf(1.0, 0.55, aim_amount)
+	var sens := LOOK_SENS * lerpf(1.0, 0.55, aim_amount) * (0.5 if gun != null else 1.0)
 	if spyglass:
 		sens *= SPYGLASS_FOV / FOV
 	rotation.y -= drag.x * sens
@@ -488,13 +678,20 @@ func reload_progress() -> float:
 	return 1.0 - reload_left / reload_time
 
 
+## The blade in hand: [damage x, reach x, strike speed x, recovery speed x].
+func blade() -> Array:
+	if weapon == "melee" and has_pike:
+		return BLADES["pike"]
+	return BLADES.get(weapon, [1.0, 1.0, 1.0, 1.0])
+
+
 ## How long the cut itself and the recovery take with the blade in hand.
 func strike_time() -> float:
-	return STRIKE_TIME / float(BLADES.get(weapon, [1, 1, 1, 1])[2])
+	return STRIKE_TIME / float(blade()[2])
 
 
 func recover_time() -> float:
-	return RECOVER_TIME / float(BLADES.get(weapon, [1, 1, 1, 1])[3])
+	return RECOVER_TIME / float(blade()[3])
 
 
 ## 0..1 through reloading the pistol.
@@ -542,6 +739,18 @@ func _physics_process(delta: float) -> void:
 		dir.y = 0.0
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
+		if mount_t > 0.0:
+			mount_t = maxf(0.0, mount_t - delta)
+			velocity.x = 0.0
+			velocity.z = 0.0
+		elif mounted and horse != null:
+			var hv: Vector3 = horse.drive(input, global_transform.basis, delta)
+			velocity.x = hv.x
+			velocity.z = hv.z
+		if gun != null:
+			velocity.x = 0.0
+			velocity.z = 0.0
+			_lay_gun()
 
 		_update_switch(delta)
 		_update_swing(delta)
@@ -550,7 +759,9 @@ func _physics_process(delta: float) -> void:
 		_update_throw(delta)
 		if _want_fire:
 			_want_fire = false
-			if weapon == "musket" and switch_left <= 0.0 and throw_left <= 0.0:
+			if gun != null:
+				_fire_gun()
+			elif weapon == "musket" and switch_left <= 0.0 and throw_left <= 0.0:
 				_fire()
 			elif weapon == "pistol" and switch_left <= 0.0 and throw_left <= 0.0:
 				_fire_pistol()
@@ -559,7 +770,8 @@ func _physics_process(delta: float) -> void:
 
 		_reprime = maxf(0.0, _reprime - delta)
 		# You need both hands on the musket to reload it (and a cartridge).
-		if not loaded and weapon == "musket" and switch_left <= 0.0 and ammo != 0:
+		var steady: bool = not mounted or horse == null or horse.speed < 3.0 # (no loading at the trot)
+		if not loaded and weapon == "musket" and switch_left <= 0.0 and ammo != 0 and steady:
 			reload_left -= delta
 			var p := reload_progress()
 			for stroke in RAM_STROKES:
@@ -572,7 +784,7 @@ func _physics_process(delta: float) -> void:
 				loaded = true
 				_last_reload_p = 1.0
 		# The pistol loads the same way, only while it's in your hand.
-		if not pistol_loaded and weapon == "pistol" and switch_left <= 0.0 and ammo != 0:
+		if not pistol_loaded and weapon == "pistol" and switch_left <= 0.0 and ammo != 0 and steady:
 			pistol_reload_left -= delta
 			var pp := pistol_reload_progress()
 			if _last_pistol_p < 0.55 and pp >= 0.55:
@@ -675,7 +887,7 @@ func _update_swing(delta: float) -> void:
 				_hit_done = false
 		"strike":
 			phase_time += delta
-			var quick: float = BLADES.get(weapon, [1, 1, 1, 1])[2]
+			var quick: float = blade()[2]
 			if not _hit_done and phase_time >= STRIKE_TIME * 0.5 / quick:
 				_hit_done = true
 				_apply_melee()
@@ -698,8 +910,10 @@ func _flat_forward() -> Vector3:
 
 func _apply_melee() -> void:
 	var data: Dictionary = SWINGS[swing_dir]
-	var blade: Array = BLADES.get(weapon, [1.0, 1.0, 1.0])
-	var reach: float = float(data["reach"]) * float(blade[1])
+	var bl: Array = blade()
+	var reach: float = float(data["reach"]) * float(bl[1])
+	if mounted:
+		reach += 0.9 # (from the saddle you reach down and out)
 	var cone: float = data["cone"]
 	var fwd := _flat_forward()
 	var candidates := []
@@ -714,12 +928,15 @@ func _apply_melee() -> void:
 		candidates.append([d, e])
 	candidates.sort_custom(func(a, b): return a[0] < b[0])
 
-	var damage: float = (data["damage"] + data["charge_damage"] * strike_charge) * float(blade[0])
+	var damage: float = (data["damage"] + data["charge_damage"] * strike_charge) * float(bl[0])
 	if weapon == "saber":
 		# A sabre is made for cutting: the slashes bite, the thrust less so.
 		damage *= saber_mult * (0.75 if swing_dir == Swing.THRUST else 1.0)
 	else:
 		damage *= melee_mult
+	if mounted and horse != null:
+		# The horse's speed is in the blow.
+		damage *= (1.0 + horse.speed / 12.0) * Company.Officer.mounted_blow_mult()
 	var knock: float = data["knock"] * (1.0 + strike_charge * 0.5)
 	var right := global_transform.basis.x
 	var count := 0
@@ -878,11 +1095,22 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 			# Parried: no damage, and the attacker reels back.
 			if from.has_method("stagger"):
 				from.stagger(to.normalized() * 2.5, 0.5)
+			if has_pike and weapon == "melee" and from.has_method("take_damage"):
+				# Braced: he ran onto the point.
+				from.take_damage(38.0 * melee_mult, self)
+				battle.play_sound_ui("stab", -4.0)
 			battle.play_sound_ui("clang", -3.0)
 			blocked.emit()
 			return
+	if mounted and horse != null and not horse.dead and randf() < (0.35 if _shot else 0.45):
+		# It's the horse that's hit.
+		battle.play_sound_ui("grunt", -8.0)
+		if horse.hurt(amount * Company.Officer.diff("hurt")):
+			_horse_down()
+		return
 	if not _shot:
 		amount *= 1.0 - armour # your coat turns some of a hack
+	amount *= Company.Officer.diff("hurt") # (the difficulty)
 	hp -= amount
 	battle.play_sound_ui("stab", -4.0)
 	battle.play_sound_ui("grunt", -6.0)

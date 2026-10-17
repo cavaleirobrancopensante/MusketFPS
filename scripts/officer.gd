@@ -51,9 +51,49 @@ const SKILLS := {
 		"help": "Your men gain 8% more experience a level."},
 	"tongues": {"name": "Tongues", "attr": "wits",
 		"help": "Picking up the land's languages: +15% faster learning and +3% chance to be understood a level."},
+	"riding": {"name": "Riding", "attr": "fitness",
+		"help": "On horseback: your horse is 4% faster and turns quicker a level, and your blows from the saddle hit 5% harder."},
+	"gunnery": {"name": "Gunnery", "attr": "wits",
+		"help": "The guns: every gun's crew reloads 5% faster a level, and the shot you lay yourself scatters 6% less."},
 }
-const SKILL_ORDER := ["marksmanship", "bladework", "leadership", "tactics", "surgery", "logistics",
+const SKILL_ORDER := ["marksmanship", "bladework", "riding", "gunnery", "leadership", "tactics", "surgery", "logistics",
 	"pathfinding", "trade", "training", "tongues"]
+
+## What kind of officer you are (chosen when the campaign starts): the
+## skills it gives you, its kit, the men it brings, and the beach battle
+## that teaches it (field_prologue.gd).
+const BRANCHES := {
+	"line": {"name": "Officer of the Line", "short": "LINE INFANTRY",
+		"text": "A musket in your hands and a company in two ranks behind you. You start with more musketeers and a sharp eye: you shoot straighter and load faster. Your company's volleys are your weapon.",
+		"skills": {"marksmanship": 3, "leadership": 1}, "extra_men": 4, "extra_kind": "musket"},
+	"pike": {"name": "Officer of Pikes", "short": "PIKES",
+		"text": "A pike and the steady men who stand behind it. You start with a block of pikemen and fight with the pike yourself: long reach, and braced, nothing on legs or hooves gets past.",
+		"skills": {"bladework": 3, "leadership": 1}, "extra_men": 6, "extra_kind": "pike"},
+	"artillery": {"name": "Officer of Artillery", "short": "ARTILLERY",
+		"text": "A light gun, a galloper, that you lay and fire yourself: round shot at long range, canister when they close. Its crew loads it; you aim it. Your gunnery speeds every gun the company has.",
+		"skills": {"gunnery": 3, "tactics": 1}, "extra_men": 0, "extra_kind": ""},
+	"cavalry": {"name": "Officer of Horse", "short": "CAVALRY",
+		"text": "You start mounted. Ride hard and cut from the saddle (speed makes the blow), fire your pistol, ride down skirmishers. Dismount to fight on foot, and keep your horse alive.",
+		"skills": {"riding": 3, "bladework": 1}, "extra_men": 0, "extra_kind": ""},
+}
+const BRANCH_ORDER := ["line", "pike", "artillery", "cavalry"]
+
+## Difficulty (chosen with the officer): [enemy numbers, enemy toughness,
+## damage you and your men take, money and pay, food eaten].
+const DIFFICULTY := {
+	"easy": {"name": "Easy", "text": "Smaller warbands, lighter wounds, fuller purses.", "enemy": 0.75, "tough": 0.85, "hurt": 0.65, "money": 1.4, "food": 0.8},
+	"normal": {"name": "Normal", "text": "The land as it is.", "enemy": 1.0, "tough": 1.0, "hurt": 1.0, "money": 1.0, "food": 1.0},
+	"hard": {"name": "Hard", "text": "Bigger warbands, braver enemies, deeper wounds, thinner purses.", "enemy": 1.25, "tough": 1.15, "hurt": 1.3, "money": 0.75, "food": 1.15},
+	"ironman": {"name": "Ironman", "text": "Hard, with one save that keeps itself: no going back. Leave a battle and it counts as lost.", "enemy": 1.25, "tough": 1.15, "hurt": 1.3, "money": 0.75, "food": 1.15},
+}
+const DIFFICULTY_ORDER := ["easy", "normal", "hard", "ironman"]
+
+
+## The difficulty's multiplier `k` ("enemy", "tough", "hurt", "money", "food").
+static func diff(k: String) -> float:
+	if not Company.active:
+		return 1.0
+	return float(DIFFICULTY.get(Company.difficulty, DIFFICULTY["normal"]).get(k, 1.0))
 
 const OFFICER_GEAR := {"head": "bicorne", "torso": "officer_coat", "primary": "musket", "secondary": "bayonet",
 	"pistol": "pistol", "sword": "saber"}
@@ -65,7 +105,9 @@ static func blank() -> Dictionary:
 		"attr_points": 1, "skill_points": 4,
 		"attrs": {"aim": 6, "strength": 5, "constitution": 5, "fitness": 6, "wits": 6, "presence": 5},
 		"skills": {"marksmanship": 2, "bladework": 1, "leadership": 1, "tactics": 0, "surgery": 0,
-			"logistics": 0, "pathfinding": 0, "trade": 0, "training": 0, "tongues": 1},
+			"logistics": 0, "pathfinding": 0, "trade": 0, "training": 0, "tongues": 1, "riding": 0, "gunnery": 0},
+		"branch": "line",
+		"horse": {}, # a cavalry officer's horse: {"hp", "max"}; empty: none (or it was killed)
 		"gear": OFFICER_GEAR.duplicate(),
 		"pack": {"ammo": 30},
 	}
@@ -252,6 +294,27 @@ static func sell_mult() -> float:
 	return 1.0 + 0.05 * skill("trade")
 
 
+## Riding (the horse) and Gunnery (every gun's crew, and the gun you lay).
+static func horse_speed_mult() -> float:
+	return 1.0 + 0.04 * skill("riding")
+
+
+static func mounted_blow_mult() -> float:
+	return 1.0 + 0.05 * skill("riding")
+
+
+static func gun_reload_mult() -> float:
+	return maxf(0.4, 1.0 - 0.05 * skill("gunnery"))
+
+
+static func gun_scatter_mult() -> float:
+	return maxf(0.3, 1.0 - 0.06 * skill("gunnery"))
+
+
+static func branch() -> String:
+	return String(o().get("branch", "line")) if Company.active else "line"
+
+
 static func xp_mult() -> float:
 	return 1.0 + 0.08 * skill("training")
 
@@ -270,4 +333,6 @@ static func skill_now(k: String) -> String:
 		"trade": return Lang.t("buy -%d%%, sell +%d%%") % [4 * s, 5 * s]
 		"training": return Lang.t("men's xp +%d%%") % [8 * s]
 		"tongues": return Lang.t("learning +%d%%, understood +%d%%") % [15 * s, 3 * s]
+		"riding": return Lang.t("horse +%d%% speed, blows +%d%%") % [4 * s, 5 * s]
+		"gunnery": return Lang.t("guns reload -%d%%, your shot -%d%% scatter") % [5 * s, 6 * s]
 	return ""

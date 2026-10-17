@@ -237,7 +237,10 @@ func _ready() -> void:
 		else:
 			field.spawn_armies()
 		game_state = "field"
+	_bring_horse()
+	_bring_light_gun()
 
+	Company.battle_begun()
 	await Loading.step(f[4], Lang.t("Fall in!"))
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -256,7 +259,15 @@ func _ready() -> void:
 	if prologue:
 		state_timer = 11.0
 		say("", Lang.t("%s. The regiment's survivors hold the beach where the %s broke up, the sea at their backs.") % [Lore.BEACH, Lore.SHIP], 5.5)
-		say(Lore.COMMANDER, Lang.t("Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today."), 5.5)
+		match Company.Officer.branch():
+			"pike":
+				say(Lore.COMMANDER, Lang.t("Your pikes on the right of the line, Ensign. Keep them closed up and steady. I give the orders today."), 5.5)
+			"artillery":
+				say(Lore.COMMANDER, Lang.t("To your gun, Ensign. You lay it yourself today; your crew will keep it loaded. I give the orders."), 5.5)
+			"cavalry":
+				say(Lore.COMMANDER, Lang.t("Keep your horse behind the works, Ensign, till I send you. I give the orders today."), 5.5)
+			_:
+				say(Lore.COMMANDER, Lang.t("Stay by me, Ensign, and keep your musket loaded. The guns will open first. I give the orders today."), 5.5)
 	elif camp and spotted:
 		hud.show_message(Lang.t("\"Stand to!\" The watch has seen them. Up, and form on me!"), 5.0)
 		state_timer = 7.0
@@ -271,6 +282,55 @@ func _ready() -> void:
 	else:
 		hud.show_message(Lang.t("Form the line! They're coming..."), 4.5)
 	Loading.done(self)
+
+
+# ---------------------------------------------------------------- your horse and your gun
+
+const PlayerHorse := preload("res://scripts/player_horse.gd")
+
+
+## A cavalry officer's horse: under you as the battle opens, or tethered by
+## the fire if they come for the camp at night.
+func _bring_horse() -> void:
+	if not Company.active:
+		if not Settings.field.get("horse", false):
+			return
+	var hd: Dictionary = Company.officer.get("horse", {}) if Company.active else {"hp": 220.0, "max": 220.0}
+	if hd.is_empty() or field == null:
+		return
+	var at: Vector3 = player.position
+	if camp:
+		at = field.camp_fire + Vector3(-6.0, 0, 3.0)
+		at = field.terrain.free_spot(at)
+		at.y = field.terrain.height(at.x, at.z)
+	var h = PlayerHorse.make(self, at, player.rotation.y, float(hd.get("hp", 220.0)), float(hd.get("max", 220.0)))
+	add_child(h)
+	player.horse = h
+	if not camp:
+		player.mounted = true
+		h.player = player
+
+
+## The artillery officer's galloper: its own little battery (field.gd).
+func _bring_light_gun() -> void:
+	if field == null or not Company.active or Company.light_gun <= 0 or field.prologue:
+		return # (the beach places its own: field_prologue.gd)
+	var pr = field.player_reg
+	var fwd: Vector3 = pr.forward if pr != null else Vector3.FORWARD
+	var right := fwd.cross(Vector3.UP)
+	var at: Vector3 = (pr.pos if pr != null else player.position) - right * (field._width_n(pr.kind, pr.members.size()) * 0.5 + 6.0) + fwd * 2.0
+	if camp:
+		at = field.camp_fire + Vector3(7.0, 0, -2.0)
+	make_light_gun(at, fwd)
+
+
+## The galloper and its crew as a battery of one ("Your gun").
+func make_light_gun(at: Vector3, fwd: Vector3):
+	field._making_light = true
+	var r = field._make_reg(0, "gun", 1, at, fwd, false)
+	field._making_light = false
+	r.title = Lang.t("Your gun")
+	return r
 
 
 # ---------------------------------------------------------------- orders
@@ -1038,7 +1098,8 @@ func _end_battle(won: bool) -> void:
 			"enemy": String(Company.next_battle.get("enemy_kind", "lizards")) if Company.active and not prologue else "lizards", "arrows_spent": int(_spent.get("arrow", 0)), "bolts_spent": int(_spent.get("bolt", 0)),
 			"assault": int(Company.next_battle.get("assault", -1)), "stash": bool(Company.next_battle.get("stash", false)),
 			"nest_name": String(Company.next_battle.get("nest_name", "")),
-			"allies_left": field.allies_left() if field != null else 0})
+			"allies_left": field.allies_left() if field != null else 0,
+			"horse_hp": player.horse.hp if player.horse != null else 0.0})
 	hud.show_restart()
 
 

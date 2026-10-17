@@ -19,6 +19,9 @@ const EYE := Vector3(0, 1.64, 0.02) # matches the first-person camera
 const UPRIGHT := [Vector3(0.02, 0.98, -0.56), Vector3(0, 1, -0.25)]
 const MELEE_IDLE := [Vector3(0.16, 1.28, -0.3), Vector3(0, 0.28, -1)]
 const BLOCK := [Vector3(0.32, 1.52, -0.42), Vector3(-1, 0.1, -0.05)]
+## The pike levelled at the charge: low at the hip, the head just above the
+## line of sight, so you see it out in front.
+const PIKE_IDLE := [Vector3(0.2, 1.18, -0.12), Vector3(0, 0.1, -1)]
 # Swing directions: 0 overhead, 1 from left, 2 from right, 3 thrust.
 const WINDUP := {
 	0: [Vector3(0.12, 1.68, -0.42), Vector3(0, 0.75, -0.65)],
@@ -104,7 +107,18 @@ func _process(delta: float) -> void:
 	rig.pitch_pivot = EYE
 	rig.show_head = player.third_person and not player.spyglass
 	# At the spyglass your own arms would fill the narrow view.
-	rig.visible = not player.spyglass
+	rig.visible = not player.spyglass and (player.gun == null or player.third_person)
+	# On horseback: up in the saddle, legs round the horse whichever way
+	# you look.
+	var lift: float = player.saddle_lift()
+	rig.position.y = lift
+	rig.seated = lift > 0.4
+	if player.horse != null and rig.seated:
+		var look := atan2(-f.x, -f.z)
+		rig.seat_yaw = angle_difference(look, player.horse.yaw)
+		rig.move_speed = 0.0
+	else:
+		rig.seat_yaw = 0.0
 	_pose()
 
 
@@ -222,9 +236,10 @@ func _pose() -> void:
 			_apply_pose(STRIKE[dir], 40.0)
 			rig.t_lean = 0.12
 		"recover":
-			_apply_pose(STRIKE[dir] if player.phase_time < 0.06 else MELEE_IDLE, 12.0)
+			_apply_pose(STRIKE[dir] if player.phase_time < 0.06 else (PIKE_IDLE if player.has_pike else MELEE_IDLE), 12.0)
 		_:
-			_apply_pose(BLOCK if player.blocking else MELEE_IDLE, 20.0 if player.blocking else 14.0)
+			var idle := PIKE_IDLE if player.has_pike else MELEE_IDLE
+			_apply_pose(BLOCK if player.blocking else idle, 20.0 if player.blocking else 14.0)
 
 
 ## Pointing out an order. With the musket: the right hand lets go, the left

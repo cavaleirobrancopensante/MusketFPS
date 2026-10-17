@@ -1139,6 +1139,15 @@ func _fill_menu(people := false, market := false) -> void:
 			var n := Company.make_cartridges(1)
 			_show_toast(Lang.t("The men roll %d cartridges by the fire.") % n)
 			_fill_menu()))
+	if kind != "village" and Company.officer.get("horse", {}).is_empty():
+		# A horse for the officer (a cavalryman's lost one, or your first).
+		var hp := Company.price(Company.HORSE_PRICE)
+		var hb := _button(Lang.t("BUY A HORSE  ·  %d crowns") % hp, func():
+			if Company.buy_horse():
+				_show_toast(Lang.t("A good bay, saddled and bridled. You'll ride into the next fight."))
+			_fill_menu())
+		hb.disabled = Company.money < hp
+		_menu_box.add_child(hb)
 	var gv := Company.goods_value(kind)
 	if gv > 0:
 		_menu_box.add_child(_button(Lang.t("SELL LOOT for %d crowns") % gv, func():
@@ -1164,15 +1173,15 @@ func _label(text: String, size: int, col: Color) -> Label:
 
 func _mood_plain(trust: int) -> String:
 	if trust <= -40:
-		return "hostile"
+		return Lang.t("hostile")
 	if trust <= -10:
-		return "cold"
+		return Lang.t("cold")
 	if trust < 10:
-		return "wary"
+		return Lang.t("wary")
 	if trust < 30:
-		return "warming"
+		return Lang.t("warming")
 	if trust < 60:
-		return "friendly"
+		return Lang.t("friendly")
 	return Lang.t("a friend")
 
 

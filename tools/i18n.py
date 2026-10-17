@@ -84,7 +84,7 @@ def scan(path, wrap=False):
                 continue
             if re.match(r"\s*:", after) and not re.search(r"\?\s*$", before):
                 continue # a dictionary key, or a match pattern
-            if re.search(r"(\.get|\.has|has_meta|get_meta|set_meta|play_sound|_scene|begins_with|ends_with|find|replace|split)\(\s*$", before):
+            if re.search(r"(\.get|\.has|has_meta|get_meta|set_meta|play_sound|_scene|begins_with|ends_with|trim_prefix|trim_suffix|find|replace|split)\(\s*$", before):
                 continue
             found.append(s)
             if wrap:

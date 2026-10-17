@@ -83,6 +83,7 @@ var nation := ""
 var ally_nation := ""
 var ally_coat := Color(0.62, 0.12, 0.1)
 var _making_allied := false # (while its men are made: they dress as its soldiers)
+var _making_light := false # (while the artillery officer's galloper is made)
 ## How fast the battle goes (the setup's PACE): marching, loading and blows
 ## all scale with it, so there's time to fight and to command.
 var pace := 0.75
@@ -361,6 +362,14 @@ func spawn_campaign() -> void:
 		comp = {"none": 0} # (the garrison is the nest's: _build_nest)
 	elif comp.is_empty():
 		comp = World.party_comp({"kind": "warband", "size": int(nb.get("enemy", Company.next_enemy_count())), "id": 0})
+	if not assault:
+		# The difficulty: more of them (or fewer).
+		var more := Company.Officer.diff("enemy")
+		if absf(more - 1.0) > 0.01:
+			var scaled := {}
+			for k in comp:
+				scaled[k] = maxi(1 if int(comp[k]) > 0 else 0, int(round(int(comp[k]) * more)))
+			comp = scaled
 	var theirs: Array = []
 	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "xbow": 14, "bow": 14, "cav": 10}
 	for k in World.COMP_ORDER:
@@ -708,6 +717,14 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 		r.members.append(u)
 	r.size0 = r.members.size()
 	_making_allied = false
+	if side == 1 and (campaign or prologue):
+		# The difficulty: tougher and braver enemies.
+		var tough := Company.Officer.diff("tough")
+		r.max_morale *= tough
+		r.morale = r.max_morale
+		for u in r.members:
+			if u.get("hp") != null:
+				u.hp *= tough
 	for u in r.members:
 		var sp: Vector3 = terrain.free_spot(r.slot(u.slot_index))
 		u.position = sp
@@ -940,13 +957,13 @@ func _fire_guns() -> void:
 			var gp: Vector3 = nest.gate_point() + Vector3.UP * 1.2
 			if r.fire_at_will and gp.distance_to(r.centroid) < r.range_m():
 				for g in r.members:
-					if g.alive and not g.crew.silent:
+					if g.alive and not g.crew.silent and not g.manned:
 						g.try_fire(gp)
 			continue
 		if not r.may_fire():
 			continue
 		for g in r.members:
-			if not g.alive or g.crew.silent:
+			if not g.alive or g.crew.silent or g.manned:
 				continue
 			var t: Node3D = r.shot_at(g)
 			if t == null:

@@ -12,6 +12,7 @@ const INTRO := "res://scenes/intro.tscn"
 const MusicBar := preload("res://scripts/music_bar.gd")
 const MAP := "res://scenes/map.tscn"
 const Vignette := preload("res://scripts/vignette.gd")
+const CREATION := "res://scenes/creation.tscn"
 const FlagButton := preload("res://scripts/flag_button.gd")
 const Lore := preload("res://scripts/lore.gd")
 
@@ -39,7 +40,7 @@ func _ready() -> void:
 	if "--intro" in args or "--intro-render" in args:
 		if "--intro" in args:
 			Engine.time_scale = 4.0
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		get_tree().change_scene_to_file.call_deferred(INTRO)
 		return
 	for a in args:
@@ -68,7 +69,7 @@ func _ready() -> void:
 			return
 	if "--siegetest" in args:
 		# Headless check of a town siege: it falls, and a broken one lifts.
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		World.new_world(1234)
 		var towns: Array = World.gen.settlements.filter(func(st): return st["kind"] == "town" and st.get("faction", "") == "vell")
@@ -130,7 +131,7 @@ func _ready() -> void:
 		return
 	if "--contracttest" in args:
 		# Headless check of a contract: signing, pay, progress, the end.
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		var terms := Company.contract_terms(0, "aurest", Lang.t("Count Test"))
 		terms["duty"] = "warbands"
@@ -150,13 +151,13 @@ func _ready() -> void:
 		return
 	if "--maptest" in args:
 		# Headless check of the map: a new campaign straight after the beach.
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		World.reset()
 		get_tree().change_scene_to_file.call_deferred(MAP)
 		return
 	if "--loottest" in args:
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		# A wagon packed to the brim and two men down: their kit can't all fit.
 		Company.stow("rations", 99999)
@@ -169,13 +170,13 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/loot.tscn")
 		return
 	if "--plantest" in args:
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		get_tree().change_scene_to_file.call_deferred("res://scenes/battleplan.tscn")
 		return
 	if "--towntest" in args:
 		seed(4242) # the same land every test run, to compare looks
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		World.reset()
 		World.is_ready = false
@@ -191,13 +192,13 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/town.tscn")
 		return
 	if "--officer" in args:
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		get_tree().change_scene_to_file.call_deferred("res://scenes/officer.tscn")
 		return
 	if "--company" in args:
 		# Headless check of the Company screen after the prologue.
-		Company.new_campaign()
+		Company.new_campaign(_test_start())
 		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 		get_tree().change_scene_to_file.call_deferred(COMPANY)
 		return
@@ -211,7 +212,7 @@ func _ready() -> void:
 			Settings.mixed = true
 		if "--camp" in args:
 			# A night camp attacked: -- --autotest --camp [--spotted]
-			Company.new_campaign()
+			Company.new_campaign(_test_start())
 			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 			for m in Company.roster:
 				m["wounded_days"] = 0
@@ -223,7 +224,7 @@ func _ready() -> void:
 				Company.next_battle["allies"] = {"faction": "aurest", "comp": World.party_comp({"kind": "army", "size": 40}), "party": -1, "size": 40}
 		elif "--patrol" in args:
 			# A nation's patrol: -- --autotest --patrol [--vell]
-			Company.new_campaign()
+			Company.new_campaign(_test_start())
 			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 			for m in Company.roster:
 				m["wounded_days"] = 0
@@ -239,7 +240,7 @@ func _ready() -> void:
 					"allies": {"faction": fac, "comp": World.party_comp(pp), "party": -1, "size": int(pp["size"])}}
 		elif "--assault" in args:
 			# Storming a nest: -- --autotest --assault [--walls=0.5]
-			Company.new_campaign()
+			Company.new_campaign(_test_start())
 			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 			for m in Company.roster:
 				m["wounded_days"] = 0
@@ -251,7 +252,7 @@ func _ready() -> void:
 			Company.next_battle = {"enemy": 40, "terrain": 3, "party": -1, "ambush": false, "enemy_kind": "lizards",
 				"assault": 0, "walls": walls, "stash": false, "nest_name": Lang.t("Test nest")}
 		elif "--campaign" in args:
-			Company.new_campaign()
+			Company.new_campaign(_test_start())
 		else:
 			Company.active = false
 		get_tree().change_scene_to_file.call_deferred(BATTLE)
@@ -396,6 +397,17 @@ func _build_flags() -> void:
 		row.add_child(f)
 
 
+## Tests: `--branch=line|pike|artillery|cavalry` and `--difficulty=...`.
+static func _test_start() -> Dictionary:
+	var st := {}
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--branch="):
+			st["branch"] = a.substr(9)
+		elif a.begins_with("--difficulty="):
+			st["difficulty"] = a.substr(13)
+	return st
+
+
 func _button(text: String, cb: Callable, primary := false) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -512,10 +524,8 @@ func _on_slot(i: int) -> void:
 		Settings.field = {}
 		Settings.playground = false
 		Settings.save_prefs()
-		Settings.delete_slot(i)
-		Company.new_campaign()
-		World.reset() # a new land for a new campaign
-		Loading.change(INTRO) # the shipwreck, then the beach
+		# Who you are, first (creation.gd starts the campaign in this slot).
+		Loading.change(CREATION)
 	else:
 		Settings.use_slot(i)
 		_on_continue()

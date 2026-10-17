@@ -18,6 +18,8 @@ var stagger_time := 0.0
 var in_melee_t := -99.0
 var max_hp := 260.0
 var kills := 0
+var light := false # the artillery officer's galloper
+var manned := false # you're laying it (player_gun.gd): the battery leaves it to you
 
 
 static func make(b, f, s: int, at: Vector3, yaw: float):
@@ -26,10 +28,21 @@ static func make(b, f, s: int, at: Vector3, yaw: float):
 	me.field = f
 	me.side = s
 	me.position = at
-	me.crew = GunCrew.make(b, at, yaw, 9.0 / f.pace)
+	me.light = f._making_light
+	me.crew = GunCrew.make(b, at, yaw, me.base_reload())
+	me.crew.light = me.light
 	if s == 1:
 		me.crew.coat_col = Color(0.62, 0.12, 0.1)
 	return me
+
+
+## Seconds for the drill: a light gun is quicker; your Gunnery quickens
+## every gun of yours.
+func base_reload() -> float:
+	var r: float = (6.5 if light else 9.0) / float(field.pace)
+	if side == 0:
+		r *= Company.Officer.gun_reload_mult()
+	return r
 
 
 func _ready() -> void:
@@ -49,6 +62,9 @@ func _process(_delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if not alive or reg == null:
+		return
+	if manned:
+		moving = false
 		return
 	# Manhandled to its place in the battery; the crew can't load on the move.
 	var slot: Vector3 = reg.slot(slot_index)
@@ -92,7 +108,7 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	if from != null:
 		last_hit_by = from
 	hp -= amount * (0.5 if _shot else 1.0) # (the gun and the limber take a lot of it)
-	crew.reload = 9.0 / field.pace * lerpf(2.0, 1.0, clampf(hp / max_hp, 0.0, 1.0))
+	crew.reload = base_reload() * lerpf(2.0, 1.0, clampf(hp / max_hp, 0.0, 1.0))
 	if reg != null:
 		reg.hurt(amount)
 	if hp <= 0.0:

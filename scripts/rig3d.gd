@@ -129,6 +129,11 @@ var cloth := Color(0.5, 0.42, 0.32)
 var coat_override = null
 ## A trooper in the saddle (cavalry): legs astride, sabre or cleaver up.
 var seated := false
+## Seated: how far the legs turn from where the body faces (radians), so a
+## rider can look about while his legs stay round the horse.
+var seat_yaw := 0.0
+## Mounts: the head carried lower (your own horse, seen from the saddle).
+var neck_dip := 0.0
 ## Mounts (kind "horse" or "raptor"): saddle cloth colour.
 var saddle_col := Color(0.16, 0.24, 0.55)
 var _mlegs: Array = [] # [upper id, lower id, hoof id, attach Vector3, phase offset]
@@ -1522,7 +1527,7 @@ func _update_mount(delta: float) -> void:
 	body.position.y = absf(sin(_walk_phase)) * amp * 0.09 - (0.05 if anim == "rear" else 0.0)
 	body.rotation.x = 0.0 if anim != "rear" else -0.35
 	if _neck != null:
-		_neck.rotation.x = sin(_walk_phase * 2.0) * amp * 0.08 + (0.25 if gallop else 0.0)
+		_neck.rotation.x = sin(_walk_phase * 2.0) * amp * 0.08 + (0.25 if gallop else 0.0) + neck_dip
 	# Tail.
 	var base := Vector3(0, 1.55, 0.92) if not raptor else Vector3(0, 1.4, 0.62)
 	var dir := Vector3(0, -0.8, 0.5).normalized() if not raptor else Vector3(0, -0.1, 1).normalized()
@@ -1569,12 +1574,13 @@ func _seated_legs() -> void:
 	spine.position.y = _hip_y
 	for side in ["l", "r"]:
 		var sx := (_hip_x if not liz else 0.2) * (-1.0 if side == "l" else 1.0)
-		var hip := Vector3(sx, _hip_y, 0.0)
-		var knee := Vector3(sx * 2.4, _hip_y - 0.18, -0.36)
-		var ankle := Vector3(sx * 2.5, _hip_y - 0.62, -0.18)
+		var sb := Basis(Vector3.UP, seat_yaw)
+		var hip := sb * Vector3(sx, _hip_y, 0.0)
+		var knee := sb * Vector3(sx * 2.4, _hip_y - 0.18, -0.36)
+		var ankle := sb * Vector3(sx * 2.5, _hip_y - 0.62, -0.18)
 		_place_segment(_leg[side + "_thigh"], hip, knee)
 		_place_segment(_leg[side + "_shin"], knee, ankle)
-		_set_pos(_leg[side + "_foot"], ankle + Vector3(0, -0.02, -0.06))
+		_set_pos(_leg[side + "_foot"], ankle + sb * Vector3(0, -0.02, -0.06))
 
 
 ## A trooper's sabre: sloped at the shoulder walking, levelled in the

@@ -38,6 +38,13 @@ var t := 1.0 # 0..1 through the drill; 1 = loaded and laid
 var silent := false
 var coat_col = null # another army's coat (field battles)
 var want_yaw := 0.0 # where the gunner is laying the gun (world yaw)
+## A light gun (the artillery officer's galloper): smaller, quicker to load.
+var light := false
+## You're the gunner (player_gun.gd): you lay it (want_yaw, elev) and give
+## the word; the crew still sponges, loads and rams.
+var manned := false
+var elev := 0.0 # the barrel's elevation (radians, up +)
+const TRAVERSE := 0.7 # rad/s: the trail shifted round by handspike
 var _crew := {} # role -> {"holder", "rig"}
 var _cartridge := -1
 var _flash: OmniLight3D
@@ -55,6 +62,8 @@ static func make(b, at: Vector3, yaw: float, reload_s := 12.0) -> Node3D:
 
 func _ready() -> void:
 	gun = Props.cannon()
+	if light:
+		gun.scale = Vector3.ONE * 0.74
 	add_child(gun)
 	barrel = gun.get_node("barrel")
 	# The ammunition box.
@@ -99,6 +108,10 @@ func holder_at(role: String, p: Vector3) -> void:
 
 ## Where each man stands between tasks (gun space: the gun faces -Z).
 func _post(role: String) -> Vector3:
+	return _post_full(role) * (Vector3(0.85, 1, 0.74) if light else Vector3.ONE)
+
+
+func _post_full(role: String) -> Vector3:
 	match role:
 		"rammer": return Vector3(0.75, 0, -1.6)
 		"loader": return Vector3(-0.75, 0, -1.6)
@@ -122,7 +135,12 @@ func _process(delta: float) -> void:
 	if t < 1.0:
 		t = minf(1.0, t + delta / reload)
 	# The gunner lays the gun while it's being loaded and after.
-	if t > 0.6:
+	if manned:
+		# You shift the trail yourself, a handspike's pace.
+		var d := angle_difference(rotation.y, want_yaw)
+		rotation.y += clampf(d, -TRAVERSE * delta, TRAVERSE * delta)
+		barrel.rotation.x = lerpf(barrel.rotation.x, elev, 1.0 - exp(-4.0 * delta))
+	elif t > 0.6:
 		rotation.y = lerp_angle(rotation.y, want_yaw, 1.0 - exp(-2.5 * delta))
 	_drill(delta)
 
@@ -153,6 +171,52 @@ func fire_at(aim: Vector3, canister_range := 28.0) -> bool:
 	tw.tween_property(barrel, "position:z", 0.0, 1.2)
 	t = 0.0
 	return true
+
+
+## Your shot: fire along the barrel as it's laid. "roundshot" or "canister";
+## `scatter` widens or tightens it (your Gunnery). Returns true if it fired.
+func fire_laid(kind: String, scatter: float, shooter: Node3D) -> bool:
+	if not ready():
+		return false
+	var muzzle: Vector3 = barrel.global_transform * Vector3(0, 0, MUZZLE_Z)
+	var bore := (barrel.global_transform.basis * Vector3(0, 0, -1)).normalized()
+	if kind == "canister":
+		for i in (9 if light else 12):
+			var v: Vector3 = battle.projectiles.spread_dir(bore, 0.1 * scatter) * 260.0
+			battle.projectiles.fire("canister", muzzle, v, shooter)
+	else:
+		var v2: Vector3 = battle.projectiles.spread_dir(bore, 0.006 * scatter) * muzzle_speed()
+		battle.projectiles.fire("roundshot", muzzle, v2, shooter)
+	battle.play_sound("cannon", muzzle, 4.0 if light else 6.0)
+	battle.spawn_flash(muzzle, 2.4 if light else 3.0)
+	for i in 3:
+		battle.spawn_smoke(muzzle + Vector3(randf_range(-0.6, 0.6), randf_range(0, 0.6), randf_range(-1.2, 0.2)), 2.0 if light else 2.4, bore)
+	battle.spawn_flash(barrel.global_transform * VENT, 0.6)
+	var tw := barrel.create_tween()
+	tw.tween_property(barrel, "position:z", 0.45, 0.08)
+	tw.tween_property(barrel, "position:z", 0.0, 1.2)
+	t = 0.0
+	return true
+
+
+func muzzle_speed() -> float:
+	return 150.0 if light else 170.0
+
+
+## Where a round shot fired now would first strike the ground (to show the
+## gunner); `height` gives the ground's height at a point.
+func impact_point(height: Callable) -> Vector3:
+	var p: Vector3 = barrel.global_transform * Vector3(0, 0, MUZZLE_Z)
+	var v := (barrel.global_transform.basis * Vector3(0, 0, -1)).normalized() * muzzle_speed()
+	var dt := 0.04
+	for i in 150:
+		v.y -= 9.8 * dt
+		v *= 1.0 - 0.02 * dt
+		var np := p + v * dt
+		if np.y <= float(height.call(np.x, np.z)):
+			return np
+		p = np
+	return p
 
 
 ## Lay the gun toward a world point (the gunner turns the trail).
@@ -243,8 +307,10 @@ func _drill(delta: float) -> void:
 		lr.anim = "idle"
 	lr.bayonet_in_hand = carrying
 
-	# The gunner: kneels at the trail and sights along the barrel; shifts the trail.
+	# The gunner: kneels at the trail and sights along the barrel; shifts the
+	# trail. (When it's you, he stands back out of your way.)
 	var gr = _crew["gunner"]["rig"]
+	gr.visible = not manned
 	_walk("gunner", _post("gunner"), delta)
 	_face("gunner", fwd)
 	if t > 0.6 and t < 1.0 or t >= 1.0:
@@ -260,6 +326,7 @@ func _drill(delta: float) -> void:
 
 	# The firer: linstock held up and away; touches the vent when it's time.
 	var fr = _crew["firer"]["rig"]
+	fr.visible = not manned # (you put the match to it yourself)
 	_walk("firer", _post("firer"), delta)
 	_face("firer", fwd)
 	if t >= 1.0:

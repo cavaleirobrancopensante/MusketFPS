@@ -197,6 +197,10 @@ func _refresh() -> void:
 		var pay := int(r["pay"])
 		if int(r.get("rations_spoiled", 0)) > 0 and int(r.get("wagon_looted", 0)) == 0:
 			t += Lang.t("Lizards got into the wagon. You took back what they grabbed, but they'd eaten %d rations before you cut them down.\n") % int(r["rations_spoiled"])
+		if bool(r.get("left_field", false)):
+			t += Lang.t("[color=#%s]You left the field before the battle was decided. Ironman: it counts as a defeat.[/color]\n") % _hex(RED)
+		if bool(r.get("horse_lost", false)):
+			t += Lang.t("[color=#%s]Your horse was killed under you. A town's market may sell you another.[/color]\n") % _hex(RED)
 		if int(r.get("wagon_looted", 0)) > 0:
 			t += Lang.t("[color=#%s]Lizards plundered the wagon: %d%% of its stores are gone.[/color]\n") % [_hex(RED), int(r["wagon_looted"])]
 		if humans and bool(r.get("won", false)):
