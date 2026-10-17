@@ -236,6 +236,8 @@ func _army_buttons(list: Array, fui, mode_label: String) -> void:
 		if fui.selected.any(func(r): return r.is_ranged()):
 			row.append(["o_fire", "FIRE: AT WILL" if r0.fire_at_will else "FIRE: HOLD"])
 			row.append(["o_volley", "VOLLEY"])
+		if fui.selected.any(func(r): return r.can_square()):
+			row.append(["o_square", "SQUARE" if not r0.square else "IN SQUARE"])
 		row.append(["o_run", "RUN" if not r0.run else "RUNNING"])
 		row.append(["o_fallback", "FALL BACK"])
 		if fui.selected.size() == 1 and r0.player_led:
@@ -347,7 +349,7 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			var fui = _field_ui()
 			fui.open(false)
 			fui.focus = _map_to_world(p)
-		"o_halt", "o_charge", "o_fire", "o_volley", "o_run", "o_fallback", "o_follow":
+		"o_halt", "o_charge", "o_fire", "o_volley", "o_run", "o_fallback", "o_follow", "o_square":
 			_field_ui()._order(id.substr(2))
 			battle.play_sound_ui("drum", -10.0)
 		"o_none":

@@ -824,8 +824,12 @@ func _update_labels() -> void:
 		var known := bool(World.places[id]["known"])
 		var far: float = {"village": 260.0, "town": 520.0, "city": 9999.0, "hold": 9999.0, "nest": 520.0}[st["kind"]]
 		l.visible = known and _dist < far
-		if known and World.is_raided(id):
+		if known and not World.siege_of(id).is_empty():
+			l.text = String(st["name"]) + "  (besieged)"
+		elif known and World.is_raided(id):
 			l.text = String(st["name"]) + "  (raided)"
+		elif known and st["kind"] in ["village", "town", "city"]:
+			l.text = String(st["name"])
 
 
 func _update_camera() -> void:
@@ -1044,8 +1048,11 @@ func _visit(st: Dictionary) -> void:
 	if kind == "nest":
 		_visit_nest(st)
 		return
+	elif not World.siege_of(id).is_empty() and kind in ["town", "city"]:
+		_visit_besieged(st)
+		return
 	elif World.is_raided(id):
-		text = "Burned. The lizards have been here; the people who are left have nothing to sell."
+		text = "Burned. Raiders have been here; the people who are left have nothing to sell."
 		buttons.append(["LEAVE", _popup_close])
 		_scene("burned")
 	elif not _test:
@@ -1483,6 +1490,54 @@ func _on_scouts_back(r: Dictionary) -> void:
 	_popup_open("The scouts are back", t, [["CARRY ON", _popup_close]], false)
 
 
+## A town under siege: the gates are shut. Attack the besiegers (with the
+## garrison sallying beside you), or, if you're on the besiegers' side, lend
+## them your guns and men to shorten it.
+func _visit_besieged(st: Dictionary) -> void:
+	var id := int(st["id"])
+	var sg := World.siege_of(id)
+	var army: Dictionary = sg["army"]
+	var l := World.lord_of(army)
+	var def := String(st["faction"])
+	var att := String(army.get("faction", ""))
+	var lvl := World.intel_level(army, 0.0)
+	var text := "%s is under siege: %s's army (%s) sits before the walls, day %d of the siege. The gates are shut.\n\nThe town will hold %d more days at most." % [
+		st["name"], World.lord_full(l) if not l.is_empty() else "an army", "%d" % int(army["size"]) if lvl >= 2 else World.rough_count(army),
+		int(sg["days"]), maxi(1, int(sg["need"]) - int(sg["days"]))]
+	var buttons: Array = []
+	if not Company.is_enemy(def):
+		text += "\n\n[color=#9aa3b8]ATTACK THE BESIEGERS: the garrison sallies to fight beside you. %s will be grateful; %s won't.[/color]" % [Lore.FACTIONS[def]["short"], Lore.FACTIONS[att]["short"]]
+		buttons.append(["ATTACK THE BESIEGERS", _relieve_town.bind(st, army)])
+	if not Company.is_enemy(att) and (l.is_empty() or int(l["relation"]) >= 0):
+		text += "\n[color=#9aa3b8]HELP THE SIEGE: your men dig in beside his%s. It costs you with %s.[/color]" % [
+			" and your guns batter the walls (it falls in a day)" if Company.guns > 0 else "", Lore.FACTIONS[def]["short"]]
+		buttons.append(["HELP THE SIEGE", func():
+			_popup_close()
+			World.help_siege(id, 99 if Company.guns > 0 else 2)
+			Company.change_standing(def, -20)
+			Company.change_standing(att, 10)
+			World.change_relation(l, 15)
+			_push_toast("You dig in beside %s's men." % (World.lord_short(l) if not l.is_empty() else "the besiegers"))])
+	buttons.append(["LEAVE", _popup_close])
+	_scene("patrol", {"faction": att})
+	_popup_open("%s, besieged" % st["name"], text, buttons)
+
+
+func _relieve_town(st: Dictionary, army: Dictionary) -> void:
+	_popup_close()
+	var def := String(st["faction"])
+	Company.change_standing(def, 15)
+	Company.change_standing(String(army["faction"]), -25)
+	World.change_relation(World.lord_of(army), -30)
+	if not Company.contract.is_empty() and String(Company.contract["faction"]) == String(army["faction"]):
+		World.change_relation(World.lord(int(Company.contract["lord"])), -40)
+		_push_toast(Company.break_contract())
+	_set_battle(army, false)
+	var g := 20 if st["kind"] == "town" else 32
+	Company.next_battle["allies"] = {"faction": def, "comp": World.party_comp({"kind": "patrol", "size": g}), "party": -1, "size": g, "lord": -1}
+	_go(BATTLE)
+
+
 ## The nations and their lords: where you stand with each, and what you
 ## know of their armies.
 func _show_lords() -> void:
@@ -1797,6 +1852,12 @@ func _run_test(delta: float) -> void:
 					if World.is_raided(int(id)):
 						raided += 1
 				print("  raided places now: ", raided, "; news: ", World.log.slice(-6))
+				for st2 in World.gen.settlements:
+					var sg2 := World.siege_of(int(st2["id"]))
+					if not sg2.is_empty():
+						print("  SIEGE ", st2["name"], " ", sg2["days"], "/", sg2["need"])
+					if World.places[int(st2["id"])].has("owner"):
+						print("  TAKEN ", st2["name"], " now ", st2["faction"])
 				print("MAPTEST END at the nest ", World.clock())
 				get_tree().quit()
 			return

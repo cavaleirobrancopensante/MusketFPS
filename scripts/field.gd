@@ -886,6 +886,8 @@ func _morale(dt: float) -> void:
 ## Attacked from the side or the back: a heavy blow to its nerve, once per
 ## attacker.
 func _flank_check(r) -> void:
+	if r.square:
+		return # (a square has no flank or rear)
 	for o in regs:
 		if o.side == r.side or o.broken() or not o.engaged():
 			continue
@@ -966,6 +968,17 @@ func _ai(side: int) -> void:
 			continue # (yours are yours to command)
 		if r.hold_fast:
 			continue # (a nest's garrison, behind its stakes)
+		# Foot with horse bearing down on it forms square, and opens out again
+		# once they've gone.
+		if r.can_square() and not r.engaged():
+			var horse := _horse_near(r, 40.0 if not r.square else 60.0)
+			if horse and not r.square:
+				r.form_square(true)
+				continue
+			elif r.square and not horse:
+				r.form_square(false)
+			elif r.square:
+				continue
 		if r.order == "charge" and r.target != null and not r.target.broken():
 			continue
 		if r.order == "move" and not r.path.is_empty() and clock - r.order_t < 35.0:
@@ -988,6 +1001,14 @@ func _ai(side: int) -> void:
 			r.order_attack(best)
 
 
+## Enemy horse (unbroken) within `d` metres of this regiment?
+func _horse_near(r, d: float) -> bool:
+	for o in regs:
+		if o.side != r.side and o.is_cav() and not o.broken() and o.centroid.distance_to(r.centroid) < d:
+			return true
+	return false
+
+
 func _pick_target(r):
 	var best = null
 	var bs := INF
@@ -1003,6 +1024,8 @@ func _pick_target(r):
 				s += 120.0
 			if o.engaged():
 				s -= 30.0 # into the back of a melee
+			if o.square:
+				s += 150.0 # (horse won't ride at a square)
 		elif r.kind == "pike" and o.is_cav() and d < 70.0:
 			s -= 50.0
 		var nest = battle.nest
@@ -1086,7 +1109,7 @@ func _check_end() -> void:
 		if int(_report_t) % 10 == 0 or over != "" or _report_t < 4.0:
 			var parts: PackedStringArray = []
 			for r in regs:
-				parts.append("%s%d:%s/%d %s %d%%m %s" % ["Y" if r.side == 0 else "T", r.id, r.kind, r.members.size(), r.state.substr(0, 4), int(r.morale), r.order.substr(0, 4)])
+				parts.append("%s%d:%s/%d %s %d%%m %s" % ["Y" if r.side == 0 else "T", r.id, r.kind, r.members.size(), r.state.substr(0, 4) if not r.square else "SQUA", int(r.morale), r.order.substr(0, 4)])
 			print("FIELD t%d fps%d %s | %s" % [int(clock), Engine.get_frames_per_second(), status_line(), " ".join(parts)])
 		if over != "" and _report_t > 3.0:
 			print("FIELD END ", over, " at ", int(clock), " shots ", battle.projectiles.stats)

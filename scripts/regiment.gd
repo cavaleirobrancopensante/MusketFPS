@@ -64,6 +64,10 @@ var _charge_t := 0.0
 var _hurt_acc := 0.0
 var selected := false
 var allied := false # a nation's regiment fighting beside you (its general is field.gd's, until you give it an order)
+## Formed square (foot only): a hollow box, every face outward. Horse can't
+## break it (they rear and are hurt), it shoots all round and can't be
+## taken in the flank; but it can't march, and it's a fat target.
+var square := false
 var hold_fast := false # a nest's garrison: stays at its post (field.gd's general leaves it)
 var covered := false # ...behind the stakes, where nobody can shoot it
 var _arrive_t := 0.0
@@ -98,7 +102,50 @@ func is_ranged() -> bool:
 ## Half the angle in front it can shoot into (radians): a line of muskets
 ## or bows wide, a battery's guns less (the trails have to be shifted).
 func fire_arc() -> float:
+	if square:
+		return PI
 	return 1.0 if is_gun() else acos(0.25)
+
+
+func can_square() -> bool:
+	return kind in ["musket", "pike", "bow", "xbow"] and members.size() >= 8
+
+
+## Into square (or out of it). Halts the regiment.
+func form_square(on: bool) -> void:
+	if on and not can_square():
+		return
+	if on and not square:
+		path = []
+		charging = false
+		if order != "follow":
+			order = "hold"
+		pos = centroid
+	square = on
+
+
+## The side of the square (m).
+func square_side() -> float:
+	return maxf(4.0, ceilf(members.size() / 4.0) * spacing)
+
+
+## The block's depth front to back (m), for drawing it.
+func block_depth() -> float:
+	if square:
+		return square_side()
+	return maxf(2.0, ceilf(float(members.size()) / files_now()) * rank_gap)
+
+
+## Which way the man in place `i` faces: the regiment's front, or in square
+## the outward face of his side.
+func slot_facing(i: int) -> Vector3:
+	if not square:
+		return forward
+	match i % 4:
+		0: return forward
+		1: return right()
+		2: return -forward
+	return -right()
 
 
 func range_m() -> float:
@@ -129,10 +176,24 @@ func files_now() -> int:
 
 ## Width of the front (metres).
 func width() -> float:
+	if square:
+		return square_side()
 	return (mini(files_now(), members.size()) - 1) * spacing
 
 
 func slot(i: int) -> Vector3:
+	if square:
+		# Round the four faces in turn, each face a line of its own.
+		var per := ceili(members.size() / 4.0)
+		var on_face := i / 4
+		var face_n := mini(per, (members.size() - i % 4 + 3) / 4)
+		var half := square_side() * 0.5
+		var along := (on_face - (face_n - 1) * 0.5) * spacing
+		var out := slot_facing(i)
+		var side_dir := out.cross(Vector3.UP)
+		var q := pos + out * half + side_dir * along
+		q.y = field.terrain.height(q.x, q.z)
+		return q
 	var f := files_now()
 	var n := members.size()
 	var rank := i / f
@@ -228,6 +289,7 @@ var order_t := 0.0 # field clock when the order was given
 
 
 func order_move(to: Vector3, face: Vector3, at_run := false) -> void:
+	square = false
 	order_t = field.clock
 	order = "move"
 	charging = false
@@ -247,6 +309,7 @@ func fired() -> void:
 
 
 func order_attack(r) -> void:
+	square = false
 	order_t = field.clock
 	last_shot_t = field.clock
 	order = "attack"
@@ -263,8 +326,10 @@ func order_charge(r) -> void:
 	if r == null:
 		return
 	if is_cav() and side == 1 and r.side == 0 and target != r:
-		field.alert(r, "Their %s are charging %s!" % [String(info["name"]).to_lower(), r.title if not r.player_led else "your company"], true)
+		field.alert(r, "Their %s are charging %s!%s" % [String(info["name"]).to_lower(), r.title if not r.player_led else "your company",
+			" Form square!" if r.can_square() and not r.square else ""], true)
 	order = "charge"
+	square = false
 	target = r
 	charging = true
 	_charge_t = 0.0
@@ -318,7 +383,7 @@ func tick(dt: float) -> void:
 		moving = false
 		pos = centroid
 		return
-	braced = kind == "pike" and not moving and not charging
+	braced = (kind == "pike" and not moving and not charging) or square
 	match order:
 		"follow":
 			_follow(dt)
