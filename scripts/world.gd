@@ -18,6 +18,7 @@ const Lore := preload("res://scripts/lore.gd")
 const Men := preload("res://scripts/men.gd")
 const Events := preload("res://scripts/events.gd")
 const Econ := preload("res://scripts/economy.gd")
+const Calendar := preload("res://scripts/calendar.gd")
 
 const HOURS_PER_SEC := 1.2 # game hours per real second while moving
 const WAIT_HOURS_PER_SEC := 4.0
@@ -254,7 +255,12 @@ func day() -> int:
 
 func clock() -> String:
 	var hh := int(hours) % 24
-	return Lang.t("Day %d, %02d:%02d") % [day(), hh, int(fmod(hours, 1.0) * 60.0)]
+	return "%s · %02d:%02d" % [Calendar.date_text(day() - 1), hh, int(fmod(hours, 1.0) * 60.0)]
+
+
+## The Church's day (calendar.gd): {name, cls, color, comms...}.
+func feast() -> Dictionary:
+	return Calendar.of_day(day() - 1)
 
 
 func settlement(id: int) -> Dictionary:
@@ -387,9 +393,13 @@ func speed_here() -> float:
 
 ## Advance the world by `dt` real seconds (called by the map each frame).
 ## Time only runs while the party moves or waits.
+var time_speed := 1.0 # ×1, ×2, ×4: the map's speed button
+
+
 func tick(dt: float) -> void:
 	if not is_ready or _dusk_pending:
 		return
+	dt *= time_speed
 	if camping:
 		advance(dt * CAMP_HOURS_PER_SEC)
 	elif moving():

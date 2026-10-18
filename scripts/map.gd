@@ -620,6 +620,12 @@ func _build_hud() -> void:
 	top.add_child(tv)
 	_clock = _label("", 22, Color(0.95, 0.8, 0.45))
 	tv.add_child(_clock)
+	# The day's feast, in its liturgical colour (tap the panel for the calendar).
+	_feast_l = _label("", 16, Color.WHITE)
+	tv.add_child(_feast_l)
+	top.gui_input.connect(func(e: InputEvent):
+		if (e is InputEventMouseButton and e.pressed) or (e is InputEventScreenTouch and e.pressed):
+			_open_calendar())
 	_status = _label("", 17, Color.WHITE)
 	tv.add_child(_status)
 	var bottom := _panel(Color(UI.NIGHT, 0.8))
@@ -654,9 +660,13 @@ func _build_hud() -> void:
 	br.anchor_right = 1.0
 	br.anchor_top = 1.0
 	br.anchor_bottom = 1.0
-	br.position = Vector2(-430, -76)
+	br.position = Vector2(-540, -76)
 	br.add_theme_constant_override("separation", 8)
 	root.add_child(br)
+	_speed_btn = _button("▶ ×1", func():
+		World.time_speed = {1.0: 2.0, 2.0: 4.0, 4.0: 1.0}.get(World.time_speed, 1.0)
+		_speed_btn.text = "▶ ×%d" % int(World.time_speed))
+	br.add_child(_speed_btn)
 	_wait_btn = _button(Lang.t("WAIT"), _on_wait)
 	br.add_child(_wait_btn)
 	br.add_child(_button(Lang.t("CENTRE"), func(): _follow = true))
@@ -789,6 +799,72 @@ func _center(c: Control) -> void:
 	c.position = (get_viewport().get_visible_rect().size - c.size) * 0.5
 
 
+# ---------------------------------------------------------------- the calendar
+
+const Calendar := preload("res://scripts/calendar.gd")
+var _feast_l: Label
+var _feast_day := -1
+var _speed_btn: Button
+var _cal_panel: PanelContainer
+var _cal_box: VBoxContainer
+
+
+## The Church's calendar: today and the weeks ahead, each day with its
+## celebration in its colour (feasts of the I and II class picked out).
+func _open_calendar() -> void:
+	if _cal_panel == null:
+		_cal_panel = _panel(Color(UI.WOOL, 0.98))
+		_cal_panel.custom_minimum_size = Vector2(760, 0)
+		_popup.get_parent().add_child(_cal_panel)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 8)
+		_cal_panel.add_child(v)
+		var top := HBoxContainer.new()
+		v.add_child(top)
+		var t := _label(Lang.t("THE CALENDAR"), 26, Color(0.95, 0.8, 0.45))
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top.add_child(t)
+		top.add_child(_button(Lang.t("CLOSE"), func(): _cal_panel.visible = false))
+		var sc := UI.scroll()
+		sc.custom_minimum_size = Vector2(740, 500)
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		v.add_child(sc)
+		_cal_box = VBoxContainer.new()
+		_cal_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_cal_box.add_theme_constant_override("separation", 4)
+		sc.add_child(_cal_box)
+	for c in _cal_box.get_children():
+		c.queue_free()
+	var today: int = World.day() - 1
+	for k in 28:
+		var gd := today + k
+		var c: Dictionary = Calendar.of_day(gd)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		_cal_box.add_child(row)
+		var sw := ColorRect.new()
+		sw.color = Calendar.cloth(String(c["color"]))
+		sw.custom_minimum_size = Vector2(14, 40)
+		row.add_child(sw)
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(col)
+		var big: bool = c["cls"] in ["I", "II"]
+		col.add_child(_label(("▸ " if k == 0 else "") + Calendar.short_date_text(gd), 15, Color(0.75, 0.8, 0.88) if k > 0 else Color(0.95, 0.8, 0.45)))
+		var name_l := _label(Calendar.label(c) + "   (" + Calendar.class_name_of(c) + ")", 19 if big else 16, Color(1, 0.92, 0.7) if c["cls"] == "I" else Color.WHITE)
+		name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(name_l)
+		var comms: Array = c.get("comms", [])
+		if not comms.is_empty():
+			var cl := _label(Lang.t("Comm. of %s") % ", ".join(comms.map(func(n): return Lang.t(String(n)))), 13, Color(0.7, 0.72, 0.8))
+			cl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			col.add_child(cl)
+	_cal_box.add_child(_label(Lang.t("On a feast of the I class the men keep the day: their spirits rise. On Sundays a little."), 14, Color(0.72, 0.74, 0.8)))
+	World.stop()
+	_cal_panel.visible = true
+	_center(_cal_panel)
+
+
 func _go(scene: String) -> void:
 	World.stop()
 	World.save()
@@ -803,11 +879,24 @@ func _update_hud() -> void:
 	elif World.moving() or World.waiting:
 		state = "" if not World.is_night() else Lang.t("   (night march)") if World.moving() else ""
 	_clock.text = World.clock() + state
+	var fd: int = World.day()
+	if fd != _feast_day:
+		_feast_day = fd
+		var c: Dictionary = World.feast()
+		_feast_l.text = Calendar.dial_line(c) + ("  ·  " + Calendar.class_name_of(c) if c["cls"] in ["I", "II"] else "")
+		var ink: Color = Calendar.cloth(String(c["color"]))
+		if String(c["color"]) == "white":
+			ink = Color(0.96, 0.9, 0.7) # (white vestments: shown as cream on the dark panel)
+		elif String(c["color"]) == "black":
+			ink = Color(0.7, 0.7, 0.72)
+		_feast_l.add_theme_color_override("font_color", ink)
 	var fit := Company.fit_men().size()
 	var cm := Company.company_morale()
 	_status.text = Lang.t("%d crowns · %d/%d men fit · morale %d (%s)\nfood %.1f days · water %.1f days%s") % [
 		Company.money, fit, Company.roster.size(), cm, Men.morale_word(cm),
 		Company.days_left("rations"), Company.days_left("water"), Lang.t(" · water foul") if bool(Company.stores["foul"]) else ""]
+	if Company.arrears > 0:
+		_status.text += Lang.t(" · pay owed %d") % Company.arrears
 	var c := World.cell()
 	var i: int = Gen.idx(c.x, c.y)
 	var g = World.gen
@@ -1118,6 +1207,8 @@ func _on_wait() -> void:
 func _on_day(notes: PackedStringArray) -> void:
 	for n in notes:
 		_push_toast(n)
+	if Company.pay_plea_pending:
+		_pay_plea()
 	# A contract run its course: the lord settles his opinion of you.
 	var lc: Dictionary = Company.last_contract
 	if not lc.is_empty():
@@ -1762,8 +1853,24 @@ func _do_craft(id: String, n: int) -> void:
 	_rest_until = World.hours + hrs
 
 
+## The first pay day missed in the wilds: the men come to you, hats in
+## their hands; the sergeant speaks for them.
+func _pay_plea() -> void:
+	var sg: Array = Company.roster.filter(func(m): return int(m["rank"]) >= 3)
+	var sarge: String = Company.title(sg[0]) if not sg.is_empty() else Lang.t("The sergeant")
+	var text := Lang.t("At the evening halt a knot of men comes to your fire, hats in their hands. Nobody wants to speak first.\n\n\"Begging your pardon, sir. It's pay day, and there's none. We know there's none to be had out here.\"\n\n%s steps forward. \"They'll wait, sir. We all will. A man can't eat gold, not in this place. But find us people, sir: a town, a village, anything with a roof on it. Once there's something to spend it on, the lads will want what they're owed, every week of it.\"\n\n[color=#9aa3b8]Until you find a village or a town, missed pay is only owed (it adds up). After that, a missed week angers them; when there's money, they're paid everything owed.[/color]") % sarge
+	_scene("camp")
+	_popup_open(Lang.t("Hats in their hands"), text, [
+		[Lang.t("\"YOU'LL HAVE EVERY CROWN.\""), func(): Company.answer_plea(true); _popup_close()],
+		[Lang.t("\"WE'LL SEE.\""), func(): Company.answer_plea(false); _popup_close()]])
+
+
 ## Arriving at a settlement: what it is, and what you can do there.
 func _visit(st: Dictionary) -> void:
+	if st["kind"] != "nest":
+		var news := Company.found_civilization()
+		if news != "":
+			_push_toast(news)
 	var fac: Dictionary = Lore.FACTIONS[st["faction"]]
 	var kind: String = st["kind"]
 	var title := Lang.t("%s, %s of %s") % [st["name"], {"village": Lang.t("a village"), "town": Lang.t("a town"), "city": Lang.t("a city"),
@@ -2132,6 +2239,12 @@ static func _event_scene(id: String) -> String:
 
 func _event_choice(ev: Dictionary, key: String) -> void:
 	_popup_close()
+	if key == "self":
+		# Go after it yourself, musket in hand (the hunt: battle.gd).
+		Company.next_battle = {"hunt": "game", "res": -1}
+		Company.results_unseen = false
+		_go(BATTLE)
+		return
 	var r: Dictionary = World.events.resolve(World, ev["id"], key)
 	if r.has("fight"):
 		World.stop()

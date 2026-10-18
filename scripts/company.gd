@@ -314,6 +314,10 @@ var visiting := -1 # the settlement you've walked into (town.tscn)
 var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
+var arrears := 0 # wages owed and not yet paid (see _pay_day)
+var civilized := false # the company has found people (a village or a town)
+var pay_plea_pending := false # the men want a word about their pay (map.gd shows it)
+var pay_plea_done := false
 ## Labourers: villagers who work for you (hired in villages and towns, or
 ## freed from the lizards) but don't fight. They follow the wagon, eat its
 ## rations, and work the sites (see the work section).
@@ -406,6 +410,10 @@ func new_campaign(start: Dictionary = {}) -> void:
 	visiting = -1
 	workers = []
 	posts = {}
+	arrears = 0
+	civilized = false
+	pay_plea_pending = false
+	pay_plea_done = false
 	ensure_wagon_crew()
 	prologue = true
 	stash = {}
@@ -2072,17 +2080,8 @@ func pass_day(water: String) -> PackedStringArray:
 		notes.append(Lang.t("Died: %s.") % ", ".join(dn["died"]))
 	if day - last_pay_day >= 7 and roster.size() > 0:
 		last_pay_day += 7
-		var wages := weekly_wages()
-		if money >= wages:
-			money -= wages
-			notes.append(Lang.t("Wages paid: %d crowns.") % wages)
-			for m in roster:
-				Men.add_morale(m, 3)
-		else:
-			money = 0
-			notes.append(Lang.t("No pay! The men are angry."))
-			for m in roster:
-				Men.add_morale(m, -20)
+		notes.append_array(_pay_day())
+	notes.append_array(_feast_day())
 	notes.append_array(_contract_day())
 	notes.append_array(_workers_day())
 	notes.append_array(_posts_day())
@@ -2095,6 +2094,90 @@ func pass_day(water: String) -> PackedStringArray:
 	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015 * Officer.desert_mult():
 		notes.append(_mutiny())
 	save()
+	return notes
+
+
+## Pay day (every 7 days). What's owed is this week's wages and every week
+## missed before (arrears). Until the company has found people (a village,
+## a town: `civilized`), the men understand there's nothing to be had out
+## here, and the pay is only owed; once it has, a missed week makes them
+## angry. When there's money, what's owed is paid in full.
+func _pay_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	var wages := weekly_wages()
+	var due := wages + arrears
+	if money >= due:
+		money -= due
+		if arrears > 0:
+			notes.append(Lang.t("Pay day: %d crowns in wages and %d in back pay. Every man has what he's owed.") % [wages, arrears])
+			for m in roster:
+				Men.add_morale(m, 10)
+		else:
+			notes.append(Lang.t("Wages paid: %d crowns.") % wages)
+			for m in roster:
+				Men.add_morale(m, 3)
+		arrears = 0
+		for w in workers:
+			w["morale"] = mini(100, int(w.get("morale", 55)) + 4)
+		return notes
+	if not civilized:
+		arrears += wages
+		notes.append(Lang.t("No pay this week: there is nothing to buy out here, and the men know it. It's owed: %d crowns in all.") % arrears)
+		for m in roster:
+			Men.add_morale(m, -1)
+		if not pay_plea_done:
+			pay_plea_pending = true
+		return notes
+	if money >= wages:
+		money -= wages
+		notes.append(Lang.t("This week's wages paid, but %d crowns are still owed. The men want them.") % arrears)
+		for m in roster:
+			Men.add_morale(m, -2)
+		return notes
+	arrears += wages
+	notes.append(Lang.t("No pay! The men are angry: %d crowns owed now.") % arrears)
+	for m in roster:
+		Men.add_morale(m, -12 - mini(10, arrears / 60))
+	for w in workers:
+		w["morale"] = maxi(0, int(w.get("morale", 55)) - 25)
+	return notes
+
+
+## The men's answer to the plea (map.gd): they'll wait, for now.
+func answer_plea(promise: bool) -> void:
+	pay_plea_pending = false
+	pay_plea_done = true
+	for m in roster:
+		Men.add_morale(m, 6 if promise else -4)
+	save()
+
+
+## Found people at last (the map, entering a village or town).
+func found_civilization() -> String:
+	if civilized:
+		return ""
+	civilized = true
+	save()
+	if arrears > 0:
+		return Lang.t("People at last. The men will expect their pay from now on, and the %d crowns owed them.") % arrears
+	return Lang.t("People at last. From now on the men will expect their pay.")
+
+
+## The Church's day: on a feast of the I class the men keep it, glad of it;
+## on a Sunday, a little.
+func _feast_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	if not World.is_ready:
+		return notes
+	var c: Dictionary = World.feast()
+	var Cal = load("res://scripts/calendar.gd")
+	if String(c["cls"]) == "I":
+		for m in roster:
+			Men.add_morale(m, 4)
+		notes.append(Lang.t("Today is %s. The men keep the feast as best they can.") % Cal.label(c))
+	elif c.get("sunday", false):
+		for m in roster:
+			Men.add_morale(m, 1)
 	return notes
 
 
@@ -2137,17 +2220,7 @@ func march_on() -> String:
 
 	while day - last_pay_day >= 7 and roster.size() > 0:
 		last_pay_day += 7
-		var wages := weekly_wages()
-		if money >= wages:
-			money -= wages
-			notes.append(Lang.t("Wages paid: %d crowns.") % wages)
-			for m in roster:
-				Men.add_morale(m, 3)
-		else:
-			money = 0
-			notes.append(Lang.t("No pay! The men are angry."))
-			for m in roster:
-				Men.add_morale(m, -20)
+		notes.append_array(_pay_day())
 
 	# Desertion and mutiny.
 	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.3 * Officer.desert_mult())
@@ -2204,6 +2277,7 @@ func save() -> void:
 		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 		"workers": workers, "posts": posts,
+		"arrears": arrears, "civilized": civilized, "pay_plea_pending": pay_plea_pending, "pay_plea_done": pay_plea_done,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
@@ -2249,6 +2323,10 @@ func load_campaign() -> bool:
 	towns = data.get("towns", {})
 	visiting = int(data.get("visiting", -1))
 	workers = data.get("workers", [])
+	arrears = int(data.get("arrears", 0))
+	civilized = bool(data.get("civilized", not towns.is_empty()))
+	pay_plea_pending = bool(data.get("pay_plea_pending", false))
+	pay_plea_done = bool(data.get("pay_plea_done", false))
 	for w in workers:
 		ensure_worker(w)
 	posts = data.get("posts", {})

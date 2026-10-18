@@ -21,7 +21,7 @@ const TABLE := {
 		[["SALVAGE (3 h)", "salvage"], ["LEAVE IT", "leave"]]],
 	"game": ["Game in the trees",
 		"Fresh tracks, and a glimpse of something like a deer, but with too many horns.",
-		[["HUNT (3 h)", "hunt"], ["MARCH ON", "leave"]]],
+		[["HUNT (3 h)", "hunt"], ["HUNT YOURSELF", "self"], ["MARCH ON", "leave"]]],
 	"berries": ["Bushes heavy with berries",
 		"Fat purple berries the men have never seen before. They smell sweet.",
 		[["EAT THEM", "eat"], ["LEAVE THEM", "leave"]]],

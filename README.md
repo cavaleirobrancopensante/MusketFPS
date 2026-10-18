@@ -286,6 +286,31 @@ with every seed.
   (from a single village to the whole land); CENTRE to follow the company;
   COMPANY, WAGON, CAMP and MENU at the top right.
 
+### The calendar and the pay
+
+**The Church's calendar.** The map's clock is a date: the wreck is in the
+spring of 1761, Day 1 being Monday 2 February, Candlemas. Under it is the
+day's celebration in its liturgical colour, from the traditional Roman
+calendar (the 1960 rubrics, as in the TCG-RPG: `calendar.gd`,
+`data/calendar.json`): Septuagesima, Lent and Passiontide, Easter and its
+octave, Pentecost, the Sundays after it, Advent and Christmastide, Ember
+Days, and the saints' feasts of the I, II and III class, with their
+commemorations. Tap the clock panel for THE CALENDAR: the next four weeks.
+On a feast of the I class the men keep the day (morale rises); on Sundays a
+little.
+
+**Time faster.** The ▶ ×1 button beside WAIT runs the map's clock at ×1, ×2
+or ×4: marching, waiting and sleeping all go faster.
+
+**Pay in the wilds.** Wages fall due every seven days. Until the company
+finds people (it enters a village or a town), the men understand there's
+nothing to be had: the pay is only *owed*, and it adds up. The first time,
+they come to your fire with their hats in their hands, and the sergeant
+says they'll wait, since a man can't eat gold out here, but once there's
+somewhere to spend it they'll want every week of it. After that, a missed
+week makes them angry. Whenever there's money on pay day, they're paid
+everything owed (back pay lifts their spirits). The map shows "pay owed".
+
 ### Between battles
 
 - **Every soldier is a person**: a name, his own reaction, pace and
@@ -626,7 +651,8 @@ of your side's shots has the wooden share's chance of being one, which
 flies slower and hits for half.
 
 **Hunt or fish yourself** (optional; CONFIRM still sends the men): at
-a hunting ground or fishing water, HUNT/FISH YOURSELF takes you into the
+a hunting ground or fishing water, or from the "Game in the trees" event on
+the road (HUNT YOURSELF), HUNT/FISH YOURSELF takes you into the
 woods with your musket, or to a river with a rod (you need one in the
 wagon). Deer graze in small herds and bolt when you come close (closer
 still on a horse) or a shot rings out. Fishing: hold CAST to wind the rod
