@@ -696,7 +696,11 @@ func _fill_list() -> void:
 				names.append(Company.title(m))
 			for w in post["workers"]:
 				names.append(String(w["name"]))
-			var l2 := _label(Lang.t("At the %s: %s") % [Lang.t(String(spec.get("name", "site"))).to_lower(), ", ".join(names)], 15, DIM)
+			var tl: Array = []
+			for tid in post["tools"]:
+				tl.append("%s %d" % [Company.item_name(String(tid)), int(post["tools"][tid])])
+			var l2 := _label(Lang.t("At the %s: %s") % [Lang.t(String(spec.get("name", "site"))).to_lower(), ", ".join(names)] \
+				+ "\n" + Lang.t("Tools with them: %s") % (", ".join(tl) if not tl.is_empty() else Lang.t("none")), 15, DIM)
 			l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			_list.add_child(l2)
 			# Calling them back costs a man: a runner goes to fetch them.

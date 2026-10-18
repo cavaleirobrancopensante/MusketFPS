@@ -1282,7 +1282,7 @@ func _close_work() -> void:
 
 
 func _visit_spring(id: int, spec: Dictionary) -> void:
-	var text := Lang.t(String(spec["text"]))
+	var text := Lang.t(String(spec["text"])) + "\n\n" + Lang.t("Tools needed: none, only the barrels.")
 	var buttons: Array = []
 	if World.harvest_wait(id) <= 0.0:
 		buttons.append([Lang.t("FILL THE CART"), func():
@@ -1332,11 +1332,34 @@ func _fill_work() -> void:
 	var wrap := func(l: Label) -> Label:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		return l
-	if not need.is_empty():
-		var names: Array = []
+	# The tools: what the work needs, and what you have.
+	var tcard := _panel(Color(0.15, 0.2, 0.33))
+	_work_box.add_child(tcard)
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", 4)
+	tcard.add_child(tv)
+	tv.add_child(_label(Lang.t("TOOLS"), 18, gold))
+	if need.is_empty():
+		tv.add_child(wrap.call(_label(Lang.t("Needed: none. (The men hunt with their muskets.)") if kind == "game" else Lang.t("Needed: none."), 16, Color.WHITE)))
+	else:
+		var opts: Array = need.map(func(tid): return Company.item_name(String(tid)).to_lower())
+		tv.add_child(wrap.call(_label(Lang.t("Needed: one for each person working: %s.") % Lang.t(" or ").join(opts), 16, Color.WHITE)))
+		var have: Array = []
+		var total := 0
 		for tid in need:
-			names.append("%s (%d)" % [Company.item_name(String(tid)), Company.item_count(String(tid))])
-		_work_box.add_child(wrap.call(_label(Lang.t("Tools for the work: %s in the wagon. Nobody can do this work without one, and any tool may break. Markets sell them.") % Lang.t(" or ").join(names), 16, Color.WHITE)))
+			var n := Company.item_count(String(tid))
+			total += n
+			have.append("%s %d" % [Company.item_name(String(tid)), n])
+		var hl := _label(Lang.t("In the wagon: %s  ·  room for %d to work") % ["  ·  ".join(have), total], 16, Color.WHITE if total > 0 else Color(1, 0.55, 0.45))
+		hl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tv.add_child(hl)
+		var pst: Dictionary = Company.posts.get(str(id), {})
+		if not pst.is_empty() and not (pst["tools"] as Dictionary).is_empty():
+			var with_them: Array = []
+			for tid2 in pst["tools"]:
+				with_them.append("%s %d" % [Company.item_name(String(tid2)), int(pst["tools"][tid2])])
+			tv.add_child(_label(Lang.t("With your work party here: %s") % "  ·  ".join(with_them), 15, dim))
+		tv.add_child(wrap.call(_label(Lang.t("Nobody can do this work without one, and any tool may break. Markets sell them.") + (Lang.t(" You can CRAFT a fishing rod from hardwood.") if "fishing_rod" in need else ""), 14, dim)))
 	# The work party here, if you left one.
 	var post: Dictionary = Company.posts.get(str(id), {})
 	if not post.is_empty():
