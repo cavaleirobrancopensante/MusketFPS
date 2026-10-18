@@ -203,6 +203,16 @@ with every seed.
   Aurest in the west and the Vellish Marches in the east (at war), the
   dwarf holds of the Greyspine mountains in the north, and the lizard nests
   in the south-west swamps. One nest holds the ship's stores.
+- **Tracks** (`World.tracks`, as in Mount & Blade): every party on the
+  move leaves a trail of arrows on the map, pointing the way it went, that
+  fades over two days. You only see tracks near you (5 cells, +2 a level of
+  Pathfinding), coloured by who made them: red for a lizard warband, orange
+  for lizard hunters, a nation's colour for its soldiers, pale for caravans
+  and country people. Tap one to read it: who, roughly how many (closer
+  with Pathfinding), which way and how old. The **Lizard tracks** event
+  only comes when you cross a real fresh lizard trail; FOLLOW THE TRAIL
+  (2 h) leads to the warband that made it and keeps it on your map for a
+  day, to fall on it or keep out of its way.
 - **Warband sizes swing** (`World.warband_size`): most are a few dozen,
   but a nest may send a **raiding band** of 6 to 14 or, now and then, a
   **war host** of 55 to 85, or even the whole nest on the march, 100 and

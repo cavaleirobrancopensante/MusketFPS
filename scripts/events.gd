@@ -39,7 +39,7 @@ const TABLE := {
 		[["DIG IT OUT (5 h)", "dig"], ["LIGHTEN THE LOAD", "lighten"]]],
 	"spoor": ["Lizard tracks",
 		"Clawed prints, many of them, fresh. They lead off through the reeds.",
-		[["FOLLOW THEM", "follow"], ["GO THE OTHER WAY", "leave"]]],
+		[["FOLLOW THE TRAIL (2 h)", "follow"], ["LEAVE THEM", "leave"]]],
 	"ambush": ["Ambush!",
 		"Hissing in the undergrowth on every side. They've been waiting for you.",
 		[["FORM UP!", "fight"]]],
@@ -77,6 +77,9 @@ var _last := {} # event id -> hours when it last happened
 
 
 ## Choose an event for where the company is now, or {} for none.
+var _spoor := {} # the trail the "Lizard tracks" event found
+
+
 func pick(w) -> Dictionary:
 	var ctx := _context(w)
 	var total := 0.0
@@ -98,7 +101,13 @@ func pick(w) -> Dictionary:
 		if r <= 0.0:
 			var row: Array = TABLE[id]
 			_last[id] = w.hours
-			return {"id": id, "title": Lang.t(row[0]), "text": Lang.t(row[1]), "options": (row[2] as Array).map(func(o): return [Lang.t(o[0]), o[1]])}
+			var text := Lang.t(row[1])
+			if id == "spoor":
+				# The trail you've crossed, read as well as you can read it.
+				_spoor = w.fresh_lizard_track(4.0)
+				if not _spoor.is_empty():
+					text += "\n\n" + w.read_track(_spoor) + "\n\n" + Lang.t("Follow it and you'll find them and know where they are for a day: to fall on them, or to keep out of their way.")
+			return {"id": id, "title": Lang.t(row[0]), "text": text, "options": (row[2] as Array).map(func(o): return [Lang.t(o[0]), o[1]])}
 	return {}
 
 
@@ -142,7 +151,8 @@ func _weight(id: String, x: Dictionary) -> float:
 		"bog":
 			return 1.0 if t == T.SWAMP else 0.0
 		"spoor":
-			return 1.5 if lizard else 0.0
+			# (only where a real trail crosses your path: see World.tracks)
+			return 2.0 if not World.fresh_lizard_track(4.0).is_empty() else 0.0
 		"ambush":
 			return (0.6 if x["night"] else 0.3) if lizard and t in [T.FOREST, T.SWAMP] else 0.0
 		"farmer":
@@ -245,8 +255,23 @@ func resolve(w, id: String, key: String) -> Dictionary:
 			return _done(Lang.t("You throw off %d rations and the wagon comes free.") % lost)
 		"spoor":
 			if key == "follow":
-				var p: Dictionary = w.spawn_near("warband", "lizards", w.warband_size(w.day()), 7.0)
-				return _done(Lang.t("Through the reeds: a warband of %d, resting. They haven't seen you... yet.") % int(p["size"]))
+				w.pass_hours(2.0)
+				var p: Dictionary = {} if _spoor.is_empty() else w.trail_party(_spoor)
+				_spoor = {}
+				if p.is_empty():
+					return _done(Lang.t("The trail ends in a trampled clearing, stinking of blood. Whoever made it met something worse."))
+				var d: float = w.pos.distance_to(Vector2(p["x"], p["y"]))
+				var where: String = w.compass(Vector2(p["x"], p["y"]) - w.pos)
+				var hrs := maxi(1, int(round(d / 2.5)))
+				var dist_w := Lang.t("an hour's march") if hrs <= 1 else Lang.t("%d hours' march") % hrs
+				return _done(Lang.t("Two hours on the trail. %s, %s of them, about %s to the %s. Their trail is marked on the map: you'll know where they are for a day.") % [
+					w.party_name(p).split(" (")[0], w.rough_count(p), dist_w, where])
+			if key == "leave":
+				for t in w.tracks:
+					if not _spoor.is_empty() and int(t["pid"]) == int(_spoor["pid"]):
+						t["followed"] = true
+				_spoor = {}
+				return _done(Lang.t("You leave the trail to whoever made it."))
 		"ambush":
 			var p2: Dictionary = w.spawn_near("hunters", "lizards", randi_range(5, 10), 0.6)
 			return {"text": "", "fight": p2}

@@ -89,6 +89,7 @@ func new_world(s: int) -> void:
 	path.clear()
 	goal = {}
 	parties.clear()
+	tracks.clear()
 	next_party = 1
 	places.clear()
 	harvest.clear()
@@ -241,7 +242,7 @@ func save() -> void:
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
-		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest, "econ": econ}
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest, "econ": econ, "tracks": tracks}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
@@ -259,6 +260,7 @@ func load_world() -> bool:
 	hours = float(data["hours"])
 	pos = Vector2(data["pos"][0], data["pos"][1])
 	parties = data.get("parties", [])
+	tracks = data.get("tracks", [])
 	for p in parties:
 		p["id"] = int(p["id"])
 		p["size"] = int(p["size"])
@@ -598,6 +600,7 @@ func advance(dh: float) -> void:
 					return
 		for p in parties.duplicate():
 			_party_tick(p, step)
+		_see_tracks()
 		_fight_t -= step
 		if _fight_t <= 0.0:
 			_fight_t = 0.5
@@ -820,6 +823,7 @@ func _note_water() -> void:
 
 
 func _midnight() -> void:
+	_prune_tracks()
 	var notes: PackedStringArray = Company.pass_day(_day_water) if Company.active else PackedStringArray()
 	_war_tick()
 	_sieges_tick()
@@ -1093,6 +1097,139 @@ func _line_of_sight(a: Vector2i, b: Vector2i, eye: float) -> bool:
 		if ground > lerpf(eye, target, f):
 			return false
 	return true
+
+
+# ---------------------------------------------------------------- tracks
+
+## Tracks on the map, as in Mount & Blade: every party on the move leaves a
+## trail of arrows (where it was, which way it went) that lasts two days.
+## You only see the ones near you (further with Pathfinding), coloured by
+## who made them; tap one to read it. The "Lizard tracks" event follows a
+## real trail to the warband that made it.
+const TRACK_LIFE := 48.0 # hours
+const TRACK_STEP := 1.5 # cells between arrows
+const TRACK_MAX := 5000
+var tracks: Array = [] # {"x", "y", "dx", "dy", "f", "k", "n", "h", "pid", "seen"}
+
+
+func _lay_track(p: Dictionary, start: Vector2) -> void:
+	if p["kind"] == "detachment":
+		return # (your own people)
+	var me := Vector2(float(p["x"]), float(p["y"]))
+	var last = p.get("tk", null)
+	var from := Vector2(float(last[0]), float(last[1])) if last is Array else start
+	if from.distance_to(me) < TRACK_STEP:
+		if not last is Array:
+			p["tk"] = [start.x, start.y]
+		return
+	var d := (me - from).normalized()
+	tracks.append({"x": snappedf(me.x, 0.01), "y": snappedf(me.y, 0.01), "dx": snappedf(d.x, 0.01), "dy": snappedf(d.y, 0.01),
+		"f": String(p["faction"]), "k": String(p["kind"]), "n": int(p["size"]), "h": snappedf(hours, 0.01), "pid": int(p["id"]), "seen": false})
+	p["tk"] = [me.x, me.y]
+	if tracks.size() > TRACK_MAX:
+		tracks = tracks.slice(tracks.size() - TRACK_MAX)
+
+
+## How far off you can make out tracks: a few cells, more with Pathfinding,
+## never further than you can see.
+func track_sight() -> float:
+	return minf(sight_radius(), 5.0 + 2.0 * Company.Officer.skill("pathfinding"))
+
+
+func _see_tracks() -> void:
+	var r := track_sight()
+	for t in tracks:
+		if not bool(t["seen"]) and hours - float(t["h"]) < TRACK_LIFE and pos.distance_to(Vector2(float(t["x"]), float(t["y"]))) <= r:
+			t["seen"] = true
+
+
+func _prune_tracks() -> void:
+	tracks = tracks.filter(func(t): return hours - float(t["h"]) < TRACK_LIFE)
+
+
+## The tracks you've seen and that haven't faded yet.
+func seen_tracks() -> Array:
+	return tracks.filter(func(t): return bool(t["seen"]) and hours - float(t["h"]) < TRACK_LIFE)
+
+
+## Which way, as a compass word (the map's north is up).
+static func compass(d: Vector2) -> String:
+	var a := fposmod(rad_to_deg(atan2(d.x, -d.y)), 360.0)
+	var names := [Lang.t("north"), Lang.t("north-east"), Lang.t("east"), Lang.t("south-east"), Lang.t("south"),
+		Lang.t("south-west"), Lang.t("west"), Lang.t("north-west")]
+	return names[int(round(a / 45.0)) % 8]
+
+
+static func age_words(h: float) -> String:
+	if h < 3.0:
+		return Lang.t("fresh, an hour or two old")
+	if h < 9.0:
+		return Lang.t("a few hours old")
+	if h < 18.0:
+		return Lang.t("half a day old")
+	if h < 32.0:
+		return Lang.t("about a day old")
+	return Lang.t("nearly two days old, fading")
+
+
+## What a track tells you: who, how many (as close as your Pathfinding
+## reads it), which way, how old.
+func read_track(t: Dictionary) -> String:
+	var who := ""
+	match String(t["k"]):
+		"warband":
+			who = Lang.t("A lizard warband")
+		"hunters":
+			who = Lang.t("Lizard hunters")
+		"patrol", "army":
+			who = Lang.t("Soldiers of %s") % Lore.FACTIONS.get(t["f"], {"short": "?"})["short"]
+		"caravan", "traders":
+			who = Lang.t("A caravan, wheels and hooves")
+		"villagers", "labourers", "refugees":
+			who = Lang.t("Country people on foot")
+		"deserters":
+			who = Lang.t("Men on foot, in a hurry")
+		_:
+			who = Lang.t("People on foot")
+	var n := int(t["n"])
+	var e := clampf(0.5 - 0.08 * Company.Officer.skill("pathfinding"), 0.1, 0.5)
+	var u := float(hash(int(t["pid"]) * 31 + int(float(t["h"]))) % 100) / 100.0
+	var lo := maxi(1, int(floor(n * (1.0 - e * u))))
+	var hi := maxi(lo + 1, int(ceil(n * (1.0 + e * (1.0 - u)))))
+	return Lang.t("%s: %d to %d of them, heading %s. The tracks are %s.") % [
+		who, lo, hi, compass(Vector2(float(t["dx"]), float(t["dy"]))), age_words(hours - float(t["h"]))]
+
+
+## A fresh lizard trail close by that you haven't followed yet, or {}.
+func fresh_lizard_track(within: float) -> Dictionary:
+	var best := {}
+	var bd := within
+	for t in tracks:
+		if t["f"] != "lizards" or bool(t.get("followed", false)) or hours - float(t["h"]) > 30.0:
+			continue
+		if not t["k"] in ["warband", "hunters"]:
+			continue
+		var d := pos.distance_to(Vector2(float(t["x"]), float(t["y"])))
+		if d < bd:
+			bd = d
+			best = t
+	return best
+
+
+## Followed a trail to the party that made it: you know where it is for a day.
+func trail_party(t: Dictionary, h := 24.0) -> Dictionary:
+	for q in tracks:
+		if int(q["pid"]) == int(t["pid"]):
+			q["followed"] = true
+			q["seen"] = true
+	var p := party_by_id(int(t["pid"]))
+	if not p.is_empty():
+		p["trailed_until"] = hours + h
+	return p
+
+
+func is_trailed(p: Dictionary) -> bool:
+	return float(p.get("trailed_until", 0.0)) > hours
 
 
 func can_see(p: Dictionary) -> bool:
@@ -1587,6 +1724,13 @@ func _route(from: Vector2, to: Vector2) -> Array:
 
 
 func _move_party(p: Dictionary, dh: float) -> void:
+	var start := Vector2(float(p["x"]), float(p["y"]))
+	_move_party_on(p, dh)
+	if Vector2(float(p["x"]), float(p["y"])) != start:
+		_lay_track(p, start)
+
+
+func _move_party_on(p: Dictionary, dh: float) -> void:
 	var path_p: Array = p["path"]
 	var k: Dictionary = KINDS[p["kind"]]
 	var left := float(k["speed"]) * dh

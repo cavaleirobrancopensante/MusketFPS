@@ -86,6 +86,8 @@ var _prev_vis: Array = []
 
 var _player: Node3D
 var _path_mesh: ImmediateMesh
+var _tracks_mm: MultiMesh # the tracks you've seen (World.tracks)
+var _tracks_t := 0.0
 var _markers := {} # party id -> Node3D
 var _labels := {} # settlement id -> Label3D
 var _chase := {} # {"id": party id} while going after a party
@@ -543,6 +545,61 @@ func _build_player() -> void:
 	lm.albedo_color = Color(0.95, 0.8, 0.4)
 	pm.material_override = lm
 	add_child(pm)
+	_build_tracks()
+
+
+## Tracks: a flat arrow on the ground for each one you've seen, pointing
+## the way they went, in the colour of whoever made it, fading with age.
+func _build_tracks() -> void:
+	var am := ArrayMesh.new()
+	var v := PackedVector3Array([
+		Vector3(0, 0, -0.9), Vector3(0.55, 0, 0.2), Vector3(0, 0, -0.25),
+		Vector3(0, 0, -0.9), Vector3(0, 0, -0.25), Vector3(-0.55, 0, 0.2),
+		Vector3(0, 0, -0.25), Vector3(0.55, 0, 0.2), Vector3(0.2, 0, 0.45),
+		Vector3(0, 0, -0.25), Vector3(-0.2, 0, 0.45), Vector3(-0.55, 0, 0.2)])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = v
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	am.surface_set_material(0, mat)
+	_tracks_mm = MultiMesh.new()
+	_tracks_mm.transform_format = MultiMesh.TRANSFORM_3D
+	_tracks_mm.use_colors = true
+	_tracks_mm.mesh = am
+	var inst := MultiMeshInstance3D.new()
+	inst.multimesh = _tracks_mm
+	add_child(inst)
+
+
+static func track_colour(t: Dictionary) -> Color:
+	if t["f"] == "lizards":
+		return Color(0.95, 0.25, 0.18) if t["k"] == "warband" else Color(0.95, 0.55, 0.2)
+	if t["k"] in ["caravan", "traders", "villagers", "labourers", "refugees"]:
+		return Color(0.85, 0.8, 0.6)
+	var fac: Dictionary = Lore.FACTIONS.get(t["f"], {})
+	return fac.get("color", Color(0.8, 0.8, 0.85))
+
+
+func _update_tracks(delta: float) -> void:
+	_tracks_t -= delta
+	if _tracks_t > 0.0:
+		return
+	_tracks_t = 0.5
+	var list: Array = World.seen_tracks()
+	_tracks_mm.instance_count = list.size()
+	for i in list.size():
+		var t: Dictionary = list[i]
+		var at := _world_pos(Vector2(float(t["x"]), float(t["y"]))) + Vector3.UP * 0.5
+		var yaw := atan2(-float(t["dx"]), -float(t["dy"]))
+		_tracks_mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * 1.6), at))
+		var c := track_colour(t)
+		c.a = clampf(1.0 - (World.hours - float(t["h"])) / World.TRACK_LIFE, 0.0, 1.0) * 0.8 + 0.12
+		_tracks_mm.set_instance_color(i, c)
 
 
 ## A party on the map: a little group of figures and a banner.
@@ -959,6 +1016,7 @@ func _process(delta: float) -> void:
 			else:
 				World.go_to(Vector2i(int(p["x"]), int(p["y"])), {"kind": "party", "id": int(p["id"])})
 	_update_fog()
+	_update_tracks(delta)
 	_update_parties()
 	_update_player()
 	_update_light()
@@ -1007,7 +1065,7 @@ func _update_parties() -> void:
 	for p in World.parties:
 		var id := int(p["id"])
 		alive[id] = true
-		var seen := World.can_see(p)
+		var seen := World.can_see(p) or World.is_trailed(p)
 		if not seen and not _markers.has(id):
 			continue
 		var n := _marker_for(p)
@@ -1168,6 +1226,16 @@ func _tap(screen: Vector2) -> void:
 			World.go_to(Vector2i(int(p["x"]), int(p["y"])), {"kind": "party", "id": int(p["id"])})
 			_follow = true
 			return
+	# Tracks under your finger: read them (and march on to where you tapped).
+	var tk := {}
+	var tkd := 1.6
+	for t in World.seen_tracks():
+		var dd := tap.distance_to(Vector2(float(t["x"]), float(t["y"])))
+		if dd < tkd:
+			tkd = dd
+			tk = t
+	if not tk.is_empty():
+		_push_toast(World.read_track(tk))
 	for st in World.gen.settlements:
 		var reach: float = World.SETTLEMENT_REACH.get(st["kind"], 3.5) + 1.0
 		var seen: bool = bool(World.places[int(st["id"])]["known"]) or World.explored[Gen.idx(int(st["x"]), int(st["y"]))] == 1

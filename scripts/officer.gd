@@ -44,7 +44,7 @@ const SKILLS := {
 	"logistics": {"name": "Logistics", "attr": "wits",
 		"help": "Better packing: the wagon carries 5% more weight and space a level."},
 	"pathfinding": {"name": "Pathfinding", "attr": "fitness",
-		"help": "On the map: +3% march speed and +4% sight a level; scouts are 7% less likely to be lost."},
+		"help": "On the map: +3% march speed and +4% sight a level; you see tracks 2 cells further and read their numbers closer; scouts are 7% less likely to be lost."},
 	"trade": {"name": "Trade", "attr": "presence",
 		"help": "Settlements sell to you 4% cheaper and pay 5% more for loot, a level."},
 	"training": {"name": "Training", "attr": "presence",
