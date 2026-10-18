@@ -1125,6 +1125,8 @@ func party_name(p: Dictionary) -> String:
 	var cw := Econ.cargo_words(p.get("cargo", {}))
 	if cw != "":
 		base += Lang.t(", with %s") % cw
+	if int(p.get("raid_post", -1)) >= 0:
+		base += Lang.t(", making for your work party")
 	return "%s (%d)" % [base, int(p["size"])]
 
 
@@ -1235,6 +1237,39 @@ func recall_party(sid: int, post: Dictionary, runner: String, pace := 1.0) -> vo
 	_tell(Lang.t("%s runs to call the work party back.") % runner, {"x": pos.x, "y": pos.y})
 
 
+## Lizards making for one of your work parties (Company._posts_day): a
+## hunting party a few leagues off, heading for the site. Catch it first
+## and there's no raid.
+func raid_post(sid: int) -> void:
+	var r := resource(sid)
+	if r.is_empty():
+		return
+	var at := Vector2(r["x"], r["y"]) + Vector2.from_angle(randf() * TAU) * randf_range(9.0, 14.0)
+	at = Vector2(clampf(at.x, 2, Gen.SIZE - 3), clampf(at.y, 2, Gen.SIZE - 3))
+	var c := _nearest_open(Vector2i(int(at.x), int(at.y)))
+	# (from the nearest nest: that's where they'll take what they get)
+	var nest_id := -1
+	var nd := 99999.0
+	for st in gen.settlements:
+		if st["kind"] == "nest" and not nest_destroyed(int(st["id"])):
+			var d := Vector2(st["x"], st["y"]).distance_to(at)
+			if d < nd:
+				nd = d
+				nest_id = int(st["id"])
+	if nest_id < 0:
+		return
+	var p := _new_party("hunters", "lizards", randi_range(5, 9), {"x": c.x, "y": c.y, "id": nest_id})
+	p["raid_post"] = sid
+	p["path"] = _route(Vector2(p["x"], p["y"]), Vector2(r["x"], r["y"]) + Vector2(0.5, 0.5))
+
+
+func raid_coming(key: String) -> bool:
+	for p in parties:
+		if str(int(p.get("raid_post", -1))) == key:
+			return true
+	return false
+
+
 func _detachment_tick(p: Dictionary, dh: float) -> void:
 	var me := Vector2(float(p["x"]), float(p["y"]))
 	if me.distance_to(pos) < CONTACT * 1.5:
@@ -1279,6 +1314,17 @@ func _hostile(a: Dictionary, b: Dictionary) -> bool:
 func _next_errand(p: Dictionary, me: Vector2) -> void:
 	if p["kind"] == "labourers":
 		Econ.labourers_errand(p, me)
+		return
+	if int(p.get("raid_post", -1)) >= 0:
+		# At the work party they were making for.
+		var sid := int(p["raid_post"])
+		var r := resource(sid)
+		p.erase("raid_post")
+		if not r.is_empty() and me.distance_to(Vector2(r["x"], r["y"])) < 3.0 and Company.active:
+			var news: String = Company.post_raided(sid)
+			if news != "":
+				_tell(news, {"x": r["x"], "y": r["y"]})
+		p["wait"] = 4.0
 		return
 	var home := settlement(int(p["home"])) if int(p["home"]) >= 0 else {}
 	if p["target"] >= 0 and me.distance_to(Vector2(settlement(int(p["target"]))["x"], settlement(int(p["target"]))["y"])) < 2.0:
@@ -1414,6 +1460,7 @@ func _move_party(p: Dictionary, dh: float) -> void:
 ## enemy) in it, waits for you: join it (map.gd) or let it go. Returns true
 ## when it's asking.
 const JOIN_RANGE := 5.0
+const CIVILIANS := ["labourers", "villagers", "caravan", "traders", "detachment", "refugees"]
 
 
 func _fights() -> bool:
@@ -1457,6 +1504,12 @@ func _offer_join(a: Dictionary, b: Dictionary) -> bool:
 	var cands: Array = []
 	for p in [a, b]:
 		if p["kind"] in ["patrol", "army"] and not hostile_to_us(p):
+			cands.append(p)
+	# People on the road the lizards are falling on (labourers, villagers, a
+	# caravan, your own work party): you can go to their aid.
+	var other_of := {a: b, b: a}
+	for p in [a, b]:
+		if p["kind"] in CIVILIANS and other_of[p]["faction"] == "lizards":
 			cands.append(p)
 	if cands.is_empty():
 		return false
@@ -1732,6 +1785,15 @@ func _sieges_tick() -> void:
 			_tell(Lang.t("The siege of %s is broken!") % st["name"], st)
 			continue
 		pl["siege_days"] = int(pl["siege_days"]) + 1
+		# Nothing comes in: they eat their stores, and when the food's gone
+		# the end comes quicker.
+		var sto := Econ.stock(id)
+		sto["rations"] = maxf(0.0, float(sto.get("rations", 0.0)) - Econ.want(id, "rations") * 0.15)
+		sto["grain"] = maxf(0.0, float(sto.get("grain", 0.0)) - Econ.want(id, "grain") * 0.1)
+		if float(sto["rations"]) <= 0.0 and float(sto["grain"]) <= 0.0:
+			pl["siege_days"] = int(pl["siege_days"]) + 1
+			if int(pl["siege_days"]) == int(pl["siege_need"]) - 1:
+				_tell(Lang.t("%s is starving.") % st["name"], st)
 		if int(pl["siege_days"]) >= int(pl["siege_need"]):
 			_town_falls(st, p)
 
@@ -1746,6 +1808,10 @@ func _town_falls(st: Dictionary, p: Dictionary) -> void:
 		pl["native"] = was
 	pl["owner"] = to
 	pl.erase("siege_army")
+	# The sack: the victors take a third of what's left in the stores.
+	var sto := Econ.stock(id)
+	for g in sto:
+		sto[g] = float(sto[g]) * 0.66
 	p["wait"] = 24.0
 	p["target"] = -1
 	var l := lord_of(p)

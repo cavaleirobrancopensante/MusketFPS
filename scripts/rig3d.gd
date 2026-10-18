@@ -795,7 +795,7 @@ func _build_saber(id: String) -> void:
 	_part(scab, _box_mesh(Vector3(0.03, 0.058, 0.05)), GOLD, Vector3(0, 0, -0.04), Vector3.ZERO, true) # throat
 
 
-const SABER_SHEATH_DIR := Vector3(-0.1, -0.88, 0.46) # spine space
+const SABER_SHEATH_DIR := Vector3(-0.12, -0.72, 0.68) # spine space (slung well back, clear of the legs)
 const SABER_SHEATH_AT := Vector3(-0.25, 0.1, -0.02)
 
 

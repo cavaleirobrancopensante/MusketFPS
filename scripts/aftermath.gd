@@ -179,6 +179,8 @@ func _refresh() -> void:
 		t += Lang.t("You are its captain now. The men are shaken (morale %d).\n") % Company.company_morale()
 		t += Lang.t("Lizardmen slain on the field: [b]%d[/b]\n") % int(r["slain"])
 		t += _section("Fallen", r["fallen"], RED, Lang.t("None. Every man came back."))
+		t += _section(Lang.t("Labourers killed in the camp"), r.get("workers_killed", []), RED, "")
+		t += _section(Lang.t("Labourers who ran off in the night"), r.get("workers_ran", []), DIM, "")
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
 		t += _section(Lang.t("Levelled up (points to spend)"), r.get("levelled", []), GOLD, "")
 		var st: Dictionary = Company.stash
@@ -220,6 +222,8 @@ func _refresh() -> void:
 			if r["fallen"].size() > 0:
 				t += Lang.t("[color=#%s]The dead were left where they fell, and their muskets with them.[/color]\n") % _hex(RED)
 		t += _section("Fallen", r["fallen"], RED, Lang.t("None. Every man came back."))
+		t += _section(Lang.t("Labourers killed in the camp"), r.get("workers_killed", []), RED, "")
+		t += _section(Lang.t("Labourers who ran off in the night"), r.get("workers_ran", []), DIM, "")
 		t += _section("Wounded", r["wounded"], Color(1, 0.7, 0.4), "")
 		t += _section(Lang.t("At the wagon"), r.get("conduct", []), DIM, "")
 		t += _section("Promoted", r["promoted"], GOLD, "")

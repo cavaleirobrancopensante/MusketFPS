@@ -567,9 +567,10 @@ with the wagon's tools for the work: they leave the roll and work it every
 day (a tent and your flag mark the spot, with how many are there). Come
 back to COLLECT what they've made, or RECALL THEM. Hunters and fishers
 smoke what they bring in, so their stock is rations. They feed themselves,
-but they're still paid, and now and then lizards find them: two or more
-soldiers there drive them off, but a party of labourers alone loses a
-third of its people and half its stock. Leave some men at the lead and
+but they're still paid, and now and then lizards come for them: a hunting
+party is seen making for the site, and you can catch it on the way. If it
+gets there, two or more soldiers drive it off, but a party of labourers
+alone loses a third of its people and half its stock. Leave some men at the lead and
 some at the fishing, and march on with the rest.
 
 **Choosing who.** CHOOSE WHO lists everyone who can work, best at this
@@ -585,7 +586,12 @@ whole party marches back to wherever you are. On the road they can be
 caught by lizards.
 
 **Labourers.** HIRE LABOURERS in a village or town (12 crowns, then a
-crown a week; a few each week): **woodcutters, miners, hunters, fishers**
+crown a week; a few each week). They have the soldiers' attributes and
+their own morale: they eat a ration and drink a day's water (foul water
+can make them sick, and a sick man works at half pace), are glad of their
+pay and angry without it, and hungry, thirsty or sullen they go home. On
+the COMPANY screen tap one to see him, or let him go. When lizards get
+into the camp at night some may be killed or run off. Trades: **woodcutters, miners, hunters, fishers**
 (by what's round the place) and **farmhands**. They don't fight and never
 go into battle; they follow the wagon, eat a ration a day (unfed, they go
 home), and work half again as hard at their own trade's sites. Beating a
@@ -645,6 +651,22 @@ the nearest village. Each settlement keeps stores (`economy.gd`):
   with meat in it sends out bigger warbands. Beat a party and what it
   carried is on the loot pile; burn a nest and its hoard is yours. Lizards
   who beat a caravan or labourers take their goods home.
+
+- **Wars eat it too.** The nations' armies and patrols eat from their home
+  city's stores (an army that can't be fed loses men); a besieged town
+  eats its stores with nothing coming in, and falls sooner once the food is
+  gone; a town that falls is sacked of a third of what it had.
+- **On the road** you can TRADE with caravans, dwarf traders, villagers and
+  labourers: buy from what they're carrying (a little dearer than a market)
+  and sell them your raw goods. Your Trade skill raises what anyone pays
+  you.
+- **Lizards falling on people near you** (labourers, villagers, a caravan,
+  your own work party): you're asked whether to go to their aid. A
+  caravan's guards fight beside you; their nation remembers it. A lord may
+  hire you for exactly that (the duty: protect his people on the roads).
+- A nest's larder shows when you look at it: well fed (big warbands), a few
+  carcasses, or bare racks (hungry, smaller warbands). Kill its hunting
+  parties to starve it.
 
 A settlement's **market** follows its stores: what it has plenty of is
 cheap, what's scarce is dear, and what it hasn't got isn't for sale. Raw

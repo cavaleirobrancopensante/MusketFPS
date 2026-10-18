@@ -623,6 +623,7 @@ func _build_right() -> Control:
 
 
 var _runner_for := -1 # the work party whose runner you're choosing
+var _worker_open := -1 # the labourer whose details are showing
 
 
 func _fill_list() -> void:
@@ -658,9 +659,33 @@ func _fill_list() -> void:
 	if not Company.workers.is_empty():
 		_list.add_child(_label(Lang.t("LABOURERS  ·  %d") % Company.workers.size(), 18, GOLD))
 		for w in Company.workers:
-			var l := _label("%s  ·  %s%s" % [w["name"], Company.trade_name(String(w["trade"])).to_lower(),
-				Lang.t("  ·  hungry") if int(w.get("hunger", 0)) > 0 else ""], 15, DIM)
-			_list.add_child(l)
+			Company.ensure_worker(w)
+			var wid := int(w["id"])
+			var state := Lang.t("  ·  away scouting") if w.get("away", false) else (Lang.t("  ·  sick") if int(w["sick"]) > 0 else (Lang.t("  ·  hungry") if int(w["hunger"]) > 0 else ""))
+			var wb := _button("%s  ·  %s%s\n%s %d" % [w["name"], Company.trade_name(String(w["trade"])).to_lower(), state,
+				Lang.t("morale"), int(w["morale"])], 15, func():
+				_worker_open = -1 if _worker_open == wid else wid
+				_fill_list())
+			wb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			wb.custom_minimum_size = Vector2(0, 54)
+			if int(w["morale"]) < 25 or int(w["hunger"]) > 0:
+				wb.add_theme_color_override("font_color", RED)
+			_list.add_child(wb)
+			if _worker_open == wid:
+				var bits: Array = []
+				for k in Men.ATTRS:
+					bits.append("%s %d" % [Lang.t(Men.ATTR_NAMES[k]), Men.attr(w, k)])
+				var info := _label("  ·  ".join(bits) + "\n" + Lang.t("Best at: %s. Scouting ★%d. Doesn't fight; eats a ration and drinks a day's water; paid %d crown a week.") % [
+					", ".join(Company.TRADES.get(String(w["trade"]), []).map(func(k2): return Lang.t(String(World.RESOURCES[k2]["name"])).to_lower())) if not Company.TRADES.get(String(w["trade"]), []).is_empty() else Lang.t("any work"),
+					int(round(Company.aptitude(w, "scout"))), Company.LABOURER_WAGE], 14, DIM)
+				info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				_list.add_child(info)
+				var db := _button(Lang.t("LET %s GO HOME") % String(w["name"]).split(" ")[0].to_upper(), 15, func():
+					Company.dismiss_worker(w)
+					_worker_open = -1
+					_fill_list())
+				db.disabled = w.get("away", false)
+				_list.add_child(db)
 	if not Company.posts.is_empty():
 		_list.add_child(_label(Lang.t("WORK PARTIES"), 18, GOLD))
 		for key in Company.posts:

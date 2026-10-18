@@ -1351,7 +1351,46 @@ func _on_talk() -> void:
 	else:
 		_log(Lang.t("[color=#%s]%s knows you.[/color]") % [DIM.to_html(false), _nm(p).capitalize()])
 	_conv.visible = true
+	_voice({}, 0.0, -6.0)
+	_voice(p, 1.1)
 	_fill_conv()
+
+
+## Voices: you, and whoever you're talking to (sound_factory.gd's talk):
+## each person their own, women higher, dwarves deeper.
+var _voices := {}
+
+
+func _voice(p: Dictionary, delay := 0.0, db := -4.0) -> void:
+	if _voices.is_empty():
+		var all := preload("res://scripts/sound_factory.gd").cached()
+		for k in ["talk1", "talk2", "talk3", "talk4"]:
+			_voices[k] = all[k]
+	var pitch := 1.0
+	var key := "talk1"
+	if p.is_empty():
+		key = "talk3" # (you)
+		pitch = 0.95
+	else:
+		var h: int = absi(hash(String(p.get("name", "")) + String(p.get("family", ""))))
+		key = "talk%d" % (1 + h % 4)
+		pitch = (1.28 if String(p.get("sex", "m")) == "f" else 0.92) + float(h % 13) / 100.0
+		if String(p.get("faction", "")) == "dwarves":
+			pitch *= 0.84
+		if int(p.get("age", 30)) > 55:
+			pitch *= 0.95
+	var go := func():
+		var a := AudioStreamPlayer.new()
+		a.stream = _voices[key]
+		a.pitch_scale = pitch
+		a.volume_db = db
+		add_child(a)
+		a.finished.connect(a.queue_free)
+		a.play()
+	if delay > 0.0:
+		get_tree().create_timer(delay).timeout.connect(go)
+	else:
+		go.call()
 
 
 func _nm(p: Dictionary) -> String:
@@ -1416,8 +1455,11 @@ func _on_action(a: String) -> void:
 	_patience -= 1
 	var t := "[color=#%s]%s[/color]\n%s" % [DIM.to_html(false), r["you"], r["see"]]
 	var said := Tongue.render(lang, r["say"])
+	if words:
+		_voice({}, 0.0, -6.0) # (you, trying the words)
 	if said != "":
 		t += "\n" + said
+		_voice(p, 0.9 if words else 0.2)
 	if String(r["note"]) != "":
 		t += "\n[color=#%s]%s[/color]" % [GOLD.to_html(false) if not String(r["note"]) == Lang.t("They didn't understand you.") else RED.to_html(false), r["note"]]
 	var learned: Array = r["learned"]

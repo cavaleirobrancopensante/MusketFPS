@@ -12,6 +12,7 @@ extends Node3D
 ##            you can't see now (the fog texture: one texel per cell)
 ##   trees    one MultiMesh per chunk; settlements: one MultiMesh of boxes
 ##   parties  small figures with banners, shown only while in sight
+const Econ := preload("res://scripts/economy.gd")
 const UI := preload("res://scripts/ui.gd")
 
 const Gen := preload("res://scripts/world_gen.gd")
@@ -1455,6 +1456,75 @@ func _fill_work() -> void:
 	row2.add_child(_button(Lang.t("CRAFT"), func(): _close_work(); _open_craft()))
 
 
+# ---------------------------------------------------------------- trading on the road
+
+var _trade_panel: PanelContainer
+var _trade_box: VBoxContainer
+var _trade_with := {}
+
+
+## A caravan, traders or villagers met on the road: buy from what they
+## carry, sell them your raw goods (economy.gd).
+func _open_party_trade(p: Dictionary) -> void:
+	_trade_with = p
+	if _trade_panel == null:
+		_trade_panel = _panel(Color(UI.WOOL, 0.98))
+		_trade_panel.custom_minimum_size = Vector2(760, 0)
+		_popup.get_parent().add_child(_trade_panel)
+		var sc := UI.scroll()
+		sc.custom_minimum_size = Vector2(740, 520)
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_trade_panel.add_child(sc)
+		_trade_box = VBoxContainer.new()
+		_trade_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_trade_box.add_theme_constant_override("separation", 8)
+		sc.add_child(_trade_box)
+	World.stop()
+	_fill_party_trade()
+	_trade_panel.visible = true
+	_center(_trade_panel)
+
+
+func _fill_party_trade() -> void:
+	var p := _trade_with
+	for c in _trade_box.get_children():
+		_trade_box.remove_child(c)
+		c.queue_free()
+	var gold := Color(0.95, 0.8, 0.45)
+	var top := HBoxContainer.new()
+	_trade_box.add_child(top)
+	var t := _label(World.party_name(p).split(" (")[0].to_upper(), 24, gold)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	top.add_child(t)
+	top.add_child(_button(Lang.t("DONE"), func(): _trade_panel.visible = false))
+	_trade_box.add_child(_label(Lang.t("%d crowns") % Company.money, 17, Color.WHITE))
+	var offers := Econ.road_offers(p)
+	_trade_box.add_child(_label(Lang.t("THEY SELL") if not offers.is_empty() else Lang.t("They've nothing to sell."), 18, gold))
+	for o in offers:
+		var cr := Company.price(int(o[2]))
+		var b := _button(Lang.t("%d %s  ·  %d cr   (they have %d)") % [int(o[1]), Econ.good_name(String(o[0])), cr, int(p["cargo"][o[0]])], func():
+			var why := Econ.buy_from_party(p, o)
+			_push_toast(why if why != "" else Lang.t("Bought."))
+			_fill_party_trade())
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.disabled = Company.money < cr
+		_trade_box.add_child(b)
+	var sells: Array = []
+	for g in Company.MATERIALS:
+		if Econ.road_sell_price(g) > 0 and int(Company.stores.get(g, 0)) >= Econ.LOT:
+			sells.append(g)
+	if not sells.is_empty():
+		_trade_box.add_child(_label(Lang.t("THEY'LL BUY"), 18, gold))
+		for g in sells:
+			var b2 := _button(Lang.t("Sell %d lb of %s  ·  %d cr   (have %d)") % [Econ.LOT, Econ.good_name(g), Econ.road_sell_price(g), int(Company.stores.get(g, 0))], func():
+				var got := Econ.sell_to_party(p, g)
+				_push_toast(Lang.t("Sold for %d crowns.") % got)
+				_fill_party_trade())
+			b2.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			_trade_box.add_child(b2)
+
+
 func _got_text(got: Dictionary) -> String:
 	var bits: Array = []
 	for k in got:
@@ -1676,6 +1746,14 @@ func _visit_nest(st: Dictionary) -> void:
 	var days := int(n["siege_days"])
 	if days > 0:
 		text += Lang.t("\n\nDay %d of the siege. They're hungry, and they're fewer.") % days
+	# Their larder (economy.gd): fed, they send out bigger warbands; their
+	# hunting parties feed it.
+	var meat := Econ.have(id, "meat")
+	text += "\n\n" + (Lang.t("Carcasses hang on racks between the mounds: they're well fed, and their warbands will be big.") if meat >= 40 \
+		else (Lang.t("A few carcasses on the racks. Kill their hunting parties and they'll go hungry.") if meat >= 8 \
+		else Lang.t("The racks are bare: they're hungry, and their warbands are smaller for it.")))
+	if Econ.have(id, "plunder") > 0:
+		text += Lang.t(" There's plunder piled by the mounds (%d crowns' worth or so): it's yours if you burn the place.") % Econ.have(id, "plunder")
 	if id == World.gen.stash_nest and not Company.stash.is_empty():
 		text += Lang.t("\n\n[color=#f0c060]Through the stakes you can see crates with the %s's mark, the ship's guns, powder kegs. Your stores are here.[/color]") % Lore.SHIP
 	var fit := Company.fit_men().size()
@@ -1764,7 +1842,7 @@ func _meet(p: Dictionary) -> void:
 	var text := ""
 	match String(p["kind"]):
 		"caravan":
-			text = Lang.t("Merchants with mules and carts. They'll trade once you have something they want.")
+			text = Lang.t("Merchants with mules and carts, on the road between the towns.")
 		"patrol":
 			text = Lang.t("Soldiers of %s. They watch you closely: strangers in red coats, armed with something they've never seen.") % Lore.FACTIONS[p["faction"]]["name"]
 		"villagers":
@@ -1791,6 +1869,10 @@ func _meet(p: Dictionary) -> void:
 				text = Lang.t("An army of %s on the march.") % Lore.FACTIONS[p["faction"]]["name"]
 	var buttons: Array = []
 	var kind := String(p["kind"])
+	if kind in ["caravan", "traders", "villagers", "labourers"]:
+		var cw := Econ.cargo_words(p.get("cargo", {}))
+		text += ("\n\n" + Lang.t("They're carrying %s.") % cw) if cw != "" else ("\n\n" + Lang.t("They're carrying nothing to speak of."))
+		buttons.append([Lang.t("TRADE"), func(): _popup_close(); _open_party_trade(p)])
 	if kind == "deserters":
 		text = Lang.t("Ragged men in odd bits of %s kit, who ran from the war and live off the road now. Nobody would miss them.") % Lore.FACTIONS[p["faction"]]["short"]
 	if kind in ["patrol", "caravan", "deserters", "army"]:
@@ -2195,6 +2277,9 @@ func _show_lords() -> void:
 ## nation's men): join them, and their regiments fight beside yours (theirs
 ## to lead until you give them an order), or stay out of it.
 func _on_fight_near(friend: Dictionary, foe: Dictionary) -> void:
+	if friend["kind"] in World.CIVILIANS:
+		_civilians_attacked(friend, foe)
+		return
 	var ff := String(friend["faction"])
 	var fname: String = Lore.FACTIONS[ff]["name"]
 	var foe_humans: bool = foe["faction"] != "lizards"
@@ -2218,6 +2303,39 @@ func _on_fight_near(friend: Dictionary, foe: Dictionary) -> void:
 	_popup_open(Lang.t("A fight ahead!"), text, buttons)
 	if _test:
 		print("  MAPTEST: a fight near: %s against %s (stayed out)" % [World.party_name(friend), World.party_name(foe)])
+		_popup_close()
+
+
+## Lizards falling on people on the road near you: go to their aid (a
+## battle against the lizards, the caravan's guards on your side), or not.
+func _civilians_attacked(friend: Dictionary, foe: Dictionary) -> void:
+	var ours: bool = friend["kind"] == "detachment"
+	var who := Lang.t("your own work party") if ours else World.party_name(friend).split(" (")[0]
+	var n_e := "%d" % int(foe["size"]) if World.intel_level(foe) >= 2 else World.rough_count(foe)
+	var text := Lang.t("Ahead of you %s lizards are falling on %s!") % [n_e, who]
+	if ours:
+		text += Lang.t("\n\nThey can't hold them off alone.")
+	else:
+		var ff := String(friend["faction"])
+		text += Lang.t("\n\nGo to their aid and %s will remember it.") % Lore.FACTIONS.get(ff, {"short": "?"})["short"]
+		if not Company.contract.is_empty() and String(Company.contract["duty"]) == "protect" and String(Company.contract["faction"]) == ff:
+			text += Lang.t("\n[color=#c9a14a]It's what %s pays you for.[/color]") % Company.contract["lord_name"]
+	var buttons: Array = [[Lang.t("TO THEIR AID!"), func():
+			_popup_close()
+			_set_battle(foe, false)
+			Company.next_battle["helped"] = {"kind": String(friend["kind"]), "faction": String(friend["faction"]), "party": int(friend["id"])}
+			if friend["kind"] in ["caravan", "traders"]:
+				# The caravan's guards fight beside you.
+				var guards := World.party_comp(friend)
+				if not guards.is_empty():
+					Company.next_battle["allies"] = {"faction": String(friend["faction"]), "comp": guards, "party": int(friend["id"]),
+						"size": int(friend["size"]), "lord": -1}
+			_go(BATTLE)],
+		[Lang.t("LEAVE THEM"), _popup_close]]
+	_scene("villagers" if not friend["kind"] in ["caravan", "traders"] else "caravan", {"faction": friend.get("faction", "aurest")})
+	_popup_open(Lang.t("They need help!"), text, buttons)
+	if _test:
+		print("  MAPTEST: lizards on %s (left them)" % who)
 		_popup_close()
 
 
@@ -2435,6 +2553,15 @@ func _apply_battle_result() -> void:
 				_push_toast(Lang.t("%s will remember you stood with him.") % World.lord_short(al_lord))
 			else:
 				_push_toast(Lang.t("%s will remember you stood with them.") % Lore.FACTIONS[al["faction"]]["name"])
+	var helped: Dictionary = nb.get("helped", {})
+	if not helped.is_empty() and bool(r.get("won", false)):
+		var hf := String(helped["faction"])
+		if hf in ["aurest", "vell", "dwarves"]:
+			Company.change_standing(hf, 8)
+			var cp3 := Company.contract_progress("protect", hf)
+			if cp3 != "":
+				_push_toast(cp3)
+		_push_toast(Lang.t("You saved them. They won't forget it."))
 	if bool(r.get("won", false)):
 		World.remove_party(id)
 		_push_toast(Lang.t("The warband is destroyed.") if String(nb.get("enemy_kind", "lizards")) == "lizards" else Lang.t("They're beaten: the survivors scatter."))

@@ -99,9 +99,23 @@ static func price_mult(sid: int, good: String) -> float:
 	return clampf(1.8 - 1.2 * h / w, 0.6, 1.8)
 
 
-## A day in every settlement: they make what they can and eat.
+## A day in every settlement: they make what they can and eat. The
+## nations' armies and patrols eat from their home's stores; an army that
+## can't be fed loses men to hunger and desertion.
 static func day() -> void:
 	var W = _w()
+	for p in W.parties:
+		if not p["kind"] in ["army", "patrol"] or int(p.get("home", -1)) < 0:
+			continue
+		var home := int(p["home"])
+		if W.settlement(home).get("faction", "") != p["faction"]:
+			continue # (its home has fallen: it lives off the land)
+		var need := float(p["size"]) * (0.12 if p["kind"] == "army" else 0.06)
+		var s0 := stock(home)
+		var got := minf(need, float(s0.get("rations", 0.0)))
+		s0["rations"] = float(s0.get("rations", 0.0)) - got
+		if got < need * 0.5 and int(p["size"]) > 6:
+			p["size"] = int(p["size"]) - maxi(1, int(p["size"]) / 20)
 	for st in W.gen.settlements:
 		var sid := int(st["id"])
 		var kind := String(st["kind"])
@@ -251,6 +265,8 @@ static func labourers_errand(p: Dictionary, me: Vector2) -> void:
 ## A nest feeds its warriors: the meat in it makes the next warband bigger.
 static func nest_feed(sid: int) -> int:
 	var m := float(stock(sid).get("meat", 0.0))
+	if m < 8.0:
+		return -3 # (hungry: fewer go out)
 	var extra := mini(8, int(m / 12.0))
 	add(sid, "meat", -extra * 12.0)
 	return extra
@@ -393,4 +409,66 @@ static func sell_price(sid: int, good: String) -> int:
 		return 0
 	var base := float(RAW_PRICE.get(good, 8 if good == "lead" else 20))
 	var m := price_mult(sid, good)
-	return maxi(1, int(round(base * m * 0.7)))
+	return maxi(1, int(round(base * m * 0.7 * Company.Officer.sell_mult()))) # (your Trade gets you more)
+
+
+# ---------------------------------------------------------------- trading on the road
+
+## What a party carrying goods will sell you: [good, lot, crowns]. Traders
+## on the road ask a little more than a market (they've carried it).
+const ROAD_LOT := {"rations": 10, "lead": 5, "powder": 1, "arrows": 20, "tools": 1, "hides": 1}
+const ROAD_PRICE := {"rations": 6, "lead": 7, "powder": 26, "arrows": 4, "tools": 7, "hides": 4}
+
+
+static func road_offers(p: Dictionary) -> Array:
+	var out: Array = []
+	var c: Dictionary = p.get("cargo", {})
+	for g in c:
+		var lot: int = int(ROAD_LOT.get(g, LOT))
+		if float(c[g]) < lot or g == "plunder":
+			continue
+		var base: int = int(ROAD_PRICE.get(g, RAW_PRICE.get(g, 3)))
+		out.append([String(g), lot, int(round(base * 1.15))])
+	return out
+
+
+## Buy a lot from a party's cargo: into the wagon (a tool as one of the
+## tool items). Returns "" or why not.
+static func buy_from_party(p: Dictionary, offer: Array) -> String:
+	var g := String(offer[0])
+	var n := int(offer[1])
+	var cr: int = Company.price(int(offer[2]))
+	if Company.money < cr:
+		return Lang.t("Not enough crowns.")
+	var id := g
+	if g == "tools":
+		id = TOOL_ITEMS.pick_random()
+	elif g == "hides":
+		id = "hide"
+	if Company.room_for(id) < n:
+		return Lang.t("The wagon is full.")
+	Company.money -= cr
+	Company.stow(id, n)
+	p["cargo"][g] = float(p["cargo"][g]) - n
+	Company.save()
+	return ""
+
+
+## What a party will pay for a lot of your raw goods (they trade them on).
+static func road_sell_price(good: String) -> int:
+	if not RAW_PRICE.has(good):
+		return 0
+	return maxi(1, int(round(RAW_PRICE[good] * 0.6 * Company.Officer.sell_mult())))
+
+
+static func sell_to_party(p: Dictionary, good: String) -> int:
+	var cr := road_sell_price(good)
+	if cr <= 0 or int(Company.stores.get(good, 0)) < LOT:
+		return 0
+	Company.stores[good] = int(Company.stores[good]) - LOT
+	var c: Dictionary = p.get("cargo", {})
+	c[good] = float(c.get(good, 0.0)) + LOT
+	p["cargo"] = c
+	Company.money += cr
+	Company.save()
+	return cr

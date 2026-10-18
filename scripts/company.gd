@@ -774,6 +774,26 @@ func apply_battle(result: Dictionary) -> void:
 	# The wooden balls went the way of the rest, in their share.
 	if int(stores.get("wood_shot", 0)) > 0 and ammo_before > 0:
 		stores["wood_shot"] = int(round(int(stores["wood_shot"]) * float(_ammo_total()) / float(ammo_before)))
+	# The labourers in camp when it's attacked: they don't fight, but they're there.
+	if bool(next_battle.get("camp", false)) and not workers.is_empty() and not was_prologue:
+		var lost_w: Array = []
+		var ran: Array = []
+		for w in workers.duplicate():
+			if w.get("away", false):
+				continue
+			var r := randf()
+			if r < (0.06 if won else 0.3):
+				workers.erase(w)
+				lost_w.append(String(w["name"]))
+			elif not won and r < 0.5:
+				workers.erase(w)
+				ran.append(String(w["name"]))
+			else:
+				w["morale"] = clampi(int(w.get("morale", 55)) + (5 if won else -15), 0, 100)
+		if not lost_w.is_empty():
+			summary["workers_killed"] = lost_w
+		if not ran.is_empty():
+			summary["workers_ran"] = ran
 	money = maxi(0, money + int(summary["pay"]))
 	last_result = summary
 	results_unseen = true
@@ -1432,6 +1452,8 @@ static func ensure_worker(w: Dictionary) -> void:
 	for k in ["thirst", "hunger", "sick"]:
 		if not w.has(k):
 			w[k] = 0
+	if not w.has("morale"):
+		w["morale"] = 55
 
 
 ## How good someone is at a task, for ranking who to send: "scout",
@@ -1509,6 +1531,8 @@ static func work_force(kind: String, people: Array, tools: Dictionary) -> Dictio
 			e *= TRADE_BONUS
 		if w.has("attrs"):
 			e *= clampf(1.0 + 0.05 * (Men.attr(w, "strength") - 5), 0.7, 1.5) # (a strong back)
+		if int(w.get("sick", 0)) > 0:
+			e *= 0.5
 		eff += e
 	return {"eff": eff, "used": used, "bare": bare}
 
@@ -1713,46 +1737,93 @@ func _posts_day() -> PackedStringArray:
 		var broke := wear_tools(wf["used"], 1.0, post)
 		if not broke.is_empty():
 			notes.append(Lang.t("At the %s: %s") % [site_name, broke_note(broke)])
-		if randf() < POST_RAID:
-			if post["men"].size() >= 2:
-				var m: Dictionary = post["men"].pick_random()
-				m["wounded_days"] = int(m["wounded_days"]) + randi_range(2, 5)
-				notes.append(Lang.t("Lizards came at the party at the %s; the soldiers there drove them off. %s was hurt.") % [site_name, m["name"]])
-			else:
-				var taken: Array = []
-				var pool: Array = post["workers"] + post["men"]
-				pool.shuffle()
-				for w in pool.slice(0, maxi(1, pool.size() / 3)):
-					taken.append(w["name"])
-					post["workers"].erase(w)
-					post["men"].erase(w)
-				for k in st:
-					st[k] = float(st[k]) * 0.5
-				notes.append(Lang.t("Lizards fell on the work party at the %s and carried off %s. Leave soldiers with them.") % [site_name, ", ".join(taken)])
-				if post_size(post) == 0:
-					posts.erase(key) # (and the tools with them)
+		if randf() < POST_RAID and World.is_ready and not World.raid_coming(key):
+			# A band of lizards has seen them and makes for the site: you may
+			# catch it on the way (world.gd raid_post), or it gets there.
+			World.raid_post(int(key))
+			notes.append(Lang.t("Lizards have been seen making for your work party at the %s!") % site_name)
 	return notes
 
 
-## The labourers eat from the wagon. Unfed for two days, they start to go home.
+## Lizards reach a work party (World.raid_post): soldiers there drive them
+## off; labourers alone lose people and half of what they'd made. Returns
+## the news.
+func post_raided(sid: int) -> String:
+	var key := str(sid)
+	var post: Dictionary = posts.get(key, {})
+	if post.is_empty():
+		return ""
+	var spec: Dictionary = World.RESOURCES.get(String(post.get("kind", "")), {})
+	var site_name := Lang.t(String(spec.get("name", "site"))).to_lower()
+	if post["men"].size() >= 2:
+		var m: Dictionary = post["men"].pick_random()
+		m["wounded_days"] = int(m["wounded_days"]) + randi_range(2, 5)
+		save()
+		return Lang.t("Lizards came at the party at the %s; the soldiers there drove them off. %s was hurt.") % [site_name, m["name"]]
+	var taken: Array = []
+	var pool: Array = post["workers"] + post["men"]
+	pool.shuffle()
+	for w in pool.slice(0, maxi(1, pool.size() / 3)):
+		taken.append(w["name"])
+		post["workers"].erase(w)
+		post["men"].erase(w)
+	var st: Dictionary = post["stock"]
+	for k in st:
+		st[k] = float(st[k]) * 0.5
+	if post_size(post) == 0:
+		posts.erase(key) # (and the tools with them)
+	save()
+	return Lang.t("Lizards fell on the work party at the %s and carried off %s. Leave soldiers with them.") % [site_name, ", ".join(taken)]
+
+
+## The labourers' day: they eat a ration and drink from the barrels (foul
+## water can make them sick, unless there's grog), and their morale rises
+## and falls like the men's. Hungry, thirsty or sullen, they go home.
 func _workers_day() -> PackedStringArray:
 	var notes: PackedStringArray = []
 	if workers.is_empty():
 		return notes
 	var left: Array = []
+	var sick_n := 0
 	for w in workers:
-		if int(stores.get("rations", 0)) > 0:
+		ensure_worker(w)
+		if w.get("away", false):
+			continue # (out scouting: they took their own)
+		var fed := int(stores.get("rations", 0)) > 0
+		if fed:
 			stores["rations"] = int(stores["rations"]) - 1
-			w["hunger"] = 0
-		else:
-			w["hunger"] = int(w.get("hunger", 0)) + 1
-			if int(w["hunger"]) >= 2 and randf() < 0.5:
+		var drank := int(stores.get("water", 0)) > 0
+		if drank:
+			stores["water"] = int(stores["water"]) - 1
+			if bool(stores.get("foul", false)):
+				if bool(stores.get("grog", true)) and int(stores.get("rum", 0)) > 0:
+					stores["rum"] = int(stores["rum"]) - 1
+				elif int(w["sick"]) <= 0 and randf() < SICK_CHANCE:
+					w["sick"] = randi_range(3, 6)
+					sick_n += 1
+		w["hunger"] = 0 if fed else int(w["hunger"]) + 1
+		w["thirst"] = 0 if drank else int(w["thirst"]) + 1
+		if int(w["sick"]) > 0:
+			w["sick"] = int(w["sick"]) - 1
+		var mo := int(w.get("morale", 55))
+		mo += (2 if fed and drank and mo < 65 else 0) - (8 if not fed else 0) - (12 if not drank else 0) - (3 if int(w["sick"]) > 0 else 0)
+		w["morale"] = clampi(mo, 0, 100)
+		if int(w["thirst"]) >= 2 or int(w["hunger"]) >= 2 or int(w["morale"]) < 15:
+			if randf() < 0.5:
 				left.append(w)
 	for w in left:
 		workers.erase(w)
+	if sick_n > 0:
+		notes.append(Lang.t("%d labourers fell sick from foul water.") % sick_n)
 	if not left.is_empty():
-		notes.append(Lang.t("Unfed, %d labourers went home.") % left.size())
+		notes.append(Lang.t("%d labourers gave up on you and went home.") % left.size())
 	return notes
+
+
+## Let a labourer go (he goes home).
+func dismiss_worker(w: Dictionary) -> void:
+	workers.erase(w)
+	save()
 
 
 ## Two men to haul the wagon if nobody has been given the job: the two
@@ -2225,13 +2296,14 @@ const CONTRACT_DAYS := 21
 const DUTIES := {
 	"warbands": ["Hunt down the lizard warbands that raid his lands", 2, "lizard bands destroyed"],
 	"enemy": ["Beat the enemy's men in the field (a patrol or an army)", 1, "enemy forces beaten"],
+	"protect": ["Protect his people on the roads: save caravans and labourers from the lizards", 2, "of his people saved"],
 }
 
 
 ## What a lord would offer you (the terms; nothing is signed yet).
 func contract_terms(lord_id: int, faction: String, lord_name: String) -> Dictionary:
 	var pay := 20 + 3 * fit_men().size() + 10 * guns
-	var duty: String = ["warbands", "enemy"].pick_random()
+	var duty: String = ["warbands", "enemy", "protect"].pick_random()
 	return {"lord": lord_id, "faction": faction, "lord_name": lord_name, "from": day, "until": day + CONTRACT_DAYS,
 		"pay": pay, "duty": duty, "need": int(DUTIES[duty][1]), "done": 0, "paid_day": day}
 
@@ -2252,6 +2324,8 @@ func contract_progress(kind: String, faction: String) -> String:
 			counts = faction == "lizards" and kind in ["warband", "hunters", "nest"]
 		"enemy":
 			counts = faction == String(AT_WAR.get(String(contract["faction"]), "")) and kind in ["patrol", "army"]
+		"protect":
+			counts = kind == "protect" and faction == String(contract["faction"])
 	if not counts or int(contract["done"]) >= int(contract["need"]):
 		return ""
 	contract["done"] = int(contract["done"]) + 1
