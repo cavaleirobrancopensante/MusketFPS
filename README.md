@@ -40,8 +40,11 @@ each language still lacks.
   Hard with one save that keeps itself: leave a battle half fought and,
   when you come back, it counts as lost.
 - **What kind of officer you are**, each with its own skills, kit, men and
-  first battle (`officer.gd` BRANCHES):
-  - *Officer of the Line*: +4 musketeers, Marksmanship +3, Leadership +1.
+  first battle (`officer.gd` BRANCHES). Every officer leads two units: a
+  company of musketeers and his own kind (the line officer's second unit is
+  another company of muskets; in every battle his muskets stand as two
+  companies):
+  - *Officer of the Line*: two companies of musketeers (+4 men), Marksmanship +3, Leadership +1.
   - *Officer of Pikes*: +6 pikemen and a pike of your own (THRUST reaches
     furthest; BLOCK braces it, so whatever runs at you lands on the point),
     Bladework +3, Leadership +1.
@@ -116,24 +119,24 @@ volleys.
 
 The battle is the tutorial: each beat shows a **HOW TO** box for the
 controls it needs (moving and looking, firing and aiming, the bayonet and
-blocking, grenades, going to the Major, the orders and the command view).
+blocking, grenades, the orders and the command view). No markers or
+arrows: the story moves on by itself, in short cutscenes (`story_scene.gd`).
 
 1. **The Major's battle:** two waves out of the forest.
-2. **The javelin:** in the second wave it brings the Major down. Go to him
-   (follow the gold marker): with his last words he gives you the regiment.
+2. **The javelin:** in the second wave it brings the Major down. A
+   cutscene: the sergeant's shout, you come through the smoke and kneel by
+   him in the sand, and with his last words he gives you the regiment.
 3. **Your command:** the command view opens, paused, with a short lesson
    (select a regiment by its card or on the field; tap the ground to march,
    drag along the ground to form a line, tap an enemy to attack). A third wave comes on,
    brutes in the centre and raptor riders on the right. Fight it from above
    or in the line, as you like.
 4. **The collapse:** after a while (sooner if the regiment bleeds) a horde
-   comes round the left end of the works, the left company breaks and the
-   guns are overrun.
-5. **The retreat:** lead what's left along the beach to **the cliff path**
-   (the red colour marks it) while the horde comes on behind. Broken
-   companies run for the path too.
+   comes round the left end of the works. A cutscene over the left flank:
+   the left company breaks, the horde pours over the earthworks and in
+   among the guns, and the battle ends there.
 
-Lose it, and a short cutscene follows the rout: the run along the sand
+Straight on into the retreat cutscene: the run along the sand
 with men turning to fire, a last volley at the foot of the path that turns
 the pursuit, the beach through the Major's glass (the lizards stripping the
 dead, and worse), the ammunition cart recovered from a gully, the horde

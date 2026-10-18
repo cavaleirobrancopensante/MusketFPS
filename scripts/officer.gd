@@ -64,7 +64,7 @@ const SKILL_ORDER := ["marksmanship", "bladework", "riding", "gunnery", "leaders
 ## that teaches it (field_prologue.gd).
 const BRANCHES := {
 	"line": {"name": "Officer of the Line", "short": "LINE INFANTRY",
-		"text": "A musket in your hands and a company in two ranks behind you. You start with more musketeers and a sharp eye: you shoot straighter and load faster. Your company's volleys are your weapon.",
+		"text": "A musket in your hands and two companies of musketeers in two ranks behind you. You start with more musketeers and a sharp eye: you shoot straighter and load faster. Your company's volleys are your weapon.",
 		"skills": {"marksmanship": 3, "leadership": 1}, "extra_men": 4, "extra_kind": "musket"},
 	"pike": {"name": "Officer of Pikes", "short": "PIKES",
 		"text": "A pike and the steady men who stand behind it. You start with a block of pikemen and fight with the pike yourself: long reach, and braced, nothing on legs or hooves gets past.",

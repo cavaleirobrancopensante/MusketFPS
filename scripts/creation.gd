@@ -431,10 +431,10 @@ func _refresh() -> void:
 		gives.append("%s +%d" % [Lang.t(Officer.SKILLS[s]["name"]), int(br["skills"][s])])
 	var kit := ""
 	match branch:
-		"line": kit = Lang.t("+%d musketeers") % int(br["extra_men"])
-		"pike": kit = Lang.t("+%d pikemen, and a pike of your own") % int(br["extra_men"])
-		"artillery": kit = Lang.t("a light gun and its crew")
-		"cavalry": kit = Lang.t("a horse, a lance, a sabre and a pistol, and a troop of %d dragoons and lancers") % int(br["extra_men"])
+		"line": kit = Lang.t("two companies of musketeers (+%d men)") % int(br["extra_men"])
+		"pike": kit = Lang.t("a company of musketeers and a block of pikes (+%d pikemen), and a pike of your own") % int(br["extra_men"])
+		"artillery": kit = Lang.t("a company of musketeers and a light gun with its crew")
+		"cavalry": kit = Lang.t("a company of musketeers, and a horse, a lance, a sabre and a pistol, and a troop of %d dragoons and lancers") % int(br["extra_men"])
 	_branch_text.text = Lang.t("[b][color=#%s]%s[/color][/b]\n%s\n\n[color=#%s]%s[/color] %s\n[color=#%s]%s[/color] %s") % [
 		GOLD.to_html(false), Lang.t(br["name"]), Lang.t(br["text"]),
 		DIM.to_html(false), Lang.t("Skills:"), ", ".join(gives), DIM.to_html(false), Lang.t("You bring:"), kit]

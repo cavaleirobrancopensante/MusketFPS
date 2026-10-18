@@ -415,7 +415,11 @@ func spawn_campaign() -> void:
 	for k in ["musket", "pike", "bow", "xbow", "dragoon", "lancer"]:
 		var list: Array = groups[k]
 		var first := true
-		for chunk in _chunks(list, 30):
+		# An officer of the line has two companies of muskets.
+		var each := 30
+		if k == "musket" and Company.Officer.branch() == "line" and list.size() >= 8:
+			each = mini(30, ceili(list.size() / 2.0))
+		for chunk in _chunks(list, each):
 			mine.append([k, k == lead and first, chunk.size(), chunk])
 			first = false
 	if mine.is_empty():

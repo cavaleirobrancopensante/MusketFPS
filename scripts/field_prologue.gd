@@ -10,16 +10,15 @@ extends Node
 ## and he hands you the regiment:
 ##
 ##   line          the Major's battle: two waves out of the forest
-##   captain_down  go to him (the gold marker)
+##   captain_down  a cutscene: you kneel by him, he gives you the regiment
+##                 and dies (story_scene.gd)
 ##   command       the regiment is yours: the command view opens, paused,
 ##                 with a lesson; a third wave comes, brutes and raptor
 ##                 riders with it. Fight it, from above or in the line.
 ##   collapse      after a while (or sooner if the regiment bleeds) a horde
 ##                 comes round the left end of the works, the left company
-##                 breaks and the guns are overrun
-##   retreat       lead what's left along the beach to the cliff path while
-##                 the horde comes on behind
-##   escaped       up the path: the battle ends, the campaign begins
+##                 breaks and the guns are overrun: a cutscene of it, and
+##                 the battle ends in the retreat (retreat.gd)
 ##
 ## The first beats teach what your kind of officer does (Company.officer
 ## "branch", chosen when the campaign began):
@@ -62,6 +61,8 @@ var _wave3_t := -1.0
 var branch := "line"
 var musket_reg = null # the company that gives the Major's volleys
 var pike_reg = null
+var horde: Array = [] # the regiments that come round the left end
+var second_reg = null # (line officer) your second company of musketeers
 var light_gun = null # (artillery) your galloper's battery
 var skirm_reg = null # (cavalry) the skirmishers you're sent after
 var troop_reg = null # (cavalry) your troop of dragoons and lancers
@@ -96,6 +97,14 @@ func spawn() -> void:
 		musket_reg.title = Lang.t("Your musketeers")
 		you = field._make_reg(0, "pike", maxi(1, pikes.size()), Vector3(9.0, 0, LINE_Z + 0.5), Vector3.FORWARD, true, pikes)
 		pike_reg = you
+	elif branch == "line" and men.size() >= 8:
+		# Two companies of muskets: yours in the centre, the second on its right.
+		var half := ceili(men.size() / 2.0)
+		you = field._make_reg(0, "musket", half, Vector3(-5.0, 0, LINE_Z), Vector3.FORWARD, true, men.slice(0, half))
+		musket_reg = you
+		second_reg = field._make_reg(0, "musket", men.size() - half, Vector3(8.0, 0, LINE_Z), Vector3.FORWARD, false, men.slice(half))
+		second_reg.title = Lang.t("Your second company")
+		second_reg.fire_at_will = false
 	else:
 		you = field._make_reg(0, "musket", maxi(1, men.size()), Vector3(0, 0, LINE_Z), Vector3.FORWARD, true, men)
 		musket_reg = you
@@ -153,7 +162,7 @@ func spawn() -> void:
 	battle._commanding = false
 	battle.story_phase = "line"
 	battle._all_men = []
-	for r in [you, musket_reg, troop_reg]:
+	for r in [you, musket_reg, second_reg, troop_reg]:
 		if r == null:
 			continue
 		for m in r.members:
@@ -231,10 +240,8 @@ func _process(delta: float) -> void:
 			if phase_t > COMMAND_TIME or (phase_t > 25.0 and bleeding):
 				_collapse()
 		"collapse":
-			if phase_t > 9.0:
-				_begin_retreat()
+			pass # (the cutscene ends the battle: after_collapse_scene)
 		"retreat":
-			battle.objective = {"label": Lang.t("THE CLIFF PATH"), "pos": RETREAT_POINT, "height": 5.4}
 			_pursuit_t -= delta
 			if _pursuit_t <= 0.0:
 				_pursuit_t = PURSUIT_EVERY
@@ -272,17 +279,19 @@ func _line(delta: float) -> void:
 			battle._throw_at_captain(close)
 	# The Major's fire discipline: a volley when most are loaded and they're
 	# close enough to hit.
-	var you = musket_reg
-	if you != null and not you.broken() and _volley_cd <= 0.0 and you.nearest_foe_reg != null and you.nearest_foe_d < 45.0:
-		var loaded := 0
-		for m in you.members:
-			if m.get("loaded") == true:
-				loaded += 1
-		if loaded >= ceili(you.members.size() * 0.6):
-			_volley_cd = 4.0
-			you.fire_target = you.nearest_foe_reg
-			you.order_volley()
-			battle.hud.show_message(Lang.t("Harrow: Present... FIRE!"), 1.2)
+	if _volley_cd <= 0.0:
+		for you in [musket_reg, second_reg]:
+			if you == null or you.broken() or you.nearest_foe_reg == null or you.nearest_foe_d >= 45.0:
+				continue
+			var loaded := 0
+			for m in you.members:
+				if m.get("loaded") == true:
+					loaded += 1
+			if loaded >= ceili(you.members.size() * 0.6):
+				_volley_cd = 4.0
+				you.fire_target = you.nearest_foe_reg
+				you.order_volley()
+				battle.hud.show_message(Lang.t("Harrow: Present... FIRE!"), 1.2)
 
 
 ## Cavalry: the Major sends you out after the skirmishers in the first wave,
@@ -299,8 +308,6 @@ func _sortie_tick(delta: float) -> void:
 					troop_reg.order_attack(skirm_reg)
 				battle.say(Lore.COMMANDER, Lang.t("Ensign! Their javelin men, out in front. Ride them down! Lance couched, at the gallop!"), 5.0)
 		"out":
-			if skirm_reg != null and not skirm_reg.gone() and not skirm_reg.broken():
-				battle.objective = {"label": Lang.t("THE SKIRMISHERS"), "pos": skirm_reg.centroid}
 			if skirm_reg == null or skirm_reg.gone() or skirm_reg.broken() or _sortie_t > 50.0:
 				sortie = "back"
 				_sortie_t = 0.0
@@ -308,10 +315,8 @@ func _sortie_tick(delta: float) -> void:
 					troop_reg.order_move(HORSE_POST + Vector3(-12.0, 0, 1.0), Vector3.FORWARD, true)
 				battle.say(Lore.COMMANDER, Lang.t("Well ridden! Now back behind the works, before their warriors catch you!"), 4.5)
 		"back":
-			battle.objective = {"label": Lang.t("BEHIND THE WORKS"), "pos": HORSE_POST}
 			if pl.global_position.distance_to(HORSE_POST) < 9.0 or _sortie_t > 35.0:
 				sortie = "done"
-				battle.objective = {}
 
 
 func _all_down() -> bool:
@@ -327,28 +332,27 @@ func captain_down() -> void:
 	battle.player._leave_gun()
 	if sortie in ["out", "back"]:
 		sortie = "done"
-	battle.hud.show_message(Lang.t("%s is down!") % Lore.COMMANDER_SHORT, 3.0)
-	battle.say(battle._sergeant_name(), Lang.t("The Major's hit! Ensign, to the Major!"), 4.0)
+	_heard = true
+	battle.objective = {}
+	battle._lines.clear()
+	battle._line_t = 0.0
+	if field.test_mode or not battle.player.alive:
+		after_command_scene()
+		return
+	# A cutscene: you kneel by him and he gives you the regiment (story_scene.gd).
+	if battle.player.mounted:
+		battle.player.toggle_mount()
+	preload("res://scripts/story_scene.gd").play(battle, self, "command")
+
+
+## story_scene.gd: he's spoken, and he's gone. The regiment is yours.
+func after_command_scene() -> void:
+	battle.objective = {}
+	_begin_command()
 
 
 func _captain_down_tick() -> void:
-	var c = battle.captain
-	if c == null or _heard:
-		return
-	battle.objective = {"label": Lang.t("THE MAJOR"), "pos": c.global_position}
-	var pl = battle.player
-	if pl.alive and pl.global_position.distance_to(c.global_position) < 2.6:
-		_heard = true
-		battle.objective = {}
-		battle._lines.clear()
-		battle._line_t = 0.0
-		battle.say(Lore.COMMANDER, Lang.t("Ensign... listen. You have the regiment. All of it: the companies, the guns."), 4.5)
-		battle.say(Lore.COMMANDER, Lang.t("Hold them on the works while you can. When it breaks, and it will, take them up the cliff path. Keep them alive."), 6.0, _begin_command)
-		battle.say("", Lang.t("%s is dead. You command the regiment.") % Lore.COMMANDER_SHORT, 3.5)
-	elif phase_t > 22.0:
-		_heard = true
-		battle.objective = {}
-		battle.say(battle._sergeant_name(), Lang.t("He's gone, sir! The Major's dead. You have the regiment. Orders, sir!"), 4.5, _begin_command)
+	pass # (the cutscene carries it: story_scene.gd)
 
 
 ## The regiment is yours: up into the command view, paused, with a lesson.
@@ -376,14 +380,37 @@ func _begin_command() -> void:
 ## breaks, the guns are overrun.
 func _collapse() -> void:
 	_set_phase("collapse")
-	_lizards("liz_warrior", 22, Vector3(-75, 0, -12))
-	_lizards("liz_warrior", 18, Vector3(-62, 0, -30))
-	_lizards("liz_raptor", 8, Vector3(-90, 0, 0))
+	horde = [
+		_lizards("liz_warrior", 22, Vector3(-60, 0, -4)),
+		_lizards("liz_warrior", 18, Vector3(-52, 0, -18)),
+		_lizards("liz_raptor", 8, Vector3(-70, 0, 4)),
+	]
+	for r in horde:
+		var tgt = left_reg if left_reg != null and not left_reg.gone() else (batteries[0] if not batteries.is_empty() else null)
+		if tgt != null:
+			r.order_attack(tgt)
 	if left_reg != null and not left_reg.broken():
 		left_reg.morale = 0.0
 		left_reg._set_state("routing")
-	field.alert(left_reg, Lang.t("The left is turned! They're over the earthworks!"), true)
-	battle.say(battle._sergeant_name(), Lang.t("Sir! The left's gone, they're round the end of the works!"), 4.0)
+	# A cutscene of it (story_scene.gd), and then the retreat (retreat.gd).
+	battle._lines.clear()
+	battle._line_t = 0.0
+	if field.ui != null and field.ui.active:
+		field.ui.close()
+	if field.test_mode or not battle.player.alive:
+		after_collapse_scene()
+		return
+	preload("res://scripts/story_scene.gd").play(battle, self, "collapse")
+
+
+## story_scene.gd: the line is gone. Off the beach: the retreat cutscene.
+func after_collapse_scene() -> void:
+	_set_phase("escaped")
+	battle.objective = {}
+	field.over = "won"
+	battle.victory = true
+	battle._end_battle(true)
+	battle.finish()
 
 
 ## Off the beach: every company that still stands for the cliff path, the
@@ -457,9 +484,5 @@ func _tutorial() -> void:
 		b._hint("melee", Lang.t("BAYONET: fix it for close work. OVER, LEFT, RIGHT, THRUST strike from that side: hold to charge, release to strike.  BLOCK when one rears up glowing."), 12.0)
 	if wave >= 2 and phase == "line":
 		b._hint("grenade", Lang.t("GRENADE: lob one into a crowd 10 to 20 m out. Mind your own men."), 8.0)
-	if phase == "captain_down":
-		b._hint("major", Lang.t("Go to the Major: follow the gold marker."), 8.0)
 	if phase == "command" and phase_t > 1.0:
 		b._hint("orders", Lang.t("Your company: FOLLOW, HOLD, CHARGE, AT WILL and VOLLEY!  The rest: COMMAND (top) for the view from above, or tap a card along the top and then the world."), 14.0)
-	if phase == "retreat":
-		b._hint("retreat", Lang.t("Lead them to the cliff path: your company follows you. The others are already running for it."), 10.0)
