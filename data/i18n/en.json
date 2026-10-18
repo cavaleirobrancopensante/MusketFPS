@@ -512,6 +512,7 @@
 "COMMAND  ·  ": "field_ui.gd",
 "COMPANY": "map.gd",
 "COMPANY & KIT": "aftermath.gd",
+"CONFIRM": "map.gd",
 "CONTINUE": "hud.gd",
 "COUCH": "hud.gd",
 "CRACK! The rod broke with the line.": "fishing.gd",

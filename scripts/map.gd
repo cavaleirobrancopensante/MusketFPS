@@ -1312,6 +1312,10 @@ func _fill_work() -> void:
 	var t := _label(Lang.t(String(spec["name"])).to_upper(), 28, gold)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(t)
+	# CONFIRM: set the chosen to work (the same as SET TO WORK below).
+	var confirm := _button(Lang.t("CONFIRM"), func(): pass)
+	confirm.add_theme_color_override("font_color", gold)
+	top.add_child(confirm)
 	top.add_child(_button(Lang.t("LEAVE"), _close_work))
 	var d := _label(Lang.t(String(spec["text"])), 16, dim)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1527,6 +1531,8 @@ func _fill_work() -> void:
 		_rest_until = World.hours + float(got["hours"]))
 	bw.disabled = wait > 0.0 or nsel <= 0 or float(est["eff"]) <= 0.0
 	row2.add_child(bw)
+	confirm.disabled = bw.disabled
+	confirm.pressed.connect(func(): bw.pressed.emit())
 	var bp := _button(Lang.t("LEAVE THEM HERE"), func():
 		var n := Company.post_party(id, chosen)
 		_work_sel = []
