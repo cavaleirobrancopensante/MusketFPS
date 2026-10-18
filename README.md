@@ -203,6 +203,11 @@ with every seed.
   Aurest in the west and the Vellish Marches in the east (at war), the
   dwarf holds of the Greyspine mountains in the north, and the lizard nests
   in the south-west swamps. One nest holds the ship's stores.
+- **Warband sizes swing** (`World.warband_size`): most are a few dozen,
+  but a nest may send a **raiding band** of 6 to 14 or, now and then, a
+  **war host** of 55 to 85, or even the whole nest on the march, 100 and
+  more. The big ones grow likelier over the first two weeks, and every
+  warband grows a little as the days go by. Fed nests send more.
 - **A living world:** nests send out warbands that roam and raid villages;
   cities send patrols that hunt them (and each other, across the war);
   caravans travel between towns and holds; villagers go to market; dwarf

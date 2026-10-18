@@ -245,7 +245,7 @@ func resolve(w, id: String, key: String) -> Dictionary:
 			return _done(Lang.t("You throw off %d rations and the wagon comes free.") % lost)
 		"spoor":
 			if key == "follow":
-				var p: Dictionary = w.spawn_near("warband", "lizards", randi_range(6, 12), 7.0)
+				var p: Dictionary = w.spawn_near("warband", "lizards", w.warband_size(w.day()), 7.0)
 				return _done(Lang.t("Through the reeds: a warband of %d, resting. They haven't seen you... yet.") % int(p["size"]))
 		"ambush":
 			var p2: Dictionary = w.spawn_near("hunters", "lizards", randi_range(5, 10), 0.6)

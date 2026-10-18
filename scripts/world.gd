@@ -1249,6 +1249,11 @@ func party_name(p: Dictionary) -> String:
 		base = Lang.t("%s labourers") % Lore.FACTIONS[p["faction"]]["short"]
 	elif p["kind"] == "detachment":
 		return "%s (%d)" % [base, int(p["size"])]
+	if p["kind"] == "warband":
+		if int(p["size"]) >= 55:
+			base = Lang.t("Lizard war host")
+		elif int(p["size"]) <= 12:
+			base = Lang.t("Lizard raiding band")
 	var cw := Econ.cargo_words(p.get("cargo", {}))
 	if cw != "":
 		base += Lang.t(", with %s") % cw
@@ -1274,6 +1279,30 @@ func _count(kind: String, faction := "", home := -1) -> int:
 	return n
 
 
+## How many in a warband a nest sends out. Most are a few dozen, but the
+## numbers swing: a small raiding band, now and then a great war host of
+## 80 or 100. (The big ones grow likelier over the first two weeks, while
+## your company finds its feet.)
+static func warband_size(d: int) -> int:
+	var big := clampf(0.25 + float(d) / 14.0, 0.25, 1.0)
+	var tiers := [
+		[0.24, 6, 14], # a raiding band
+		[0.40, 14, 32], # a warband
+		[0.22 * big, 32, 55], # a big one
+		[0.10 * big, 55, 85], # a war host
+		[0.04 * big, 85, 110], # the whole nest on the march
+	]
+	var total := 0.0
+	for t in tiers:
+		total += float(t[0])
+	var r := randf() * total
+	for t in tiers:
+		r -= float(t[0])
+		if r <= 0.0:
+			return randi_range(int(t[1]), int(t[2])) + mini(d / 6, 8)
+	return randi_range(14, 32)
+
+
 ## Every day (and at the start): nests send warbands, towns send caravans,
 ## lords send patrols, villages send people to market.
 func _spawn_tick(initial: bool) -> void:
@@ -1285,7 +1314,7 @@ func _spawn_tick(initial: bool) -> void:
 					continue # burned, or penned in by your siege
 				if _count("warband", "", id) < 2 and (initial or randf() < 0.5):
 					# (a nest with meat in it sends out more)
-					_new_party("warband", "lizards", 8 + randi_range(0, 6) + day() / 3 + Econ.nest_feed(id), st)
+					_new_party("warband", "lizards", maxi(5, warband_size(day()) + Econ.nest_feed(id)), st)
 				# Small hunting parties range far and wide.
 				for k in (2 if initial else 1):
 					if _count("hunters", "", id) < 2 and (initial or randf() < 0.6):
