@@ -1312,7 +1312,7 @@ func _fill_work() -> void:
 	var t := _label(Lang.t(String(spec["name"])).to_upper(), 28, gold)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(t)
-	# CONFIRM: set the chosen to work (the same as SET TO WORK below).
+	# CONFIRM: set the chosen to work (the same as CONFIRM below).
 	var confirm := _button(Lang.t("CONFIRM"), func(): pass)
 	confirm.add_theme_color_override("font_color", gold)
 	top.add_child(confirm)
@@ -1517,7 +1517,7 @@ func _fill_work() -> void:
 	row2.add_theme_constant_override("h_separation", 10)
 	row2.add_theme_constant_override("v_separation", 10)
 	_work_box.add_child(row2)
-	var bw := _button(Lang.t("SET TO WORK"), func():
+	var bw := _button(Lang.t("CONFIRM"), func():
 		var got := World.gather(id, chosen)
 		_close_work()
 		if got.is_empty():
@@ -1531,6 +1531,7 @@ func _fill_work() -> void:
 		_rest_until = World.hours + float(got["hours"]))
 	bw.disabled = wait > 0.0 or nsel <= 0 or float(est["eff"]) <= 0.0
 	row2.add_child(bw)
+	bw.add_theme_color_override("font_color", gold)
 	confirm.disabled = bw.disabled
 	confirm.pressed.connect(func(): bw.pressed.emit())
 	var bp := _button(Lang.t("LEAVE THEM HERE"), func():
@@ -1555,6 +1556,7 @@ func _fill_work() -> void:
 		hb.disabled = wait > 0.0 or (kind == "fish" and not has_rod)
 		row2.add_child(hb)
 	row2.add_child(_button(Lang.t("CRAFT"), func(): _close_work(); _open_craft()))
+	row2.add_child(_button(Lang.t("LEAVE"), _close_work))
 
 
 # ---------------------------------------------------------------- trading on the road

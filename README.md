@@ -554,7 +554,7 @@ places about a hundred, `world.gd` RESOURCES): **saltpetre caves** and
 **lead outcrops**, **hunting grounds** and **fishing water**, and **fresh
 springs**. Each has a small model on the map and its name once you're
 close. Tap one to march there and choose how many **hands** to put to it
-(labourers first, then fit soldiers): SET TO WORK takes some hours and fills
+(labourers first, then fit soldiers): CONFIRM (at the top or the bottom of the panel) sets them to work for some hours and fills
 the wagon; then it's worked out for days (a spring just fills the water
 cart with clean water).
 
@@ -625,7 +625,7 @@ powder, 4 hardwood → 40 cartridges). They're mixed in with the rest; each
 of your side's shots has the wooden share's chance of being one, which
 flies slower and hits for half.
 
-**Hunt or fish yourself** (optional; SET TO WORK still sends the men): at
+**Hunt or fish yourself** (optional; CONFIRM still sends the men): at
 a hunting ground or fishing water, HUNT/FISH YOURSELF takes you into the
 woods with your musket, or to a river with a rod (you need one in the
 wagon). Deer graze in small herds and bolt when you come close (closer
