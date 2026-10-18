@@ -655,6 +655,10 @@ func _fill_list() -> void:
 		b.custom_minimum_size = Vector2(0, 58)
 		b.pressed.connect(_select.bind(m))
 		_list.add_child(b)
+	if not Company.chaplain.is_empty():
+		var chl := _label(Lang.t("CHAPLAIN: %s  ·  Mass on Sundays and feasts; the men stay steadier") % String(Company.chaplain["name"]), 15, GOLD)
+		chl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_list.add_child(chl)
 	# Who works but doesn't fight, and who's away working.
 	if not Company.workers.is_empty():
 		_list.add_child(_label(Lang.t("LABOURERS  ·  %d") % Company.workers.size(), 18, GOLD))

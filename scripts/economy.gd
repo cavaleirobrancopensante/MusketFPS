@@ -244,7 +244,7 @@ static func labourers_errand(p: Dictionary, me: Vector2) -> void:
 				p["wait"] = randf_range(8.0, 14.0)
 				var spec: Dictionary = W.RESOURCES.get(String(r["kind"]), {})
 				var store := String(spec.get("store", "grain"))
-				var n := float(spec.get("daily", 0.4)) * float(p["size"]) * LABOUR_RATE * randf_range(0.7, 1.3)
+				var n: float = float(spec.get("daily", 0.4)) * float(p["size"]) * LABOUR_RATE * randf_range(0.7, 1.3) * W.season_yield(String(r["kind"]))
 				var c: Dictionary = p["cargo"]
 				c[store] = float(c.get(store, 0.0)) + n
 				for k in spec.get("also", {}):

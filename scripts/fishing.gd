@@ -400,6 +400,7 @@ func _snap() -> void:
 	var msg := Lang.t("SNAP! The line parted and the fish is gone. Let go when it runs.")
 	if Company.active and randf() < ROD_BREAK_SNAP:
 		Company.add_item("fishing_rod", -1)
+		Company.add_item("fishing_rod_broken", 1)
 		msg = Lang.t("CRACK! The rod broke with the line.") + " " + (Lang.t("You take another from the wagon.") if rods_left() > 0 else Lang.t("That was your last rod."))
 	_lose_fish(msg)
 	battle.play_sound("crack", player.global_position + Vector3.UP * 1.5, -8.0)
@@ -425,6 +426,7 @@ func _landed() -> void:
 	var msg := ""
 	if Company.active and randf() < ROD_BREAK_CATCH:
 		Company.add_item("fishing_rod", -1)
+		Company.add_item("fishing_rod_broken", 1)
 		msg = Lang.t("The rod cracked landing it.")
 	tension = 0.0
 	reeling = false

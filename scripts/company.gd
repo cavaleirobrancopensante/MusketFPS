@@ -149,6 +149,15 @@ const ITEMS := {
 		"desc": "For digging out saltpetre earth, banking the charcoal clamps, and every other kind of digging."},
 	"fishing_rod": {"name": "Fishing rod", "slot": "tool", "kg": 0.6, "space": 0.5, "value": 3,
 		"desc": "A whippy ash rod with a horsehair line, a cork float and a hook. Cast it, wait for the float to go under, strike, and reel in."},
+	# Broken tools: kept to be mended (CRAFT).
+	"axe_broken": {"name": "Broken axe", "slot": "broken", "kg": 2.0, "space": 0.4, "value": 1,
+		"desc": "The haft split. A new one and it's an axe again."},
+	"pickaxe_broken": {"name": "Broken pickaxe", "slot": "broken", "kg": 2.6, "space": 0.5, "value": 1,
+		"desc": "The point snapped off. A smith's fire and a little iron will mend it."},
+	"shovel_broken": {"name": "Broken shovel", "slot": "broken", "kg": 1.8, "space": 0.5, "value": 1,
+		"desc": "The blade came off the shaft."},
+	"fishing_rod_broken": {"name": "Broken fishing rod", "slot": "broken", "kg": 0.4, "space": 0.4, "value": 0,
+		"desc": "Snapped at the top joint. The line and hook are still good."},
 	# Goods: no use to us, but worth something to someone.
 	"lizard_shield": {"name": "Lizard shield", "slot": "goods", "kg": 4.0, "space": 1.2, "value": 6,
 		"desc": "Hide stretched over a wicker frame. Collectors in the towns pay for them."},
@@ -178,6 +187,20 @@ const RECIPES := {
 		"text": "Fresh meat and fish spoil in days; smoked over the fire they keep."},
 	"bread": {"name": "Bake bread", "needs": {"grain": 6, "wood": 1}, "makes": {"rations": 8}, "hours": 4,
 		"text": "Grain ground on a quern and baked in a field oven: hard bread that keeps for weeks."},
+	"forge_axe": {"name": "Forge a felling axe", "needs": {"ore": 2, "charcoal": 3, "wood": 2}, "makes": {"axe": 1}, "hours": 5,
+		"text": "A camp forge of stones and a bellows of hide: a crude head beaten out of smelted ore, an ash haft."},
+	"forge_pickaxe": {"name": "Forge a pickaxe", "needs": {"ore": 3, "charcoal": 3, "wood": 1}, "makes": {"pickaxe": 1}, "hours": 5,
+		"text": "Heavier work at the camp forge: a pick head, drawn to a point and quenched."},
+	"forge_shovel": {"name": "Forge a shovel", "needs": {"ore": 2, "charcoal": 2, "wood": 1}, "makes": {"shovel": 1}, "hours": 4,
+		"text": "A blade of beaten iron riveted to a shaft."},
+	"mend_axe": {"name": "Mend an axe", "needs": {"axe_broken": 1, "wood": 2}, "makes": {"axe": 1}, "hours": 1, "mend": true,
+		"text": "A new ash haft, wedged into the old head."},
+	"mend_pickaxe": {"name": "Mend a pickaxe", "needs": {"pickaxe_broken": 1, "charcoal": 1, "wood": 1}, "makes": {"pickaxe": 1}, "hours": 2, "mend": true,
+		"text": "The point heated and drawn out again at the fire."},
+	"mend_shovel": {"name": "Mend a shovel", "needs": {"shovel_broken": 1, "wood": 1}, "makes": {"shovel": 1}, "hours": 1, "mend": true,
+		"text": "A new shaft and two rivets."},
+	"mend_rod": {"name": "Mend a fishing rod", "needs": {"fishing_rod_broken": 1, "wood": 1}, "makes": {"fishing_rod": 1}, "hours": 1, "mend": true,
+		"text": "A new top joint spliced and whipped on."},
 	"fishing_rod": {"name": "Make a fishing rod", "needs": {"wood": 3}, "makes": {"fishing_rod": 1}, "hours": 2,
 		"text": "A straight length of ash, cut, dried and tapered, a line plaited from horsehair, and a hook filed from a nail."},
 }
@@ -315,6 +338,9 @@ var last_result := {} # what the aftermath screen shows
 var march_note := "" # what happened on the road, shown when the battle opens
 var results_unseen := false # the aftermath screen hasn't shown last_result yet
 var arrears := 0 # wages owed and not yet paid (see _pay_day)
+var chaplain := {} # a priest with the company: {"name", "since"} (or none)
+var stash_clues := 0 # how much you know of where the ship's stores are (world.gd stash_clue)
+var last_rumour := "" # word picked up in the settlement you're entering (town.gd shows it)
 var civilized := false # the company has found people (a village or a town)
 var pay_plea_pending := false # the men want a word about their pay (map.gd shows it)
 var pay_plea_done := false
@@ -411,6 +437,9 @@ func new_campaign(start: Dictionary = {}) -> void:
 	workers = []
 	posts = {}
 	arrears = 0
+	chaplain = {}
+	stash_clues = 0
+	last_rumour = ""
 	civilized = false
 	pay_plea_pending = false
 	pay_plea_done = false
@@ -602,7 +631,7 @@ func weekly_wages() -> int:
 		for m in posts[k]["men"]:
 			total += WAGES[int(m["rank"])]
 		total += posts[k]["workers"].size() * LABOURER_WAGE
-	return total + workers.size() * LABOURER_WAGE
+	return total + workers.size() * LABOURER_WAGE + (3 if not chaplain.is_empty() else 0)
 
 
 ## The warband you'll face next: grows as the company makes a name for itself.
@@ -742,7 +771,12 @@ func apply_battle(result: Dictionary) -> void:
 		var carried := {}
 		var pid := int(next_battle.get("party", -1))
 		if pid >= 0 and World.is_ready:
-			carried = World.party_by_id(pid).get("cargo", {})
+			var bp: Dictionary = World.party_by_id(pid)
+			carried = bp.get("cargo", {})
+			if int(bp.get("home", -1)) == World.gen.stash_nest and randf() < 0.6:
+				var clue: String = World.stash_clue("plunder")
+				if clue != "":
+					summary["clue"] = clue
 		var nid := int(result.get("assault", -1))
 		if nid >= 0 and World.is_ready:
 			carried = Econ.stock(nid).duplicate()
@@ -834,7 +868,7 @@ func _after_prologue(summary: Dictionary) -> void:
 	money = int(round(40 * Officer.diff("money"))) # the regiment's pay chest, what's left of it
 	# (and the sappers' and the boats' tools, thrown in with them)
 	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1, "axe": 2, "pickaxe": 2, "shovel": 3, "fishing_rod": 2},
-		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true,
+		"water": 30, "rations": 50, "ammo": 50, "rum": 4, "foul": false, "grog": true,
 		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6, "saltpetre": 0, "sulphur": 0, "charcoal": 0, "ore": 0, "meat": 0}
 	summary["pay"] = 0
 
@@ -1355,7 +1389,8 @@ func craft_count(id: String) -> int:
 	var r: Dictionary = RECIPES[id]
 	var n := 999
 	for k in r["needs"]:
-		n = mini(n, int(stores.get(k, 0)) / int(r["needs"][k]))
+		var have := item_count(k) if ITEMS.has(k) else int(stores.get(k, 0))
+		n = mini(n, have / int(r["needs"][k]))
 	return n
 
 
@@ -1371,7 +1406,10 @@ func craft(id: String, n := 1) -> int:
 		return 0
 	var r: Dictionary = RECIPES[id]
 	for k in r["needs"]:
-		stores[k] = int(stores[k]) - b * int(r["needs"][k])
+		if ITEMS.has(k):
+			add_item(k, -b * int(r["needs"][k])) # (a broken tool, mended)
+		else:
+			stores[k] = int(stores[k]) - b * int(r["needs"][k])
 	for k in r["makes"]:
 		if ITEMS.has(k):
 			add_item(k, b * int(r["makes"][k])) # (a tool)
@@ -1558,10 +1596,14 @@ func wear_tools(used: Dictionary, days := 1.0, post := {}) -> Array:
 	for t in broke:
 		if post.is_empty():
 			add_item(t, -1)
+			add_item(String(t) + "_broken", 1) # (kept, to be mended: CRAFT)
 		else:
 			post["tools"][t] = int(post["tools"].get(t, 0)) - 1
 			if int(post["tools"][t]) <= 0:
 				post["tools"].erase(t)
+			var bk: Dictionary = post.get("broken", {})
+			bk[t] = int(bk.get(t, 0)) + 1
+			post["broken"] = bk
 	return broke
 
 
@@ -1657,6 +1699,8 @@ func recall_post(sid: int) -> Dictionary:
 		workers.append(w)
 	for t in post["tools"]:
 		add_item(String(t), int(post["tools"][t]))
+	for t in post.get("broken", {}):
+		add_item(String(t) + "_broken", int(post["broken"][t]))
 	posts.erase(key)
 	save()
 	return got
@@ -1694,6 +1738,8 @@ func rejoin(post: Dictionary) -> int:
 		workers.append(w)
 	for t in post.get("tools", {}):
 		add_item(String(t), int(post["tools"][t]))
+	for t in post.get("broken", {}):
+		add_item(String(t) + "_broken", int(post["broken"][t]))
 	for k in post.get("stock", {}):
 		var n := int(floor(float(post["stock"][k])))
 		if n > 0:
@@ -1747,7 +1793,7 @@ func _posts_day() -> PackedStringArray:
 		var wf := work_force(kind, people, post["tools"])
 		var st: Dictionary = post["stock"]
 		var store := String(spec.get("post_store", spec["store"]))
-		st[store] = float(st.get(store, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"])
+		st[store] = float(st.get(store, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"]) * World.season_yield(kind)
 		var also: Dictionary = spec.get("also", {})
 		for k in also:
 			st[k] = float(st.get(k, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"])
@@ -1888,10 +1934,14 @@ func _road_day(water := "random") -> Dictionary:
 		day_notes["dry"] = 1
 	var ate: Array = []
 	var starved: Array = []
+	var fast := fast_share()
+	var winter: bool = World.is_ready and World.season() == "winter"
 	for m in roster:
 		var pack: Dictionary = m["pack"]
 		var drank := _take(pack, "water")
-		var fed := _take(pack, "rations")
+		# A fast day of the Church (Lent, the Ember Days): many keep it on
+		# a crust, and the rations go further.
+		var fed := true if (fast > 0.0 and randf() < fast) else _take(pack, "rations")
 		# The difficulty: on easy a ration sometimes goes further, on hard
 		# the march takes more out of them.
 		var hunger := Officer.diff("food")
@@ -1908,6 +1958,9 @@ func _road_day(water := "random") -> Dictionary:
 			elif int(m["sick"]) <= 0 and randf() < SICK_CHANCE - 0.012 * (int(m["attrs"]["constitution"]) - Men.ATTR_BASE):
 				m["sick"] = randi_range(3, 6)
 				day_notes["sick"] += 1
+		if winter and int(m["sick"]) <= 0 and randf() < 0.02 - 0.003 * (int(m["attrs"]["constitution"]) - Men.ATTR_BASE):
+			m["sick"] = randi_range(2, 4) # (a winter chill)
+			day_notes["sick"] += 1
 		m["thirst"] = 0 if drank else int(m["thirst"]) + 1
 		m["hunger"] = 0 if fed else int(m["hunger"]) + 1
 		if not drank:
@@ -2085,13 +2138,13 @@ func pass_day(water: String) -> PackedStringArray:
 	notes.append_array(_contract_day())
 	notes.append_array(_workers_day())
 	notes.append_array(_posts_day())
-	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult())
+	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult() * discipline())
 	for g in gone:
 		roster.erase(g)
 	if gone.size() > 0:
 		notes.append(Lang.t("%d deserted in the night.") % gone.size())
 	var cm := company_morale()
-	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015 * Officer.desert_mult():
+	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.015 * Officer.desert_mult() * discipline():
 		notes.append(_mutiny())
 	save()
 	return notes
@@ -2163,22 +2216,81 @@ func found_civilization() -> String:
 	return Lang.t("People at last. From now on the men will expect their pay.")
 
 
-## The Church's day: on a feast of the I class the men keep it, glad of it;
-## on a Sunday, a little.
+## The Church's day just ended (the calendar, calendar.gd): a feast of the
+## I class kept, Easter's joy, Sunday's rest (if you didn't march), and
+## Mass said by your chaplain, if you have one.
 func _feast_day() -> PackedStringArray:
 	var notes: PackedStringArray = []
 	if not World.is_ready:
 		return notes
-	var c: Dictionary = World.feast()
 	var Cal = load("res://scripts/calendar.gd")
-	if String(c["cls"]) == "I":
-		for m in roster:
-			Men.add_morale(m, 4)
-		notes.append(Lang.t("Today is %s. The men keep the feast as best they can.") % Cal.label(c))
+	var c: Dictionary = Cal.of_day(World.day() - 2)
+	var rested: bool = not World.marched_today
+	var holy: bool = String(c["cls"]) == "I" or c.get("sunday", false)
+	var lift := 0
+	if String(c["name"]) == "Easter Sunday":
+		lift = 15
+		notes.append(Lang.t("Easter Sunday: Christ is risen! After the long Lent the men are glad as they haven't been since the wreck."))
+	elif String(c["cls"]) == "I" and not String(c["color"]) in ["violet", "black", "rose"]:
+		# (a feast: not the penitential days of Lent and Holy Week)
+		lift = 4
+		notes.append(Lang.t("%s: the men kept the feast as best they could.") % Cal.label(c))
 	elif c.get("sunday", false):
-		for m in roster:
-			Men.add_morale(m, 1)
+		lift = 1
+	if holy:
+		if rested:
+			lift += 3
+			for m in roster:
+				if int(m["wounded_days"]) > 0:
+					m["wounded_days"] = int(m["wounded_days"]) - 1
+		else:
+			lift -= 2
+			notes.append(Lang.t("You marched on the Lord's day. The men grumble."))
+		if not chaplain.is_empty():
+			lift += 4 if String(c["cls"]) == "I" else 2
+			notes.append(Lang.t("%s says Mass for the company.") % String(chaplain["name"]))
+	for m in roster:
+		Men.add_morale(m, lift)
 	return notes
+
+
+## A fast day: how many of the men keep it on a crust (0: not a fast day).
+## Ash Wednesday and Good Friday most of all; the weekdays of Lent and the
+## Ember Days less.
+static func fast_share() -> float:
+	if not World.is_ready:
+		return 0.0
+	var Cal = load("res://scripts/calendar.gd")
+	var c: Dictionary = Cal.of_day(World.day() - 1)
+	var n := String(c["name"])
+	if c.get("sunday", false):
+		return 0.0
+	if n in ["Ash Wednesday", "Good Friday"]:
+		return 0.5
+	var t: String = n
+	for cm in c.get("comms", []):
+		t += " " + String(cm)
+	if "Lent" in t or "Passiontide" in t or "Holy Week" in t or n == "Holy Saturday" or "Ember" in t:
+		return 0.3
+	return 0.0
+
+
+## A chaplain keeps the men steadier: fewer desert, mutiny is rarer.
+func discipline() -> float:
+	return 0.6 if not chaplain.is_empty() else 1.0
+
+
+## Take on a chaplain (a priest of the town, met in its church: town.gd).
+const CHAPLAIN_COST := 40
+
+
+func hire_chaplain(nm: String) -> bool:
+	if not chaplain.is_empty() or money < price(CHAPLAIN_COST):
+		return false
+	money -= price(CHAPLAIN_COST)
+	chaplain = {"name": nm, "since": day}
+	save()
+	return true
 
 
 ## March to the next fight: days pass on the road (see _road_day), wages
@@ -2223,13 +2335,13 @@ func march_on() -> String:
 		notes.append_array(_pay_day())
 
 	# Desertion and mutiny.
-	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.3 * Officer.desert_mult())
+	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.3 * Officer.desert_mult() * discipline())
 	for g in gone:
 		roster.erase(g)
 	if gone.size() > 0:
 		notes.append(Lang.t("%d deserted in the night.") % gone.size())
 	var cm := company_morale()
-	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.05 * Officer.desert_mult():
+	if roster.size() > 0 and cm < MUTINY_MORALE and randf() < (MUTINY_MORALE - cm) * 0.05 * Officer.desert_mult() * discipline():
 		notes.append(_mutiny())
 
 	# Camp: the barrels are refilled from whatever water there is.
@@ -2277,7 +2389,7 @@ func save() -> void:
 		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 		"workers": workers, "posts": posts,
-		"arrears": arrears, "civilized": civilized, "pay_plea_pending": pay_plea_pending, "pay_plea_done": pay_plea_done,
+		"arrears": arrears, "chaplain": chaplain, "stash_clues": stash_clues, "civilized": civilized, "pay_plea_pending": pay_plea_pending, "pay_plea_done": pay_plea_done,
 	}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
@@ -2324,6 +2436,8 @@ func load_campaign() -> bool:
 	visiting = int(data.get("visiting", -1))
 	workers = data.get("workers", [])
 	arrears = int(data.get("arrears", 0))
+	chaplain = data.get("chaplain", {})
+	stash_clues = int(data.get("stash_clues", 0))
 	civilized = bool(data.get("civilized", not towns.is_empty()))
 	pay_plea_pending = bool(data.get("pay_plea_pending", false))
 	pay_plea_done = bool(data.get("pay_plea_done", false))

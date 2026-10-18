@@ -299,8 +299,37 @@ commemorations. Tap the clock panel for THE CALENDAR: the next four weeks.
 On a feast of the I class the men keep the day (morale rises); on Sundays a
 little.
 
+**Lent, Easter and the Lord's day.** The wreck falls at the start of Lent
+(Ash Wednesday 1761 is 4 February, Easter 22 March). On fast days (the
+weekdays of Lent, the Ember Days, most of all Ash Wednesday and Good Friday)
+many of the men keep the fast on a crust, and the food goes further. Easter
+Sunday is the company's great joy. On Sundays and feasts of the I class,
+rest (don't march) and the men are glad of it and the wounded mend; march
+and they grumble.
+
+**A chaplain.** In a town or city of Aurest or Vell you can ASK THE CHURCH
+FOR A CHAPLAIN (40 crowns, then 3 a week). He says Mass on Sundays and
+feasts (the men's spirits rise more) and keeps them steadier: fewer desert,
+mutiny is rarer.
+
+**Seasons.** The calendar's month is the season, shown under the date:
+winter (little to hunt or harvest, cold nights: men sicken more easily),
+spring (fish running), summer, autumn (the harvest: fields and hunting give
+the most). Every site's yield follows it, yours and the villages'.
+
 **Time faster.** The ▶ ×1 button beside WAIT runs the map's clock at ×1, ×2
 or ×4: marching, waiting and sleeping all go faster.
+
+**The first week.** The wagon holds about a week's food. The foragers'
+first report puts the nearest hunting ground and fishing water on the map,
+and for the first fortnight the road is full of game and berries for
+whoever looks.
+
+**The ship's stores.** The map's panel says what you know of where the
+lizards took them, a piece at a time: people in the towns talk (the first
+time you visit a place), scouts who range near it see it, and beaten
+warbands from that nest carry plunder from it. First a direction, then the
+nest's name and the country round it, then its very place.
 
 **Pay in the wilds.** Wages fall due every seven days. Until the company
 finds people (it enters a village or a town), the men understand there's
@@ -589,11 +618,13 @@ saltpetre earth and sulphur crust), a **fishing rod** for fishing water.
 Nobody can do the work without the right tool: as many work as there are
 tools (a hunting ground needs none, the men take their muskets). The wagon
 starts with a few, saved from the ship: 2 axes, 2 pickaxes, 3 shovels and
-2 fishing rods. Every tool in use has a 3% chance a day of breaking. Markets sell
+2 fishing rods. Every tool in use has a 3% chance a day of breaking; a broken tool is kept
+in the wagon to be mended (CRAFT), and you can forge new ones at a camp
+forge from ore and charcoal. Markets sell
 them (villages and towns: all four; dwarf holds: picks and shovels), and
 CRAFT makes a fishing rod from 3 lb of hardwood.
 
-**Work parties.** LEAVE THEM HERE posts the hands you chose at the site,
+**Work parties.** POST A WORK PARTY posts the hands you chose at the site,
 with the wagon's tools for the work: they leave the roll and work it every
 day (a tent and your flag mark the spot, with how many are there). Come
 back to COLLECT what they've made, or RECALL THEM. Hunters and fishers
@@ -642,6 +673,8 @@ the hours passing while the men work (Logistics shortens them):
 | Roll cartridges | 1 lb powder, 3 lb lead | 40 cartridges |
 | Smoke meat | 6 meat, 1 charcoal | 6 rations |
 | Make a fishing rod | 3 hardwood | a fishing rod |
+| Forge an axe / a pickaxe / a shovel | ore, charcoal, hardwood | the tool |
+| Mend an axe, pickaxe, shovel or rod | the broken tool, hardwood (charcoal for the pick) | the tool |
 
 Fresh meat and fish lose a third a day until smoked.
 

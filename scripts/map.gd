@@ -159,6 +159,9 @@ func _ready() -> void:
 		World.waiting = true
 		_rest_until = World.hours + World.pending_rest
 		World.pending_rest = 0.0
+	if World.pending_note != "":
+		_push_toast(World.pending_note)
+		World.pending_note = ""
 	Loading.done(self)
 
 
@@ -637,8 +640,11 @@ func _build_hud() -> void:
 	bottom.add_child(_terrain_l)
 	_toast = _label("", 22, Color(1, 0.93, 0.75))
 	_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_toast.position.y = 96
+	_toast.position.y = 200
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_toast.custom_minimum_size = Vector2(760, 0)
+	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_toast.add_theme_constant_override("outline_size", 6)
 	_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	root.add_child(_toast)
@@ -703,7 +709,7 @@ func _build_hud() -> void:
 	pv.add_child(_popup_buttons)
 	_logistics = LogisticsPopup.new()
 	root.add_child(_logistics)
-	MusicBar.attach(root, Vector2(12, 140))
+	MusicBar.attach(root, Vector2(12, 200))
 
 
 func _panel(col: Color) -> PanelContainer:
@@ -859,7 +865,9 @@ func _open_calendar() -> void:
 			var cl := _label(Lang.t("Comm. of %s") % ", ".join(comms.map(func(n): return Lang.t(String(n)))), 13, Color(0.7, 0.72, 0.8))
 			cl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			col.add_child(cl)
-	_cal_box.add_child(_label(Lang.t("On a feast of the I class the men keep the day: their spirits rise. On Sundays a little."), 14, Color(0.72, 0.74, 0.8)))
+	_cal_box.add_child(_label(Lang.t("On a feast of the I class the men keep the day: their spirits rise. On Sundays a little. Rest on Sundays and feasts (don't march): the men are glad of it and the wounded mend. In Lent many keep the fast, and the food goes further."), 14, Color(0.72, 0.74, 0.8)))
+	var sn := World.season()
+	_cal_box.add_child(_label(Lang.t("The season: %s. %s") % [Lang.t(sn.capitalize()), Lang.t({"winter": "Little to hunt or harvest, cold nights: the men sicken more easily.", "spring": "The fish are running; the fields are sown.", "summer": "Long days; game is plentiful.", "autumn": "The harvest is in: fields and hunting give the most."}[sn])], 14, Color(0.85, 0.85, 0.7)))
 	World.stop()
 	_cal_panel.visible = true
 	_center(_cal_panel)
@@ -883,7 +891,8 @@ func _update_hud() -> void:
 	if fd != _feast_day:
 		_feast_day = fd
 		var c: Dictionary = World.feast()
-		_feast_l.text = Calendar.dial_line(c) + ("  ·  " + Calendar.class_name_of(c) if c["cls"] in ["I", "II"] else "")
+		_feast_l.text = Calendar.dial_line(c) + ("  ·  " + Calendar.class_name_of(c) if c["cls"] in ["I", "II"] else "") \
+			+ "  ·  " + Lang.t(World.season().capitalize())
 		var ink: Color = Calendar.cloth(String(c["color"]))
 		if String(c["color"]) == "white":
 			ink = Color(0.96, 0.9, 0.7) # (white vestments: shown as cream on the dark panel)
@@ -897,6 +906,9 @@ func _update_hud() -> void:
 		Company.days_left("rations"), Company.days_left("water"), Lang.t(" · water foul") if bool(Company.stores["foul"]) else ""]
 	if Company.arrears > 0:
 		_status.text += Lang.t(" · pay owed %d") % Company.arrears
+	var sh := World.stash_hint()
+	if sh != "":
+		_status.text += "\n" + sh
 	var c := World.cell()
 	var i: int = Gen.idx(c.x, c.y)
 	var g = World.gen
@@ -1648,7 +1660,7 @@ func _fill_work() -> void:
 	bw.add_theme_color_override("font_color", gold)
 	confirm.disabled = bw.disabled
 	confirm.pressed.connect(func(): bw.pressed.emit())
-	var bp := _button(Lang.t("LEAVE THEM HERE"), func():
+	var bp := _button(Lang.t("POST A WORK PARTY"), func():
 		var n := Company.post_party(id, chosen)
 		_work_sel = []
 		_work_sel_set = false
@@ -1804,6 +1816,8 @@ func _fill_craft() -> void:
 		c.queue_free()
 	for id in Company.RECIPES:
 		var r: Dictionary = Company.RECIPES[id]
+		if r.get("mend", false) and Company.craft_count(id) <= 0:
+			continue # (nothing broken of that kind)
 		var card := _panel(Color(0.15, 0.2, 0.33))
 		_craft_list.add_child(card)
 		var h := HBoxContainer.new()
@@ -1871,6 +1885,10 @@ func _visit(st: Dictionary) -> void:
 		var news := Company.found_civilization()
 		if news != "":
 			_push_toast(news)
+		# Word of the ship's stores, the first time you come to a place.
+		var tk := str(int(st["id"]))
+		if not Company.towns.has(tk) and randf() < 0.6:
+			Company.last_rumour = World.stash_clue("town")
 	var fac: Dictionary = Lore.FACTIONS[st["faction"]]
 	var kind: String = st["kind"]
 	var title := Lang.t("%s, %s of %s") % [st["name"], {"village": Lang.t("a village"), "town": Lang.t("a town"), "city": Lang.t("a city"),

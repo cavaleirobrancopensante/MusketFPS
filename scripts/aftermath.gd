@@ -194,6 +194,8 @@ func _refresh() -> void:
 			t += "[color=#%s]%s[/color]\n" % [_hex(RED), r["standing_note"]]
 		if r.has("nest_burned"):
 			t += Lang.t("[color=#%s][b]%s burns.[/b] Its mounds are torn open and fired; no more warbands will come out of it.[/color]\n") % [_hex(GOLD), r["nest_burned"]]
+		if r.has("clue"):
+			t += "[color=#%s]%s[/color]\n" % [_hex(GOLD), r["clue"]]
 		if r.has("carried"):
 			t += Lang.t("[color=#%s]They were carrying %s: it's on the loot pile.[/color]\n") % [_hex(GOLD), r["carried"]]
 		if int(r.get("freed", 0)) > 0:

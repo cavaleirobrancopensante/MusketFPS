@@ -143,6 +143,9 @@ func _ready() -> void:
 	_refresh_info()
 	_set_mode("walk" if first_visit else "menu")
 	_show_toast("%s. %s" % [st["name"], _arrival_line()], 5.0)
+	if Company.last_rumour != "":
+		_show_toast(Company.last_rumour)
+		Company.last_rumour = ""
 	Loading.done(self)
 	if _test:
 		_self_test.call_deferred()
@@ -1169,6 +1172,19 @@ func _fill_menu(people := false, market := false, labour := false) -> void:
 	var sells := Lang.t("food, arrows, spears") if kind == "village" else (Lang.t("powder, lead, bolts, crossbows") if kind == "hold" else Lang.t("food, rum, lead, bolts, bows, crossbows"))
 	_menu_box.add_child(_button(Lang.t("MARKET  (%s)") % sells, func(): _fill_menu(false, true)))
 	_menu_box.add_child(_button(Lang.t("HIRE LABOURERS  (%d here)") % Folk.labour_left(sid, kind), func(): _fill_menu(false, false, true)))
+	if kind in ["town", "city"] and fac in ["aurest", "vell"] and Company.chaplain.is_empty():
+		# The church: its priest may spare a curate to go with the company.
+		var cc := Company.price(Company.CHAPLAIN_COST)
+		var cb := _button(Lang.t("ASK THE CHURCH FOR A CHAPLAIN  ·  %d cr") % cc, func():
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			var names: Dictionary = Folk.FIRST.get(fac, Folk.FIRST["aurest"])
+			var nm := Lang.t("Father %s") % names["m"][rng.randi() % names["m"].size()]
+			if Company.hire_chaplain(nm):
+				_show_toast(Lang.t("%s will go with you: Mass on Sundays and feasts, a word with the men when it's needed.") % nm)
+			_fill_menu())
+		cb.disabled = Company.money < cc
+		_menu_box.add_child(cb)
 	if Company.cartridge_batches() > 0:
 		_menu_box.add_child(_button(Lang.t("MAKE %d CARTRIDGES (1 lb powder, 3 lb lead)") % Company.CARTRIDGE_BATCH, func():
 			var n := Company.make_cartridges(1)

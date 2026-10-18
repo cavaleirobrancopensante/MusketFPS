@@ -85,6 +85,8 @@ func pick(w) -> Dictionary:
 		if _last.has(id) and float(w.hours) - float(_last[id]) < 36.0:
 			continue # not the same thing twice in a day and a half
 		var wt := _weight(id, ctx)
+		if id in ["game", "berries"] and float(w.hours) < 24.0 * 12.0:
+			wt *= 3.0 # (the first fortnight: the land is full of food for whoever looks)
 		if wt > 0.0:
 			weights[id] = wt
 			total += wt

@@ -103,7 +103,86 @@ func new_world(s: int) -> void:
 	for i in 12:
 		_spawn_tick(true)
 	update_sight(true)
+	_point_to_food()
 	save()
+
+
+var pending_note := "" # told once when the map opens (the first day's word)
+
+
+# ---------------------------------------------------------------- the ship's stores: the trail
+
+## Word of where the lizards took the ship's stores, a piece at a time
+## (Company.stash_clues): from people in the towns, your scouts, and the
+## plunder of beaten warbands from that nest. 1: a direction; 2: the nest's
+## name and the country round it (shown on the map); 3: its very place.
+## Returns the news, or "" if there's nothing new.
+func stash_clue(source: String) -> String:
+	if Company.stash.is_empty() or gen.stash_nest < 0 or Company.stash_clues >= 3:
+		return ""
+	var st: Dictionary = settlement(gen.stash_nest)
+	var at := Vector2(st["x"], st["y"])
+	Company.stash_clues += 1
+	var dir := Econ_dir(pos, at)
+	var far := pos.distance_to(at) / 25.0
+	var how := Lang.t("a few days' march") if far < 4.0 else Lang.t("many days' march")
+	var text := ""
+	match Company.stash_clues:
+		1:
+			text = Lang.t("Crates with a ship's mark, carried by lizards %s, %s from here.") % [dir, how]
+		2:
+			text = Lang.t("The lizards' nest called %s, %s: that's where the crates went.") % [st["name"], dir]
+			_reveal(at, 22.0)
+		_:
+			text = Lang.t("%s: its very place is on your map now. The ship's stores are there.") % st["name"]
+			places[int(st["id"])]["known"] = true
+			_reveal(at, 8.0)
+	var from: String = {"town": Lang.t("People talk: "), "scouts": Lang.t("The scouts saw it: "), "plunder": Lang.t("Among the plunder, sailcloth and a broken crate of the ship's: ")}.get(source, "")
+	Company.save()
+	save()
+	return from + text
+
+
+## What you know of where the stores are (for the map's HUD).
+func stash_hint() -> String:
+	if Company.stash.is_empty() or gen.stash_nest < 0:
+		return ""
+	var st: Dictionary = settlement(gen.stash_nest)
+	match Company.stash_clues:
+		0:
+			return Lang.t("The ship's stores: carried off, nobody knows where.")
+		1:
+			return Lang.t("The ship's stores: somewhere %s.") % Econ_dir(pos, Vector2(st["x"], st["y"]))
+	return Lang.t("The ship's stores: at %s, %s.") % [st["name"], Econ_dir(pos, Vector2(st["x"], st["y"]))]
+
+
+## The first day: the men who went down the cliff for water saw where
+## there's food to be had: the nearest hunting ground and fishing water are
+## on the map from the start.
+func _point_to_food() -> void:
+	var found: Array = []
+	for kind in ["game", "fish"]:
+		var best := {}
+		var bd := 40.0
+		for r in gen.resources:
+			if r["kind"] != kind:
+				continue
+			var d := pos.distance_to(Vector2(r["x"], r["y"]))
+			if d < bd:
+				bd = d
+				best = r
+		if not best.is_empty():
+			_reveal(Vector2(best["x"], best["y"]), 4.0)
+			found.append("%s %s" % [Lang.t(String(RESOURCES[kind]["name"])).to_lower(), Econ_dir(pos, Vector2(best["x"], best["y"]))])
+	if not found.is_empty():
+		pending_note = Lang.t("The foragers report food to be had: %s. Hunt or fish it, or the food runs out within the week.") % Lang.t(" and ").join(found)
+
+
+static func Econ_dir(from: Vector2, to: Vector2) -> String:
+	var a := rad_to_deg((to - from).angle())
+	var dirs := [Lang.t("to the east"), Lang.t("to the south-east"), Lang.t("to the south"), Lang.t("to the south-west"),
+		Lang.t("to the west"), Lang.t("to the north-west"), Lang.t("to the north"), Lang.t("to the north-east")]
+	return dirs[int(round(fposmod(a, 360.0) / 45.0)) % 8]
 
 
 func _build() -> void:
@@ -256,6 +335,32 @@ func day() -> int:
 func clock() -> String:
 	var hh := int(hours) % 24
 	return "%s · %02d:%02d" % [Calendar.date_text(day() - 1), hh, int(fmod(hours, 1.0) * 60.0)]
+
+
+## The season, by the calendar's month: "winter", "spring", "summer", "autumn".
+func season() -> String:
+	var m: int = int(Calendar.date_of(day() - 1)["month"])
+	if m == 12 or m <= 2:
+		return "winter"
+	if m <= 5:
+		return "spring"
+	if m <= 8:
+		return "summer"
+	return "autumn"
+
+
+## What the season does to a site's yield (world.gd RESOURCES kinds): the
+## harvest in autumn, fish running in spring, a hungry winter.
+const SEASON_YIELD := {
+	"farm": {"winter": 0.3, "spring": 0.7, "summer": 1.0, "autumn": 1.6},
+	"game": {"winter": 0.7, "spring": 1.0, "summer": 1.1, "autumn": 1.3},
+	"fish": {"winter": 0.6, "spring": 1.3, "summer": 1.1, "autumn": 1.0},
+}
+
+
+func season_yield(kind: String) -> float:
+	var s := season()
+	return float(SEASON_YIELD.get(kind, {}).get(s, 0.8 if s == "winter" else 1.0))
 
 
 ## The Church's day (calendar.gd): {name, cls, color, comms...}.
@@ -509,7 +614,12 @@ func advance(dh: float) -> void:
 			return
 
 
+var marched_today := false # (the company marched on the day now ending: no Sunday rest)
+
+
 func _walk(dh: float) -> void:
+	if not path.is_empty():
+		marched_today = true
 	var left := BASE_SPEED * party_pace() * dh * (NIGHT_PACE if is_night() else 1.0)
 	while left > 0.0 and not path.is_empty():
 		var nxt: Vector2i = path[0]
@@ -596,7 +706,7 @@ func work_estimate(id: int, n = -1) -> Dictionary:
 	elif int(n) >= 0:
 		people = people.slice(0, int(n))
 	var wf: Dictionary = Company.work_force(String(r["kind"]), people, Company.wagon_tools())
-	var hands := clampf(float(wf["eff"]) / 4.0, 0.0, 3.0) # (four men with tools: the base yield)
+	var hands := clampf(float(wf["eff"]) / 4.0, 0.0, 3.0) * season_yield(String(r["kind"])) # (four men with tools: the base yield; the season)
 	var a: Array = spec["amount"]
 	wf["lo"] = int(round(int(a[0]) * hands))
 	wf["hi"] = int(round(int(a[1]) * hands))
@@ -721,6 +831,7 @@ func _midnight() -> void:
 				n["garrison"] = mini(int(n["max_garrison"]), int(n["garrison"]) + 3)
 				n["walls"] = minf(1.0, float(n["walls"]) + 0.05)
 	_day_water = ""
+	marched_today = false
 	Econ.day()
 	_spawn_tick(false)
 	day_passed.emit(notes)
@@ -862,6 +973,12 @@ func _scout_report(sc: Dictionary) -> Dictionary:
 	var steps := int(pos.distance_to(tgt) / 6.0)
 	for k in steps:
 		_reveal(pos.lerp(tgt, float(k) / maxf(1, steps)), 6.0)
+	if gen.stash_nest >= 0:
+		var sn: Dictionary = settlement(gen.stash_nest)
+		if tgt.distance_to(Vector2(sn["x"], sn["y"])) < 30.0:
+			var clue := stash_clue("scouts")
+			if clue != "":
+				report["found"].append(clue)
 	for st in gen.settlements:
 		if tgt.distance_to(Vector2(st["x"], st["y"])) < 14.0 + 3.0 * mini(men.size(), 4) + 1.5 * days:
 			places[int(st["id"])]["known"] = true
