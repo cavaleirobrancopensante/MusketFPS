@@ -1200,6 +1200,44 @@ var _work_sel_set := false
 var _work_pick_open := false
 
 
+var _work_cards: Array = [] # [button, person id, text]: the boxes under the slider
+var _work_count_l: Label
+var _work_cap := 0
+var _work_dragging := false
+var _knobs := {}
+
+
+## While the slider moves: tick the boxes, without rebuilding the panel.
+func _work_refresh_cards() -> void:
+	for c in _work_cards:
+		var b: Button = c[0]
+		var on: bool = int(c[1]) in _work_sel
+		b.text = ("✔ " if on else "") + String(c[2])
+		b.modulate = Color(1, 1, 1) if on else (Color(0.62, 0.62, 0.66) if _work_sel.size() < _work_cap else Color(0.45, 0.45, 0.5))
+	if _work_count_l != null:
+		_work_count_l.text = Lang.t("WHO WORKS:  %d") % _work_sel.size()
+
+
+## The slider's knob: a brass disc.
+func _slider_knob(hi: bool) -> ImageTexture:
+	if _knobs.has(hi):
+		return _knobs[hi]
+	var n := 40
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var c := Vector2(n, n) * 0.5
+	for y in n:
+		for x in n:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(c)
+			var col := Color(0.95, 0.8, 0.45) if not hi else Color(1.0, 0.9, 0.6)
+			if d > n * 0.5 - 1.0:
+				col.a = clampf(n * 0.5 - d, 0.0, 1.0)
+			if d < n * 0.5 - 5.0:
+				col = col.darkened(0.15)
+			img.set_pixel(x, y, col)
+	_knobs[hi] = ImageTexture.create_from_image(img)
+	return _knobs[hi]
+
+
 ## The stepper: the first `n` hands (labourers first, then soldiers).
 func _work_set_count(n: int) -> void:
 	var kind := String(World.resource(_work_id).get("kind", ""))
@@ -1359,13 +1397,54 @@ func _fill_work() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
 	_work_box.add_child(head)
-	head.add_child(_label(Lang.t("WHO WORKS:  %d") % nsel, 20, gold))
+	_work_count_l = _label(Lang.t("WHO WORKS:  %d") % nsel, 20, gold)
+	head.add_child(_work_count_l)
 	var capt := Lang.t("tap people below to send them  ·  a place for each of the %d tools") % tool_cap if not need.is_empty() \
 		else Lang.t("tap people below to send them  ·  no tools needed, up to a dozen")
 	var cl := _label(capt, 15, dim)
 	cl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	head.add_child(cl)
+	# A slider like a volume bar: slide it up and the best are chosen, one
+	# after another (the boxes below tick as it goes).
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 12)
+	_work_box.add_child(srow)
+	srow.add_child(_label("0", 16, dim))
+	var sl := HSlider.new()
+	sl.min_value = 0
+	sl.max_value = maxi(1, cap)
+	sl.step = 1
+	sl.value = nsel
+	sl.editable = cap > 0
+	sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sl.custom_minimum_size = Vector2(0, 48)
+	sl.add_theme_icon_override("grabber", _slider_knob(false))
+	sl.add_theme_icon_override("grabber_highlight", _slider_knob(true))
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.1, 0.12, 0.2)
+	track.content_margin_top = 10
+	track.content_margin_bottom = 10
+	track.set_corner_radius_all(6)
+	sl.add_theme_stylebox_override("slider", track)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(0.85, 0.66, 0.3)
+	fill.content_margin_top = 10
+	fill.content_margin_bottom = 10
+	fill.set_corner_radius_all(6)
+	sl.add_theme_stylebox_override("grabber_area", fill)
+	sl.add_theme_stylebox_override("grabber_area_highlight", fill)
+	sl.value_changed.connect(func(v: float):
+		_work_set_count(int(v))
+		_work_refresh_cards()
+		if not _work_dragging:
+			_fill_work.call_deferred()) # (a tap on the bar: settle at once)
+	sl.drag_started.connect(func(): _work_dragging = true)
+	sl.drag_ended.connect(func(_changed: bool):
+		_work_dragging = false
+		_fill_work.call_deferred())
+	srow.add_child(sl)
+	srow.add_child(_label("%d" % cap, 16, dim))
 	var quick := HBoxContainer.new()
 	quick.add_theme_constant_override("separation", 10)
 	_work_box.add_child(quick)
@@ -1383,6 +1462,8 @@ func _fill_work() -> void:
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
 	_work_box.add_child(grid)
+	_work_cards = []
+	_work_cap = cap
 	var shown: Array = avail if _work_pick_open else avail.slice(0, 12)
 	# (anyone already chosen stays in view)
 	for m in avail:
@@ -1410,6 +1491,7 @@ func _fill_work() -> void:
 		tb.add_theme_font_size_override("font_size", 15)
 		tb.modulate = Color(1, 1, 1) if on else (Color(0.62, 0.62, 0.66) if _work_sel.size() < cap else Color(0.45, 0.45, 0.5))
 		grid.add_child(tb)
+		_work_cards.append([tb, mid, txt])
 	if avail.size() > 12:
 		_work_box.add_child(_button(Lang.t("SHOW FEWER") if _work_pick_open else Lang.t("SHOW EVERYONE (%d)") % avail.size(), func(): _work_pick_open = not _work_pick_open; _fill_work()))
 	var est := World.work_estimate(id, chosen)

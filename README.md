@@ -581,7 +581,9 @@ some at the fishing, and march on with the rest.
 
 **Choosing who.** The site's panel lists everyone who can work, best at
 this site first (★: strength and stamina, more for a labourer at his own
-trade): tap someone to send him, tap again to take him off. There's a place
+trade): slide the bar (like a volume bar) to choose how many, and the best
+are ticked as it moves; or tap someone to send him, tap again to take him
+off. There's a place
 for each tool (a dozen at a hunting ground). THE BEST fills the places with
 the best, NOBODY clears them, LABOURERS ONLY keeps the soldiers back. The same goes for scouts and runners: the list is
 always ranked by the skill that matters.
