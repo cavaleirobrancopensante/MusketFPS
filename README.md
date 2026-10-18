@@ -579,10 +579,11 @@ gets there, two or more soldiers drive it off, but a party of labourers
 alone loses a third of its people and half its stock. Leave some men at the lead and
 some at the fishing, and march on with the rest.
 
-**Choosing who.** CHOOSE WHO lists everyone who can work, best at this
-site first (★: strength and stamina, more for a labourer at his own
-trade); tap to put someone in or take them out, or use the stepper (it
-takes the best first). The same goes for scouts and runners: the list is
+**Choosing who.** The site's panel lists everyone who can work, best at
+this site first (★: strength and stamina, more for a labourer at his own
+trade): tap someone to send him, tap again to take him off. There's a place
+for each tool (a dozen at a hunting ground). THE BEST fills the places with
+the best, NOBODY clears them, LABOURERS ONLY keeps the soldiers back. The same goes for scouts and runners: the list is
 always ranked by the skill that matters.
 
 **Calling them back costs a man.** Either march back to the site and RECALL

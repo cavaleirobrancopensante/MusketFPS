@@ -1341,7 +1341,7 @@ func _fill_work() -> void:
 	var avail: Array = Company.ranked(Company.hands_for_work(), kind)
 	var ids: Array = avail.map(func(m): return int(m["id"]))
 	# As many can work as there are tools for it.
-	var tool_cap := avail.size()
+	var tool_cap := mini(avail.size(), 12) # (with no tools needed, a dozen is all the work wants)
 	if not need.is_empty():
 		tool_cap = 0
 		for tid in need:
@@ -1353,60 +1353,65 @@ func _fill_work() -> void:
 	var chosen: Array = avail.filter(func(m): return int(m["id"]) in _work_sel)
 	var nsel := chosen.size()
 	var nl := Company.workers.size()
-	var step := HBoxContainer.new()
-	step.add_theme_constant_override("separation", 10)
-	_work_box.add_child(step)
-	step.add_child(_label(Lang.t("Hands:"), 20, gold))
-	for dn in [-5, -1]:
-		var b := _button("%d" % dn, func(): _work_set_count(maxi(0, nsel + dn)); _fill_work())
-		b.custom_minimum_size = Vector2(70, 54)
-		b.disabled = nsel <= 0
-		step.add_child(b)
-	var nlab := _label("%d" % nsel, 28, Color.WHITE)
-	nlab.custom_minimum_size = Vector2(60, 0)
-	nlab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	step.add_child(nlab)
-	for dn in [1, 5]:
-		var b2 := _button("+%d" % dn, func(): _work_set_count(mini(mini(avail.size(), tool_cap), nsel + dn)); _fill_work())
-		b2.custom_minimum_size = Vector2(70, 54)
-		b2.disabled = nsel >= mini(avail.size(), tool_cap)
-		step.add_child(b2)
-	step.add_child(_label(Lang.t("of %d  (%d labourers, %d fit soldiers)") % [avail.size(), nl, avail.size() - nl], 17, dim))
-	var pick := _button(Lang.t("HIDE THE LIST") if _work_pick_open else Lang.t("CHOOSE WHO"), func(): _work_pick_open = not _work_pick_open; _fill_work())
-	_work_box.add_child(pick)
-	if _work_pick_open:
-		_work_box.add_child(_label(Lang.t("Best at it first (★: strength and stamina, more for a labourer at his own trade)."), 14, dim))
-	if _work_pick_open:
-		# A button per person: tap to put them in or take them out.
-		var grid := HFlowContainer.new()
-		grid.add_theme_constant_override("h_separation", 6)
-		grid.add_theme_constant_override("v_separation", 6)
-		_work_box.add_child(grid)
-		for m in avail:
-			var mid := int(m["id"])
-			var on := mid in _work_sel
-			var txt := ""
-			var score := "★%d" % int(round(Company.aptitude(m, kind)))
-			if Company.workers.has(m):
-				txt = "%s\n%s  %s" % [m["name"], Company.trade_name(String(m["trade"])).to_lower(), score]
+	# Who works: tap people to send them (and again to take them off). The
+	# best at this work are at the top; there's a place for each tool.
+	var cap := mini(avail.size(), tool_cap)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	_work_box.add_child(head)
+	head.add_child(_label(Lang.t("WHO WORKS:  %d") % nsel, 20, gold))
+	var capt := Lang.t("tap people below to send them  ·  a place for each of the %d tools") % tool_cap if not need.is_empty() \
+		else Lang.t("tap people below to send them  ·  no tools needed, up to a dozen")
+	var cl := _label(capt, 15, dim)
+	cl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	head.add_child(cl)
+	var quick := HBoxContainer.new()
+	quick.add_theme_constant_override("separation", 10)
+	_work_box.add_child(quick)
+	var best_b := _button(Lang.t("THE BEST %d") % cap, func(): _work_set_count(cap); _fill_work())
+	best_b.disabled = cap <= 0
+	quick.add_child(best_b)
+	quick.add_child(_button(Lang.t("NOBODY"), func(): _work_sel = []; _work_sel_set = true; _fill_work()))
+	if nl > 0:
+		quick.add_child(_button(Lang.t("LABOURERS ONLY"), func():
+			_work_sel = Company.ranked(Company.workers.filter(func(w): return not w.get("away", false)), kind).slice(0, cap).map(func(w): return int(w["id"]))
+			_work_sel_set = true
+			_fill_work()))
+	_work_box.add_child(_label(Lang.t("Best at it first (★: strength and stamina, more for a labourer at his own trade)."), 14, dim))
+	var grid := HFlowContainer.new()
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	_work_box.add_child(grid)
+	var shown: Array = avail if _work_pick_open else avail.slice(0, 12)
+	# (anyone already chosen stays in view)
+	for m in avail:
+		if int(m["id"]) in _work_sel and not m in shown:
+			shown.append(m)
+	for m in shown:
+		var mid := int(m["id"])
+		var on := mid in _work_sel
+		var txt := ""
+		var score := "★%d" % int(round(Company.aptitude(m, kind)))
+		if Company.workers.has(m):
+			txt = "%s\n%s  %s" % [m["name"], Company.trade_name(String(m["trade"])).to_lower(), score]
+		else:
+			txt = "%s\n%s  %s" % [Company.title(m), Lang.t(String(m.get("tag", "Musketeers"))), score]
+		var tb := _button(("✔ " if on else "") + txt, func():
+			if mid in _work_sel:
+				_work_sel.erase(mid)
+			elif _work_sel.size() < cap:
+				_work_sel.append(mid)
 			else:
-				txt = "%s\n%s  %s" % [Company.title(m), Lang.t(String(m.get("tag", "Musketeers"))), score]
-			var tb := _button(("✔ " if on else "") + txt, func():
-				if mid in _work_sel:
-					_work_sel.erase(mid)
-				else:
-					_work_sel.append(mid)
-				_fill_work())
-			tb.custom_minimum_size = Vector2(205, 62)
-			tb.add_theme_font_size_override("font_size", 15)
-			tb.modulate = Color(1, 1, 1) if on else Color(0.62, 0.62, 0.66)
-			grid.add_child(tb)
-		var allrow := HBoxContainer.new()
-		allrow.add_theme_constant_override("separation", 10)
-		_work_box.add_child(allrow)
-		allrow.add_child(_button(Lang.t("ALL"), func(): _work_sel = ids.duplicate(); _fill_work()))
-		allrow.add_child(_button(Lang.t("NONE"), func(): _work_sel = []; _fill_work()))
-		allrow.add_child(_button(Lang.t("LABOURERS ONLY"), func(): _work_sel = Company.workers.map(func(w): return int(w["id"])); _fill_work()))
+				_push_toast(Lang.t("No more tools for this work: take someone off first."))
+			_work_sel_set = true
+			_fill_work())
+		tb.custom_minimum_size = Vector2(205, 62)
+		tb.add_theme_font_size_override("font_size", 15)
+		tb.modulate = Color(1, 1, 1) if on else (Color(0.62, 0.62, 0.66) if _work_sel.size() < cap else Color(0.45, 0.45, 0.5))
+		grid.add_child(tb)
+	if avail.size() > 12:
+		_work_box.add_child(_button(Lang.t("SHOW FEWER") if _work_pick_open else Lang.t("SHOW EVERYONE (%d)") % avail.size(), func(): _work_pick_open = not _work_pick_open; _fill_work()))
 	var est := World.work_estimate(id, chosen)
 	var info := ""
 	var wait := World.harvest_wait(id)
