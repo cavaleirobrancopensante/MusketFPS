@@ -824,7 +824,8 @@ func _after_prologue(summary: Dictionary) -> void:
 			pack["rations"] = randi_range(1, 4) # a haversack torn away in the press
 	summary["lost_gear"] = dropped
 	money = int(round(40 * Officer.diff("money"))) # the regiment's pay chest, what's left of it
-	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1},
+	# (and the sappers' and the boats' tools, thrown in with them)
+	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1, "axe": 2, "pickaxe": 2, "shovel": 3, "fishing_rod": 2},
 		"water": 30, "rations": 20, "ammo": 50, "rum": 4, "foul": false, "grog": true,
 		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6, "saltpetre": 0, "sulphur": 0, "charcoal": 0, "ore": 0, "meat": 0}
 	summary["pay"] = 0
@@ -1405,13 +1406,13 @@ func _free_captives(summary: Dictionary, nest: bool) -> void:
 ## Tools, labourers and work parties. A site on the map (world.gd
 ## RESOURCES) is worked by people: labourers first (they're what you hired
 ## them for), then fit soldiers. A man with the right tool does a whole
-## day's work; bare-handed, BARE_HANDS of it; a labourer at his own trade
+## day's work; without one he can't do that work at all (BARE_HANDS); a labourer at his own trade
 ## TRADE_BONUS more. Every tool in use may break (TOOL_BREAK a day).
 ## SET TO WORK is a few hours with the party there; a work party (posts)
 ## stays behind and works every day until you come back for it.
 const TOOLS := ["axe", "pickaxe", "shovel", "fishing_rod"]
 const TOOL_BREAK := 0.03
-const BARE_HANDS := 0.35
+const BARE_HANDS := 0.0 # (no axe, no wood: hands alone fell nothing)
 const TRADE_BONUS := 1.5
 ## A labourer's trade, and the sites (RESOURCES kinds) he's best at.
 const TRADES := {"woodcutter": ["charcoal"], "miner": ["lead", "sulphur", "saltpetre"], "hunter": ["game"],
@@ -1581,6 +1582,14 @@ func post_party(sid: int, n) -> int:
 	var post: Dictionary = posts.get(key, {"men": [], "workers": [], "tools": {}, "stock": {}, "since": day, "kind": kind})
 	var people: Array = n if n is Array else hands_for_work().slice(0, int(n))
 	var need: Array = World.RESOURCES[kind].get("tools", [])
+	if not need.is_empty():
+		# Only those there are tools for: the rest would stand idle.
+		var cap := 0
+		for tid in need:
+			cap += item_count(String(tid))
+		people = people.slice(0, cap)
+		if people.is_empty():
+			return 0
 	for w in people:
 		if workers.has(w):
 			workers.erase(w)

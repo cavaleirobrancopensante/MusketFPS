@@ -561,8 +561,10 @@ cart with clean water).
 **Tools.** Each site wants its tool: a **felling axe** for woodland, a
 **pickaxe** for lead, sulphur and saltpetre (or a **shovel** for the
 saltpetre earth and sulphur crust), a **fishing rod** for fishing water.
-A man with the right tool does a whole share of the work; bare-handed, a
-third. Every tool in use has a 3% chance a day of breaking. Markets sell
+Nobody can do the work without the right tool: as many work as there are
+tools (a hunting ground needs none, the men take their muskets). The wagon
+starts with a few, saved from the ship: 2 axes, 2 pickaxes, 3 shovels and
+2 fishing rods. Every tool in use has a 3% chance a day of breaking. Markets sell
 them (villages and towns: all four; dwarf holds: picks and shovels), and
 CRAFT makes a fishing rod from 3 lb of hardwood.
 

@@ -1294,7 +1294,7 @@ func _fill_work() -> void:
 		var names: Array = []
 		for tid in need:
 			names.append("%s (%d)" % [Company.item_name(String(tid)), Company.item_count(String(tid))])
-		_work_box.add_child(wrap.call(_label(Lang.t("Tools for the work: %s in the wagon. Bare-handed, a man does a third of the work; any tool may break.") % Lang.t(" or ").join(names), 16, Color.WHITE)))
+		_work_box.add_child(wrap.call(_label(Lang.t("Tools for the work: %s in the wagon. Nobody can do this work without one, and any tool may break. Markets sell them.") % Lang.t(" or ").join(names), 16, Color.WHITE)))
 	# The work party here, if you left one.
 	var post: Dictionary = Company.posts.get(str(id), {})
 	if not post.is_empty():
@@ -1340,8 +1340,14 @@ func _fill_work() -> void:
 	# backs, and a labourer at his own trade).
 	var avail: Array = Company.ranked(Company.hands_for_work(), kind)
 	var ids: Array = avail.map(func(m): return int(m["id"]))
+	# As many can work as there are tools for it.
+	var tool_cap := avail.size()
+	if not need.is_empty():
+		tool_cap = 0
+		for tid in need:
+			tool_cap += Company.item_count(String(tid))
 	if _work_sel.is_empty() and not _work_sel_set:
-		_work_sel = ids.duplicate()
+		_work_sel = ids.slice(0, mini(ids.size(), tool_cap))
 		_work_sel_set = true
 	_work_sel = _work_sel.filter(func(x): return x in ids)
 	var chosen: Array = avail.filter(func(m): return int(m["id"]) in _work_sel)
@@ -1361,9 +1367,9 @@ func _fill_work() -> void:
 	nlab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	step.add_child(nlab)
 	for dn in [1, 5]:
-		var b2 := _button("+%d" % dn, func(): _work_set_count(mini(avail.size(), nsel + dn)); _fill_work())
+		var b2 := _button("+%d" % dn, func(): _work_set_count(mini(mini(avail.size(), tool_cap), nsel + dn)); _fill_work())
 		b2.custom_minimum_size = Vector2(70, 54)
-		b2.disabled = nsel >= avail.size()
+		b2.disabled = nsel >= mini(avail.size(), tool_cap)
 		step.add_child(b2)
 	step.add_child(_label(Lang.t("of %d  (%d labourers, %d fit soldiers)") % [avail.size(), nl, avail.size() - nl], 17, dim))
 	var pick := _button(Lang.t("HIDE THE LIST") if _work_pick_open else Lang.t("CHOOSE WHO"), func(): _work_pick_open = not _work_pick_open; _fill_work())
@@ -1408,8 +1414,10 @@ func _fill_work() -> void:
 		info = Lang.t("You've worked it out for now: it gives again in %d days. A work party left here still brings in a little every day.") % ceili(wait / 24.0)
 	elif nsel > 0:
 		info = Lang.t("%d hours' work for about %d to %d %s.") % [int(spec["hours"]), int(est["lo"]), int(est["hi"]), Company.item_label(String(spec["store"])).to_lower()]
-	if nsel > 0 and not need.is_empty() and int(est["bare"]) > 0:
-		info += "  " + Lang.t("%d of them without a tool.") % int(est["bare"])
+	if not need.is_empty() and tool_cap == 0:
+		info = Lang.t("No tools for this work in the wagon: nobody can do it bare-handed. Buy them in a market.")
+	elif nsel > 0 and not need.is_empty() and int(est["bare"]) > 0:
+		info += "  " + Lang.t("%d of them have no tool and would stand idle.") % int(est["bare"])
 	if nsel > 0:
 		info += "\n" + Lang.t("Left here as a work party: about %.1f %s a day (they feed themselves).") % [float(spec.get("daily", 0.3)) * float(est["eff"]), store_name]
 	if info != "":
@@ -1430,7 +1438,7 @@ func _fill_work() -> void:
 		_push_toast(msg)
 		World.waiting = true
 		_rest_until = World.hours + float(got["hours"]))
-	bw.disabled = wait > 0.0 or nsel <= 0
+	bw.disabled = wait > 0.0 or nsel <= 0 or float(est["eff"]) <= 0.0
 	row2.add_child(bw)
 	var bp := _button(Lang.t("LEAVE THEM HERE"), func():
 		var n := Company.post_party(id, chosen)
@@ -1439,7 +1447,7 @@ func _fill_work() -> void:
 		_push_toast(Lang.t("%d stay behind to work the %s. Come back to collect what they make.") % [n, Lang.t(String(spec["name"])).to_lower()])
 		_refresh_resource_labels()
 		_fill_work())
-	bp.disabled = nsel <= 0
+	bp.disabled = nsel <= 0 or float(est["eff"]) <= 0.0
 	row2.add_child(bp)
 	if kind in ["game", "fish"]:
 		# Or go after it yourself.
