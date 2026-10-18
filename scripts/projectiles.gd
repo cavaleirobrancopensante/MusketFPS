@@ -102,6 +102,14 @@ func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D, only:
 	var p := {"kind": kind, "pos": from, "prev": from, "vel": velocity, "shooter": shooter, "age": 0.0}
 	if only != null:
 		p["only"] = only
+	if kind in ["roundshot", "canister"] and shooter != null and is_instance_valid(shooter) and not shooter.is_in_group("enemies"):
+		# The gun's own crew (and you at the trail) are flat behind it, out
+		# of the way of their own shot, whatever it strikes close in front.
+		var spare: Array = []
+		for u in battle.soldiers + [battle.player]:
+			if is_instance_valid(u) and (u as Node3D).global_position.distance_to(from) < 7.0:
+				spare.append(u)
+		p["spare"] = spare
 	if kind == "javelin" or kind == "roundshot" or kind == "stone":
 		var mj := MeshInstance3D.new()
 		mj.mesh = _javelin_mesh if kind == "javelin" else _shot_mesh
@@ -185,7 +193,7 @@ func _step(p: Dictionary, delta: float) -> bool:
 		_spent(p, false)
 		return false
 	var done: Array = p.get("hit_list", [])
-	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done)
+	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done + p.get("spare", []))
 	if not hit.is_empty() and k.has("crush"):
 		var cat := prev.lerp(pos, float(hit["t"]))
 		_impact_unit(p, k, hit["unit"], cat)

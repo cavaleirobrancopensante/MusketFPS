@@ -241,6 +241,10 @@ func _ready() -> void:
 		game_state = "field"
 	_bring_horse()
 	_bring_light_gun()
+	if field == null and not prologue:
+		# Your company stands its ground until you give the word to follow.
+		order = Order.HOLD
+		_snap_line_to_player()
 
 	if field == null or field.hunt == "":
 		Company.battle_begun()
@@ -379,7 +383,15 @@ func _bring_light_gun() -> void:
 	var at: Vector3 = (pr.pos if pr != null else player.position) - right * (field._width_n(pr.kind, pr.members.size()) * 0.5 + 6.0) + fwd * 2.0
 	if camp:
 		at = field.camp_fire + Vector3(7.0, 0, -2.0)
-	make_light_gun(at, fwd)
+	var lg = make_light_gun(at, fwd)
+	if Company.Officer.branch() == "artillery" and not camp and lg != null and not lg.members.is_empty():
+		# The artillery officer goes into battle at his gun's trail, laying it
+		# (LEAVE THE GUN to fight on foot).
+		var g = lg.members[0]
+		var tp: Vector3 = player.trail_point(g)
+		player.position = Vector3(tp.x, field.terrain.height(tp.x, tp.z) + 0.3, tp.z)
+		player.rotation.y = atan2(-fwd.x, -fwd.z)
+		player.toggle_gun.call_deferred()
 
 
 ## The galloper and its crew as a battery of one ("Your gun").
@@ -545,10 +557,14 @@ func is_at_will() -> bool:
 
 
 func is_following() -> bool:
+	if field != null and field.player_reg != null:
+		return field.player_reg.order == "follow"
 	return order == Order.FOLLOW
 
 
 func is_holding() -> bool:
+	if field != null and field.player_reg != null:
+		return field.player_reg.order == "hold"
 	return order == Order.HOLD
 
 

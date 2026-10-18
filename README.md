@@ -46,9 +46,12 @@ each language still lacks.
     furthest; BLOCK braces it, so whatever runs at you lands on the point),
     Bladework +3, Leadership +1.
   - *Officer of Artillery*: a light gun (a galloper) and its crew, which
-    you lay and fire yourself: MAN THE GUN at its trail, look to traverse
-    and elevate (it follows slowly), a gold ring shows where the ball will
-    land, BALL or CANISTER. You can take over any of your guns the same
+    you lay and fire yourself: every battle starts with you at its trail
+    (LEAVE THE GUN to fight on foot, MAN THE GUN to go back); look to
+    traverse and elevate (it follows, a little slowly), a gold ring shows
+    where the ball will land, BALL or CANISTER. The crew are flat behind
+    the gun when it fires: your own shot never hits them, even striking the
+    works close in front. You can take over any of your guns the same
     way. Gunnery +3 (every crew reloads faster, your shot scatters less),
     Tactics +1.
   - *Officer of Horse*: you start mounted, with a lance (COUCH it at the
@@ -341,7 +344,8 @@ every man is a dot in his tag's colour, the wagon is a box. On the right:
 - **ONE LINE** and **PIKES AHEAD** presets.
 
 In battle the formation keeps its shape around you: it moves and wheels with
-you on FOLLOW and stays put on HOLD. Before a fight you saw coming, the
+you on FOLLOW and stays put on HOLD. Every battle starts on HOLD: your
+company stands its ground until you give the word to FOLLOW. Before a fight you saw coming, the
 encounter offers **PLAN** first. An **ambush** (a warband you never saw
 coming) gives no time: the men start scattered.
 

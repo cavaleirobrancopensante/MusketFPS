@@ -44,7 +44,7 @@ var light := false
 ## the word; the crew still sponges, loads and rams.
 var manned := false
 var elev := 0.0 # the barrel's elevation (radians, up +)
-const TRAVERSE := 0.7 # rad/s: the trail shifted round by handspike
+const TRAVERSE := 1.1 # rad/s: the trail shifted round by handspike
 var _crew := {} # role -> {"holder", "rig"}
 var _cartridge := -1
 var _flash: OmniLight3D

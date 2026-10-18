@@ -84,6 +84,7 @@ var tint := Color.WHITE
 
 # --- Pose targets (written by _npc_pose, or by the player when manual).
 var manual := false
+var full_rate := false # re-pose every frame however far (cutscenes: no level-of-detail stutter)
 var t_grip := Vector3(0.22, 1.12, 0.02)
 var t_dir := Vector3(0, 1, 0.15)
 var t_hand_r = null # Vector3 in body space, or null = on the musket's wrist
@@ -902,7 +903,9 @@ func _process(delta: float) -> void:
 		if cam != null:
 			var d := cam.global_position.distance_to(global_position)
 			_detail = d < DETAIL_RANGE
-			if not cam.is_position_in_frustum(global_position + Vector3.UP):
+			if full_rate:
+				pass
+			elif not cam.is_position_in_frustum(global_position + Vector3.UP):
 				interval = 8
 			elif d > MID_RANGE:
 				interval = 4

@@ -601,7 +601,7 @@ func _lay_gun() -> void:
 	var tp: Vector3 = trail_point(gun)
 	global_position = Vector3(tp.x, global_position.y, tp.z)
 	gun.crew.want_yaw = rotation.y
-	gun.crew.elev = clampf(pitch, -0.09, 0.42)
+	gun.crew.elev = clampf(pitch, -0.03, 0.5) # (never down into the works in front)
 
 
 func toggle_shot() -> void:
@@ -631,7 +631,7 @@ func add_look(drag: Vector2) -> void:
 	if not alive:
 		return
 	# Finer turning while aiming, for steady shots.
-	var sens := LOOK_SENS * lerpf(1.0, 0.55, aim_amount) * (0.5 if gun != null else 1.0)
+	var sens := LOOK_SENS * lerpf(1.0, 0.55, aim_amount) * (0.75 if gun != null else 1.0)
 	if spyglass:
 		sens *= SPYGLASS_FOV / FOV
 	rotation.y -= drag.x * sens

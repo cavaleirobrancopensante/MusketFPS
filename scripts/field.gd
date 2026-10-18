@@ -323,7 +323,7 @@ func spawn_armies() -> void:
 	var p: Vector3 = player_reg.pos
 	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
-	player_reg.order = "follow"
+	player_reg.order_hold() # (they stand their ground until you say FOLLOW)
 
 
 ## The hunt: you, your musket, and game. Deer graze in small herds in the
@@ -469,7 +469,7 @@ func spawn_campaign() -> void:
 	var p: Vector3 = player_reg.pos
 	battle.player.position = Vector3(p.x, terrain.height(p.x, p.z) + 0.3, p.z)
 	battle.player.rotation.y = 0.0
-	player_reg.order = "follow"
+	player_reg.order_hold() # (they stand their ground until you say FOLLOW)
 	if camp:
 		_make_camp(nb)
 	if assault:
