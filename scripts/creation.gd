@@ -13,6 +13,52 @@ extends Control
 const UI := preload("res://scripts/ui.gd")
 const Officer := preload("res://scripts/officer.gd")
 const Colours := preload("res://scripts/colours.gd")
+const CompanyScript := preload("res://scripts/company.gd")
+
+## In plain words: what each attribute and skill means for you in play
+## (the ? beside each opens it; Officer.ATTR_HELP / SKILLS["help"] give the
+## exact numbers underneath).
+const ATTR_LAY := {
+	"aim": "How steady your hands are when you shoot. Higher Aim: your musket and pistol shots land closer to where you point. It also limits how high Marksmanship can go.",
+	"strength": "How hard you hit up close. Higher Strength: bayonet, sabre and pike blows do more damage. It limits Bladework.",
+	"constitution": "How much punishment you can take. Higher Constitution: more health, so you survive more hits before you go down.",
+	"fitness": "How quick and enduring you are. Higher Fitness: you run faster in battle. It limits Pathfinding and Riding.",
+	"wits": "How sharp your mind is. At 7 or more you get an extra skill point every time you level up. It limits Tactics, Surgery, Logistics, Tongues and Gunnery.",
+	"presence": "How much men respect and follow you. It limits Leadership, Trade and Training: the skills that work through other people.",
+}
+const SKILL_LAY := {
+	"marksmanship": "Your own shooting. Each level, your shots scatter less and you reload a little faster. Take it if you like to fight with the musket in your own hands.",
+	"bladework": "Fighting up close yourself. Each level, your blows hurt more and your parry is easier to time. Take it if you charge in with the bayonet, sabre or pike.",
+	"riding": "Fighting from horseback. Your horse runs and turns faster and your blows from the saddle land harder. Mostly for an Officer of Horse.",
+	"gunnery": "Cannon. Every gun in your company reloads faster, and the shots you aim yourself land closer. Mostly for an Officer of Artillery.",
+	"leadership": "Keeping your men brave and loyal. They hold their ground longer in battle before breaking, and fewer desert or mutiny when times are hard.",
+	"tactics": "Commanding well. Your orders reach the men faster, your night watch spots attackers more often, and you get away more often when you try to slip off.",
+	"surgery": "Saving your wounded. Wounded men get back on their feet sooner, and after a victory some men you thought dead pull through.",
+	"logistics": "Packing the wagon well. It carries more food, water, powder and loot before it's full.",
+	"pathfinding": "Finding your way across the land. You march faster on the map, see further, spot tracks from further away and read them better, and scouts get lost less.",
+	"trade": "Haggling. Towns and villages sell to you cheaper and pay you more for what you sell them.",
+	"training": "Teaching your men. They earn experience faster, so recruits become veterans sooner.",
+	"tongues": "Languages. You pick up the local languages faster, and people understand you more often, which opens up talk, trade and news.",
+}
+## What each kind of officer gets, plainly: [heading, line] pairs.
+const BRANCH_GETS := {
+	"line": [["Your two units", "Two companies of musketeers (4 more men than the others start with)."],
+		["Your own kit", "A musket with bayonet, a pistol and a sabre."],
+		["Skills", "Marksmanship +3, Leadership +1: you shoot straighter and load faster."],
+		["In battle", "You fight in the line with your men; their volleys are your main weapon."]],
+	"pike": [["Your two units", "A company of musketeers and a block of pikemen (6 pikemen)."],
+		["Your own kit", "A pike: the longest reach of any weapon. Hold BLOCK to brace it and anything that charges you runs onto the point."],
+		["Skills", "Bladework +3, Leadership +1."],
+		["In battle", "Your pikes stop charges cold (raptor riders, horse, brutes) while the muskets shoot."]],
+	"artillery": [["Your two units", "A company of musketeers and a light gun with its crew."],
+		["Your own kit", "You aim and fire the gun yourself: round shot far off, canister up close. You can leave it to fight on foot."],
+		["Skills", "Gunnery +3, Tactics +1: every gun you ever have reloads faster."],
+		["In battle", "Every battle starts with you at the gun."]],
+	"cavalry": [["Your two units", "A company of musketeers and a troop of 6 horsemen (dragoons with carbines, and lancers)."],
+		["Your own kit", "A horse, a lance, a sabre and a pistol. Couch the lance at the gallop for a deadly charge."],
+		["Skills", "Riding +3, Bladework +1."],
+		["In battle", "You start mounted; ride down skirmishers and hit them in the flank. Keep your horse alive."]],
+}
 const INTRO := "res://scenes/intro.tscn"
 const MENU := "res://scenes/menu.tscn"
 
@@ -147,7 +193,12 @@ func _left_column() -> Control:
 	_name_edit.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
 	_name_edit.add_theme_font_size_override("font_size", 22)
 	_name_edit.max_length = 28
-	v.add_child(_name_edit)
+	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var nr := HBoxContainer.new()
+	nr.add_theme_constant_override("separation", 6)
+	nr.add_child(_name_edit)
+	nr.add_child(_dice(_random_name))
+	v.add_child(nr)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 8)
 	v.add_child(gap)
@@ -172,11 +223,11 @@ func _left_column() -> Control:
 	prev.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(prev)
 	_uniform_view = Uniform.new()
-	_uniform_view.custom_minimum_size = Vector2(76, 78)
+	_uniform_view.custom_minimum_size = Vector2(100, 104)
 	_uniform_view.owner_screen = self
 	prev.add_child(_uniform_view)
 	_flag_view = TextureRect.new()
-	_flag_view.custom_minimum_size = Vector2(117, 78)
+	_flag_view.custom_minimum_size = Vector2(156, 104)
 	_flag_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_flag_view.stretch_mode = TextureRect.STRETCH_SCALE
 	_flag_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -185,12 +236,12 @@ func _left_column() -> Control:
 	var pr := HBoxContainer.new()
 	pr.add_theme_constant_override("separation", 6)
 	v.add_child(pr)
-	var pl := _label(Lang.t("Flag"), 15, DIM)
-	pl.custom_minimum_size = Vector2(54, 0)
+	var pl := _label(Lang.t("Flag"), 19, DIM)
+	pl.custom_minimum_size = Vector2(70, 0)
 	pl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	pr.add_child(pl)
 	pr.add_child(_small("‹", func(): pattern_i = (pattern_i + Colours.PATTERNS.size() - 1) % Colours.PATTERNS.size(); _refresh()))
-	_pattern_l = _label("", 17)
+	_pattern_l = _label("", 20)
 	_pattern_l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_pattern_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pattern_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -198,21 +249,32 @@ func _left_column() -> Control:
 	pr.add_child(_small("›", func(): pattern_i = (pattern_i + 1) % Colours.PATTERNS.size(); _refresh()))
 	v.add_child(_swatch_row(Lang.t("Field"), "field", Colours.FLAG_COLOURS))
 	v.add_child(_swatch_row(Lang.t("Device"), "charge", Colours.FLAG_COLOURS))
-	return _wrap(v)
+	# (all of it in a scroll, now the colours are big enough to tap)
+	var panel := _wrap(v)
+	panel.remove_child(v)
+	var sc := UI.scroll()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(v)
+	panel.add_child(sc)
+	return panel
 
 
 ## A row of colour swatches to pick from.
 func _swatch_row(title: String, key: String, cols: Array) -> Control:
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 3)
-	var l := _label(title, 15, DIM)
-	l.custom_minimum_size = Vector2(54, 0)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	var l := _label(title, 19, DIM)
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
-	h.add_child(l)
+	box.add_child(l)
+	var h := HFlowContainer.new()
+	h.add_theme_constant_override("h_separation", 6)
+	h.add_theme_constant_override("v_separation", 6)
+	box.add_child(h)
 	var list: Array = []
 	for i in cols.size():
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(26, 30)
+		b.custom_minimum_size = Vector2(44, 44)
 		b.focus_mode = Control.FOCUS_NONE
 		b.set_meta("col", cols[i])
 		b.pressed.connect(func():
@@ -224,7 +286,7 @@ func _swatch_row(title: String, key: String, cols: Array) -> Control:
 		h.add_child(b)
 		list.append(b)
 	_swatches[key] = list
-	return h
+	return box
 
 
 func _colours() -> Dictionary:
@@ -309,6 +371,7 @@ func _right_column() -> Control:
 	_attr_pts = _label("", 16, GOLD)
 	_attr_pts.autowrap_mode = TextServer.AUTOWRAP_OFF
 	h.add_child(_attr_pts)
+	h.add_child(_dice(_random_attrs))
 	var sc := UI.scroll()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -318,7 +381,7 @@ func _right_column() -> Control:
 	list.add_theme_constant_override("separation", 4)
 	sc.add_child(list)
 	for k in Officer.ATTRS:
-		_attr_rows[k] = _row(list, Lang.t(Officer.ATTR_NAMES[k]), _on_attr.bind(k, -1), _on_attr.bind(k, 1))
+		_attr_rows[k] = _row(list, Lang.t(Officer.ATTR_NAMES[k]), _on_attr.bind(k, -1), _on_attr.bind(k, 1), _explain.bind("attr", k))
 	var sh := HBoxContainer.new()
 	list.add_child(sh)
 	var sk := UI.heading(Lang.t("Skills"), 22)
@@ -327,16 +390,21 @@ func _right_column() -> Control:
 	_skill_pts = _label("", 16, GOLD)
 	_skill_pts.autowrap_mode = TextServer.AUTOWRAP_OFF
 	sh.add_child(_skill_pts)
+	sh.add_child(_dice(_random_skills))
 	for k in Officer.SKILL_ORDER:
-		_skill_rows[k] = _row(list, Lang.t(Officer.SKILLS[k]["name"]), _on_skill.bind(k, -1), _on_skill.bind(k, 1))
+		_skill_rows[k] = _row(list, Lang.t(Officer.SKILLS[k]["name"]), _on_skill.bind(k, -1), _on_skill.bind(k, 1), _explain.bind("skill", k))
 	return _wrap(v)
 
 
 ## A name, its value, and - / + buttons.
-func _row(parent: Control, name: String, minus: Callable, plus: Callable) -> Array:
+func _row(parent: Control, name: String, minus: Callable, plus: Callable, explain: Callable) -> Array:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 6)
 	parent.add_child(h)
+	var q := _small("?", explain)
+	q.custom_minimum_size = Vector2(40, 40)
+	q.add_theme_color_override("font_color", GOLD)
+	h.add_child(q)
 	var l := _label(name, 18)
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -435,9 +503,12 @@ func _refresh() -> void:
 		"pike": kit = Lang.t("a company of musketeers and a block of pikes (+%d pikemen), and a pike of your own") % int(br["extra_men"])
 		"artillery": kit = Lang.t("a company of musketeers and a light gun with its crew")
 		"cavalry": kit = Lang.t("a company of musketeers, and a horse, a lance, a sabre and a pistol, and a troop of %d dragoons and lancers") % int(br["extra_men"])
-	_branch_text.text = Lang.t("[b][color=#%s]%s[/color][/b]\n%s\n\n[color=#%s]%s[/color] %s\n[color=#%s]%s[/color] %s") % [
-		GOLD.to_html(false), Lang.t(br["name"]), Lang.t(br["text"]),
-		DIM.to_html(false), Lang.t("Skills:"), ", ".join(gives), DIM.to_html(false), Lang.t("You bring:"), kit]
+	var bt := "[b][color=#%s]%s[/color][/b]\n" % [GOLD.to_html(false), Lang.t(br["name"])]
+	bt += Lang.t("[b]What you get:[/b]") + "\n"
+	for row in BRANCH_GETS[branch]:
+		bt += "[color=#%s]•  %s:[/color] %s\n" % [GOLD.to_html(false), Lang.t(row[0]), Lang.t(row[1])]
+	bt += "\n[color=#%s]%s[/color]" % [DIM.to_html(false), Lang.t(br["text"])]
+	_branch_text.text = bt
 	_attr_pts.text = Lang.t("%d to spend") % _attr_left()
 	for k in _attr_rows:
 		var row: Array = _attr_rows[k]
@@ -453,6 +524,100 @@ func _refresh() -> void:
 		(row[1] as Button).disabled = int(spent.get(k, 0)) <= 0
 		(row[2] as Button).disabled = _skill_left() <= 0 or lv + 1 > _cap(k)
 		(row[3] as Label).tooltip_text = Lang.t(String(Officer.SKILLS[k]["help"]))
+
+
+# ---------------------------------------------------------------- dice and ?
+
+## A small button with a die on it.
+func _dice(cb: Callable) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(UI.MIN_TOUCH, UI.MIN_TOUCH)
+	b.focus_mode = Control.FOCUS_NONE
+	b.tooltip_text = Lang.t("Roll at random")
+	b.pressed.connect(cb)
+	var d := Die.new()
+	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	d.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	b.add_child(d)
+	return b
+
+
+func _random_name() -> void:
+	_name_edit.text = "%s %s" % [CompanyScript.FIRST_NAMES.pick_random(), CompanyScript.LAST_NAMES.pick_random()]
+
+
+## Spend the attribute points at random (sometimes lowering one to 4 for an
+## extra point elsewhere, as you could by hand).
+func _random_attrs() -> void:
+	for k in attrs:
+		attrs[k] = ATTR_BASE
+	if randf() < 0.4:
+		attrs[Officer.ATTRS.pick_random()] = ATTR_BASE - 1
+	var guard := 0
+	while _attr_left() > 0 and guard < 200:
+		guard += 1
+		var k: String = Officer.ATTRS.pick_random()
+		if int(attrs[k]) < ATTR_START_MAX and int(attrs[k]) >= ATTR_BASE:
+			attrs[k] = int(attrs[k]) + 1
+	spent.clear()
+	_refresh()
+
+
+## Spend the skill points at random, within each skill's cap (favouring
+## the ones your attributes are best at).
+func _random_skills() -> void:
+	spent.clear()
+	var guard := 0
+	while _skill_left() > 0 and guard < 300:
+		guard += 1
+		var k: String = Officer.SKILL_ORDER.pick_random()
+		if randf() > float(_cap(k)) / 8.0:
+			continue
+		if _skill(k) + 1 <= _cap(k):
+			spent[k] = int(spent.get(k, 0)) + 1
+	_refresh()
+
+
+## The ? beside an attribute or skill: what it means, in plain words and in
+## numbers.
+func _explain(what: String, k: String) -> void:
+	var title := ""
+	var lay := ""
+	var exact := ""
+	if what == "attr":
+		title = Lang.t(Officer.ATTR_NAMES[k])
+		lay = Lang.t(ATTR_LAY[k])
+		exact = Lang.t(Officer.ATTR_HELP[k])
+	else:
+		var sk: Dictionary = Officer.SKILLS[k]
+		title = Lang.t(sk["name"])
+		lay = Lang.t(SKILL_LAY[k])
+		exact = Lang.t(sk["help"]) + "\n" + Lang.t("Can't be raised above your %s.") % Lang.t(Officer.ATTR_NAMES[String(sk["attr"])])
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.55)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(shade)
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UI.box(UI.WOOL, 22, 8, 0.25))
+	p.custom_minimum_size = Vector2(620, 0)
+	p.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	shade.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	p.add_child(v)
+	v.add_child(UI.heading(title, 30))
+	v.add_child(_label(lay, 21))
+	var ex := _label(Lang.t("In numbers: ") + exact, 17, DIM)
+	v.add_child(ex)
+	var ok := _button(Lang.t("Got it"), func(): shade.queue_free(), true)
+	v.add_child(ok)
+	shade.gui_input.connect(func(e: InputEvent):
+		if (e is InputEventMouseButton and e.pressed) or (e is InputEventScreenTouch and e.pressed):
+			shade.queue_free())
+	# (centre it once it knows its size)
+	await get_tree().process_frame
+	if is_instance_valid(p):
+		p.position = (shade.size - p.size) * 0.5
 
 
 func _on_begin() -> void:
@@ -545,3 +710,18 @@ class Emblem extends Control:
 				draw_colored_polygon(pts, col)
 				draw_circle(c + Vector2(-s * 0.3, -s * 0.3), s * 0.07, dark)
 				draw_line(c + Vector2(s * 0.3, -s * 0.5), c + Vector2(s * 0.6, s * 0.6), col.darkened(0.4), s * 0.1)
+
+
+## A die face (five pips), for the random buttons.
+class Die extends Control:
+	func _draw() -> void:
+		var s := minf(size.x, size.y) * 0.62
+		var o := (size - Vector2(s, s)) * 0.5
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.93, 0.9, 0.82)
+		sb.set_corner_radius_all(int(s * 0.18))
+		draw_style_box(sb, Rect2(o, Vector2(s, s)))
+		var pip := Color(0.15, 0.12, 0.1)
+		var r := s * 0.09
+		for p in [Vector2(0.25, 0.25), Vector2(0.75, 0.25), Vector2(0.5, 0.5), Vector2(0.25, 0.75), Vector2(0.75, 0.75)]:
+			draw_circle(o + p * s, r, pip)

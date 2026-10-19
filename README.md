@@ -33,6 +33,13 @@ each language still lacks.
 **NEW CAMPAIGN** (after picking a slot) opens the new-campaign screen
 (`scripts/creation.gd`):
 
+- A die beside your name rolls a random one; dice beside Attributes and
+  Skills spend the points at random (within the rules). Every attribute
+  and skill has a **?** that explains it in plain words, with the exact
+  numbers underneath. Each kind of officer lists plainly what you get:
+  your two units, your own kit, the skills, and how you fight. The
+  colours (coat, flag pattern, field and device) are big enough to tap.
+
 - **Your name**, and the **difficulty**: Easy, Normal, Hard or Ironman.
   It scales the enemy's numbers and toughness (bigger warbands, braver and
   harder to kill), the damage you and your men take, money (the starting
