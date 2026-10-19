@@ -57,7 +57,8 @@ each language still lacks.
     Bladework +3, Leadership +1.
   - *Officer of Artillery*: a light gun (a galloper) and its crew, which
     you lay and fire yourself: every battle starts with you at its trail
-    (LEAVE THE GUN to fight on foot, MAN THE GUN to go back); look to
+    (LEAVE THE GUN to fight on foot; walk back to its trail and MAN THE GUN
+    shows on the left); look to
     traverse and elevate (it follows, a little slowly), a gold ring shows
     where the ball will land, BALL or CANISTER. The crew are flat behind
     the gun when it fires: your own shot never hits them, even striking the
@@ -246,7 +247,20 @@ with every seed.
   over them, so the river grows wider. March into a shut ford and you
   choose: WAIT FOR IT TO FALL, CROSS NOW (rations and powder spoiled, a man
   may drown; worse the higher it runs) or FIND ANOTHER WAY (a bridge or
-  another ford). (Next: damp powder and slack bowstrings in battle.)
+  another ford). **What the weather does to you**: rain soaks the
+  company's powder (less in camp or with the powder covered; dry air and
+  sun dry it out), and in battle damp powder misfires and loads slowly;
+  rain slackens bowstrings (archers shoot wide and soft); the battlefield
+  takes the weather of where it's fought (rain falling round you, a greyer
+  light, fog, heat haze, a storm's lightning and thunder) and the battle
+  opens with a line saying so. Rain on a work party stops most of the work
+  (charcoal pits, saltpetre beds, sulphur, fields; mines less) and fish
+  bite better after it. On the march the weather asks you: a squall
+  (COVER THE POWDER, an hour, or PUSH ON: damp powder and soaked rations),
+  fog (WAIT FOR IT TO LIFT or MARCH ON: a man may wander off, the wagon may
+  go into a ditch), the heat (REST IN THE SHADE or PUSH ON: men drop, water
+  goes) and, in camp in a storm, lightning (a man burned, the wagon's
+  stores crushed by a tree, or just a sleepless night).
 - **Tracks** (`World.tracks`, as in Mount & Blade): every party on the
   move leaves a trail of arrows on the map, pointing the way it went, that
   fades over two days. You only see tracks near you (5 cells, +2 a level of

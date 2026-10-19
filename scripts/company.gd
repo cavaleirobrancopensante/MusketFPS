@@ -1793,7 +1793,10 @@ func _posts_day() -> PackedStringArray:
 		var wf := work_force(kind, people, post["tools"])
 		var st: Dictionary = post["stock"]
 		var store := String(spec.get("post_store", spec["store"]))
-		st[store] = float(st.get(store, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"]) * World.season_yield(kind)
+		var wx: float = World.weather.site_work(str(key), kind) if World.is_ready and World.weather != null else 1.0
+		if wx < 0.7:
+			notes.append(Lang.t("Rain at the %s: little work done today.") % site_name)
+		st[store] = float(st.get(store, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"]) * World.season_yield(kind) * wx
 		var also: Dictionary = spec.get("also", {})
 		for k in also:
 			st[k] = float(st.get(k, 0.0)) + float(spec.get("daily", 0.3)) * float(wf["eff"])

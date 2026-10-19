@@ -165,7 +165,7 @@ const MOUNT_REACH := 3.2
 var gun = null
 var fishing = null # a rod in your hands (fishing.gd, fishing at the river)
 var gun_shot := "roundshot"
-const GUN_REACH := 3.6
+const GUN_REACH := 5.0
 
 var _want_fire := false
 var _last_reload_p := 1.0
@@ -599,10 +599,13 @@ func toggle_gun() -> void:
 
 
 func _leave_gun() -> void:
+	var was = gun
 	if gun != null and is_instance_valid(gun):
 		gun.manned = false
 		gun.crew.manned = false
 	gun = null
+	if was != null and battle.hud != null and alive:
+		battle._hint("gun_back", Lang.t("To lay the gun again, walk back to its trail (behind it): MAN THE GUN shows on the left."), 7.0)
 
 
 ## At the trail: the gun turns (slowly) to where you look and the barrel
@@ -1074,14 +1077,14 @@ func _fire() -> void:
 		return
 	if not loaded or _reprime > 0.0:
 		return
-	if randf() < misfire_chance:
+	if randf() < misfire_chance + battle.wx_misfire:
 		# A flash in the pan: prime it again.
 		_reprime = 1.2
 		battle.play_sound_ui("crack", -10.0)
 		battle.hud.show_message(Lang.t("Misfire!"), 1.0)
 		return
 	loaded = false
-	reload_left = reload_time
+	reload_left = reload_time * battle.wx_reload
 	if ammo > 0:
 		ammo -= 1
 		ammo_used += 1

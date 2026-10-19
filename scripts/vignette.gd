@@ -432,8 +432,8 @@ func _stage() -> void:
 			_cam_from = Vector3(-8, 3, 10)
 			_cam_to = Vector3(6, 4, 10)
 			_look = Vector3(0, 1.5, -4)
-		"fever", "bog", "spoor":
-			_env.fog_density = 0.05 if kind == "fever" else 0.02
+		"fever", "bog", "spoor", "fog":
+			_env.fog_density = 0.05 if kind in ["fever", "fog"] else 0.02
 			_env.fog_light_color = Color(0.75, 0.78, 0.72)
 			for i in 30:
 				_box(Vector3(0.06, _rng.randf_range(0.8, 1.6), 0.06), Vector3(_rng.randf_range(-12, 12), 0.5, _rng.randf_range(-12, 4)), Color(0.45, 0.48, 0.28))

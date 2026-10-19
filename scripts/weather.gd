@@ -35,6 +35,13 @@ var heat_hours := 0.0 # today, marching in the heat
 var last_rain_h := -99.0 # when it last rained where you are
 var state := "" # "storm", "rain", "fog", "heat" or "" where you are now
 var _seed := 0
+# Stage 3: what the weather does to the company.
+var damp := 0.0 # 0 dry .. 1 soaked: the powder and the cartridges (misfires, slow loading)
+var covered_until := -1.0 # the kegs under tarpaulin (a squall's COVER THE POWDER)
+var site_rain := {} # work post key -> hours of rain on it today (Company._posts_day)
+var _site_t := 0.0
+var pending_event := "" # a weather pop-up waiting to be asked (World.advance: events.weather_event)
+var _last_event := {} # event id -> hours when it last came
 # Rivers (stage 2): water that has run off into each river cell, flowing
 # downstream; how high that puts it; which fords are under and which banks
 # are flooded (mirrored in gen.wet, for speed_at and the map).
@@ -98,7 +105,8 @@ func to_dict() -> Dictionary:
 	for c in water:
 		wl[str(c)] = snappedf(float(water[c]), 0.01)
 	return {"storms": storms, "next_id": next_id, "rain_hours": rain_hours, "heat_hours": heat_hours,
-		"last_rain_h": last_rain_h, "state": state, "water": wl}
+		"last_rain_h": last_rain_h, "state": state, "water": wl, "damp": snappedf(damp, 0.01),
+		"covered_until": covered_until, "site_rain": site_rain}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -108,6 +116,9 @@ func from_dict(d: Dictionary) -> void:
 	heat_hours = float(d.get("heat_hours", 0.0))
 	last_rain_h = float(d.get("last_rain_h", -99.0))
 	state = String(d.get("state", ""))
+	damp = float(d.get("damp", 0.0))
+	covered_until = float(d.get("covered_until", -1.0))
+	site_rain = d.get("site_rain", {})
 	water.clear()
 	var wl: Dictionary = d.get("water", {})
 	for k in wl:
@@ -116,6 +127,10 @@ func from_dict(d: Dictionary) -> void:
 
 
 func clear() -> void:
+	damp = 0.0
+	site_rain.clear()
+	pending_event = ""
+	_last_event.clear()
 	storms.clear()
 	water.clear()
 	closed.clear()
@@ -169,6 +184,7 @@ func tick(dh: float) -> void:
 	_wash_tracks(dh)
 	_rivers_tick(dh)
 	_here(dh)
+	_sites_tick(dh)
 
 
 func _spawn_storm() -> void:
@@ -475,6 +491,16 @@ func _here(dh: float) -> void:
 		rain_hours += dh
 	if ht > 0.4 and w.moving():
 		heat_hours += dh
+	# The powder: rain soaks it (less under canvas, in camp or covered), dry
+	# air and sun dry it out again.
+	if r > 0.15:
+		var shelter := 0.35 if (w.camping or w.hours < covered_until) else 1.0
+		damp = minf(1.0, damp + r * dh * 0.3 * shelter)
+	else:
+		damp = maxf(0.0, damp - dh * (0.04 + 0.12 * ht))
+	# Lightning near the camp at night.
+	if w.camping and r > 0.55 and thunder_at(w.pos) and randf() < 0.06 * dh:
+		_ask("lightning")
 	var now := ""
 	if r > 0.55 and thunder_at(w.pos):
 		now = "storm"
@@ -502,6 +528,62 @@ func _here(dh: float) -> void:
 		if text != "":
 			w.log.append("%s  %s" % [w.clock(), text])
 			w.news.emit(text)
+		# On the march, the weather can ask you something (events.gd).
+		if w.moving() and not w.camping:
+			match now:
+				"storm":
+					_ask("squall")
+				"fog":
+					if f > 0.55:
+						_ask("fog")
+				"heat":
+					if ht > 0.6:
+						_ask("heatwave")
+
+
+## A weather pop-up, once in a while for each kind (World.advance asks it).
+func _ask(id: String) -> void:
+	if w.hours - float(_last_event.get(id, -999.0)) < 30.0:
+		return
+	_last_event[id] = w.hours
+	pending_event = id
+
+
+## Rain on your work parties: the hours of it today, by post.
+func _sites_tick(dh: float) -> void:
+	_site_t += dh
+	if _site_t < 1.0 or storms.is_empty() or not Company.active:
+		_site_t = minf(_site_t, 1.0)
+		return
+	_site_t -= 1.0
+	for key in Company.posts:
+		var r: Dictionary = w.resource(int(key))
+		if r.is_empty():
+			continue
+		var rn := rain_at(Vector2(float(r["x"]), float(r["y"])) + Vector2(0.5, 0.5))
+		if rn > 0.2:
+			site_rain[str(key)] = float(site_rain.get(str(key), 0.0)) + rn
+
+
+## How much work a site gets done today for the rain on it (and the catch
+## after rain is better). Takes the day's tally away.
+func site_work(key: String, kind: String) -> float:
+	var h := float(site_rain.get(key, 0.0))
+	site_rain.erase(key)
+	if kind == "fish":
+		return 1.0 + minf(0.3, h * 0.03) # (fish bite after rain)
+	if kind in ["charcoal", "saltpetre", "sulphur", "farm"]:
+		return maxf(0.2, 1.0 - h * 0.08) # (a pit, a bed, a field: rain stops it)
+	return maxf(0.5, 1.0 - h * 0.04)
+
+
+## The weather where a battle is fought, for battle.gd: rain, fog, heat, a
+## storm overhead, and how damp the company's powder is.
+func battle_weather() -> Dictionary:
+	var c: Vector2i = w.cell()
+	var r := rain_at(w.pos)
+	return {"rain": r, "fog": fog_at(c), "heat": heat_at(c), "storm": r > 0.55 and thunder_at(w.pos),
+		"damp": clampf(maxf(damp, r * 0.6), 0.0, 1.0)}
 
 
 ## The day ends: hand the tallies to the march (World._midnight).

@@ -64,6 +64,19 @@ const TABLE := {
 	"flood": ["The river has risen",
 		"Rain upstream: the ford is a brown torrent.",
 		[["WAIT FOR IT TO FALL", "wait"], ["CROSS NOW", "cross"], ["FIND ANOTHER WAY", "around"]]],
+	# Weather (weather.gd asks these when it turns; never from the random table).
+	"squall": ["A squall",
+		"The sky goes black and the rain comes in sideways, thunder with it. The cartridge boxes and the powder kegs are open to it.",
+		[["COVER THE POWDER (1 h)", "cover"], ["PUSH ON", "push"]]],
+	"fog": ["Fog",
+		"Fog comes down so thick that from the wagon you can't see the head of the column. Anything could be out there.",
+		[["WAIT FOR IT TO LIFT", "wait"], ["MARCH ON", "push"]]],
+	"heatwave": ["The heat",
+		"The sun beats down on the open ground. The men's tongues are sticking to their teeth, and the water barrels are going down fast.",
+		[["REST IN THE SHADE (3 h)", "rest"], ["PUSH ON", "push"]]],
+	"lightning": ["Lightning!",
+		"A crack like a cannon over the camp, and the whole sky goes white.",
+		[["SEE WHAT IT HIT", "ok"]]],
 	"camp": ["An abandoned camp",
 		"Cold ashes, a torn tent, bootprints going nowhere in particular.",
 		[["SEARCH", "search"], ["LEAVE", "leave"]]],
@@ -79,6 +92,15 @@ var _last := {} # event id -> hours when it last happened
 ## Choose an event for where the company is now, or {} for none.
 var _spoor := {} # the trail the "Lizard tracks" event found
 const FORD_RISK := 0.5
+
+
+## The weather has turned where you are (weather.gd pending_event).
+func weather_event(_w, id: String) -> Dictionary:
+	if not TABLE.has(id):
+		return {}
+	var row: Array = TABLE[id]
+	_last[id] = _w.hours
+	return {"id": id, "title": Lang.t(row[0]), "text": Lang.t(row[1]), "options": (row[2] as Array).map(func(o): return [Lang.t(o[0]), o[1]])}
 
 
 ## The ford ahead is under water (World._walk stopped at it).
@@ -177,8 +199,8 @@ func _weight(id: String, x: Dictionary) -> float:
 			return 1.5 if t in [T.HILLS, T.MOUNTAIN] else 0.0
 		"fishing":
 			return 1.2 if x["river"] else 0.0
-		"flood":
-			return 0.0 # (it comes when a real flood shuts the ford in front of you: flood_event)
+		"flood", "squall", "fog", "heatwave", "lightning":
+			return 0.0 # (they come from the weather itself: flood_event, weather_event)
 		"camp":
 			return 0.6
 		"prospectors":
@@ -336,6 +358,61 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				var fish := randi_range(6, 14)
 				st["rations"] = int(st["rations"]) + fish
 				return _done(Lang.t("%d rations of fish, cleaned and smoked.") % fish)
+		"squall":
+			if key == "cover":
+				w.pass_hours(1.0)
+				w.weather.covered_until = w.hours + 8.0
+				return _done(Lang.t("Tarpaulins over the kegs and the cartridge boxes, the wagon's cover lashed down. The men are soaked to the skin, but the powder stays dry."))
+			w.weather.damp = minf(1.0, w.weather.damp + 0.35)
+			var soaked := int(st["rations"]) / 8
+			st["rations"] = int(st["rations"]) - soaked
+			return _done(Lang.t("You push on through it. The cartridges are damp (expect misfires until they dry) and %d rations are soaked and spoiled.") % soaked)
+		"fog":
+			if key == "wait":
+				var waited := 0
+				while w.weather.fog_at(w.cell()) > 0.3 and waited < 6:
+					w.pass_hours(1.0)
+					waited += 1
+				return _done(Lang.t("%d hours sitting in the white. Then the sun burns through and you can see where you are.") % maxi(1, waited))
+			if randf() < 0.3:
+				var m := _random_man()
+				if not m.is_empty() and Company.roster.size() > 6:
+					_lose(m, Lang.t("lost in the fog"))
+					return _done(Lang.t("You march on by the compass. When the fog lifts, %s is gone: wandered off the road and never found.") % Company.title(m))
+			if randf() < 0.4:
+				w.pass_hours(1.5)
+				return _done(Lang.t("The wagon goes off the road into a ditch in the white. An hour and a half to get it out."))
+			return _done(Lang.t("You march on by the compass and the sound of the drum. You come out of it on the right road."))
+		"heatwave":
+			if key == "rest":
+				w.pass_hours(3.0)
+				_morale(1)
+				return _done(Lang.t("Three hours under the trees, hats over their faces. The worst of the day goes by."))
+			var down := 0
+			for m in Company.roster:
+				if int(m.get("sick", 0)) <= 0 and randf() < 0.08 - 0.01 * (int(m["attrs"]["constitution"]) - 5):
+					m["sick"] = randi_range(1, 2)
+					down += 1
+			_morale(-2)
+			st["water"] = maxi(0, int(st["water"]) - 4)
+			if down > 0:
+				return _done(Lang.t("You push on. %d men drop in the heat and have to be carried on the wagon; the water barrels are low.") % down)
+			return _done(Lang.t("You push on. Grumbling, sweat, the water barrels lower, but nobody drops."))
+		"lightning":
+			var roll := randf()
+			if roll < 0.35:
+				var m2 := _random_man()
+				if not m2.is_empty():
+					m2["wounded_days"] = maxi(int(m2["wounded_days"]), randi_range(2, 4))
+					return _done(Lang.t("It struck the tree over %s's blanket. He's burned and dazed, but alive.") % Company.title(m2))
+			if roll < 0.7:
+				var lost := mini(int(st.get("powder", 0)), randi_range(2, 6))
+				st["powder"] = int(st.get("powder", 0)) - lost
+				var spoiled := int(st["rations"]) / 10
+				st["rations"] = int(st["rations"]) - spoiled
+				return _done(Lang.t("A pine by the wagon split down the middle and fell across it. Some of the stores are crushed: %d powder and %d rations.") % [lost, spoiled])
+			_morale(-1)
+			return _done(Lang.t("It struck the hill above the camp. Nobody sleeps much after that."))
 		"flood":
 			var ford: Vector2i = w.ford_block
 			w.ford_block = Vector2i(-1, -1)

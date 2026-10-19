@@ -628,6 +628,12 @@ func advance(dh: float) -> void:
 			_party_tick(p, step)
 		_see_tracks()
 		weather.tick(step)
+		if weather.pending_event != "":
+			var we: Dictionary = events.weather_event(self, weather.pending_event)
+			weather.pending_event = ""
+			if not we.is_empty():
+				event.emit(we)
+				return
 		var ws: float = weather.sight_mult()
 		if absf(ws - _wsight) > 0.08:
 			_wsight = ws

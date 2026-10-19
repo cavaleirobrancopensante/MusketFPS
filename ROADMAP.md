@@ -194,7 +194,7 @@ stakes and whose gate the guns batter. Next:
   dismounting dragoons.
 - Riding yourself: you on a horse, leading the cavalry.
 
-### Weather (stages 1-2 done: 1.68, 1.69)
+### Weather ✅ (stages 1-3: 1.68, 1.69, 1.73)
 
 - Stage 1 ✅: a prevailing wind off each map's sea, storms that form over the
   sea and travel inland with it (rain heavier on rising ground, a rain
@@ -203,9 +203,26 @@ stakes and whose gate the guns batter. Next:
   lightning on the 3D map.
 - Stage 2 ✅: rivers rising after rain upstream (the flood travels down a day
   later), fords closing, flooded rivers drawn wider.
-- Stage 3: damp powder (misfires, slower loading), slack bowstrings,
+- Stage 3 ✅: damp powder (misfires, slower loading), slack bowstrings,
   storm damage to the wagon, work sites stopped by rain, weather pop-up
   events, and the weather inside battles.
+
+### Pickable overhaul (next)
+
+- Everything anyone carries on the battlefield can be picked up when they
+  die: every weapon (muskets, pikes, bows, crossbows, swords, javelins,
+  lances, pistols), ammunition (cartridges, arrows, bolts, powder, shot) and
+  other things you can use (rammers, tools, grenades, the colours).
+
+### Cannon overhaul (next)
+
+- An ammunition box by every gun (round shot, canister, powder) that can be
+  emptied and refilled.
+- Working a gun alone: pick up the tools (rammer, sponge, linstock), carry
+  the powder and shot from the box, load it step by step and fire it.
+- Take control of any gun by selecting it (walk up and tap it, or from the
+  command view) and lay it in first person; it's always clear how to get
+  back on a gun you've left.
 
 ### Boats and ships (future)
 

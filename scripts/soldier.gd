@@ -492,7 +492,7 @@ func _shoot() -> void:
 	if in_way == "player" or (in_way == "friend" and randf() > 0.05 * (1.0 - steadiness)):
 		shot_timer = randf_range(0.3, 0.7)
 		return
-	if randf() < misfire_chance:
+	if randf() < misfire_chance + battle.wx_misfire:
 		# Flash in the pan: a puff by the lock, no shot. Re-prime and try again.
 		battle.spawn_flash(muzzle - dir * 0.6)
 		battle.play_sound("ramrod", muzzle, -10.0)
@@ -504,7 +504,7 @@ func _shoot() -> void:
 		ammo -= 1
 		if ammo == 0:
 			battle.on_out_of_ammo(self)
-	reload_left = reload_time * randf_range(0.9, 1.15)
+	reload_left = reload_time * randf_range(0.9, 1.15) * battle.wx_reload # (damp cartridges load slow)
 	_ram_sound_t = 1.5
 	play_oneshot("fire", 0.25)
 	battle.spawn_smoke(muzzle, 1.0, dir)
@@ -512,7 +512,7 @@ func _shoot() -> void:
 	battle.play_sound("musket", muzzle, -2.0)
 	# A real ball: smoothbores scatter, nerves make it worse, and a miss flies
 	# on to whatever is behind.
-	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult
+	var spread: float = lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult * (1.0 + (0.8 * battle.wx_rain if missile in ["arrow", "bolt"] else 0.0)) # (a wet string)
 	var v: Vector3 = battle.projectiles.spread_dir(aim_point - muzzle, spread) * BALL_SPEED
 	battle.projectiles.fire("ball", muzzle, v, self)
 
@@ -550,7 +550,7 @@ func _loose() -> void:
 		var flat := Vector2(v.x, v.z).length()
 		var t := Vector2(aim.x - from.x, aim.z - from.z).length() / maxf(flat, 0.1)
 		aim = target.global_position + Vector3.UP * 1.1 + tv * t
-	var spread := lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult
+	var spread: float = lerpf(SPREAD_JUMPY, SPREAD_STEADY, steadiness) * spread_mult * (1.0 + 0.8 * battle.wx_rain) # (a wet string)
 	v = battle.projectiles.spread_dir(v, spread) * v.length()
 	loaded = false
 	ammo_used += 1
@@ -563,6 +563,8 @@ func _loose() -> void:
 	play_oneshot("fire", 0.3)
 	battle.play_sound("bow" if missile == "arrow" else "crossbow", from, -6.0)
 	var p: Dictionary = battle.projectiles.fire(missile, from, v, self)
+	if battle.wx_rain > 0.1:
+		p["dmg_mult"] = 1.0 - 0.35 * battle.wx_rain # (a bowstring slack with the wet throws soft)
 	p["dmg_mult"] = dmg_mult
 	battle.missile_spent(missile)
 

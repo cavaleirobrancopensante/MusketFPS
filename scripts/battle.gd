@@ -96,6 +96,13 @@ var _autotest_timer := 0.0
 
 # Prologue state.
 var prologue := false
+## The weather on the field (weather.gd battle_weather): rain, fog, heat, a
+## storm, and how damp the powder is. Damp powder misfires and loads slow;
+## rain slackens bowstrings (archers shoot wide and soft).
+var wx := {}
+var wx_misfire := 0.0
+var wx_reload := 1.0
+var wx_rain := 0.0
 var allies: Array = [] # the other companies' men (not yours)
 var captain = null
 var story_phase := "" # line -> captain_down -> retreat -> escaped
@@ -120,6 +127,19 @@ func _ready() -> void:
 	var nb: Dictionary = Company.next_battle if Company.active and not prologue else {}
 	camp = bool(nb.get("camp", false))
 	spotted = camp and bool(nb.get("spotted", false))
+	if Company.active and World.is_ready and World.weather != null and not prologue and not bool(nb.get("rearguard", false)):
+		wx = World.weather.battle_weather()
+		wx_rain = float(wx["rain"])
+		wx_misfire = float(wx["damp"]) * 0.3 + wx_rain * 0.08
+		wx_reload = 1.0 + 0.35 * float(wx["damp"])
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--wx="): # (tests: --wx=storm|fog|heat)
+			var k := a.substr(5)
+			wx = {"rain": 1.0 if k == "storm" else 0.0, "fog": 0.8 if k == "fog" else 0.0, "heat": 0.9 if k == "heat" else 0.0,
+				"storm": k == "storm", "damp": 0.8 if k == "storm" else 0.0}
+			wx_rain = float(wx["rain"])
+			wx_misfire = float(wx["damp"]) * 0.3 + wx_rain * 0.08
+			wx_reload = 1.0 + 0.35 * float(wx["damp"])
 	night = camp or bool(nb.get("night", false))
 	_setup_input()
 	Loading.begin(self)
@@ -145,6 +165,7 @@ func _ready() -> void:
 		add_child(field)
 		field.setup(self, fcfg)
 	_build_world()
+	_weather_fx()
 	await Loading.step(f[3], Lang.t("Mustering the company..."))
 
 	player = PlayerScript.new()
@@ -295,6 +316,13 @@ func _ready() -> void:
 		hud.show_message(Lang.t("Fish in the river. Hold CAST, let go to throw."), 5.0)
 	elif field != null and field.rearguard:
 		hud.show_message(Lang.t("The foot of the cliff path"), 3.0)
+	elif not wx.is_empty() and (float(wx["damp"]) > 0.25 or bool(wx["storm"]) or float(wx["fog"]) > 0.35):
+		if float(wx["damp"]) > 0.25:
+			hud.show_message(Lang.t("Rain on the field, the cartridges damp: expect misfires."), 5.0)
+		elif float(wx["fog"]) > 0.35:
+			hud.show_message(Lang.t("Fog on the field: they'll be on you before you see them."), 5.0)
+		else:
+			hud.show_message(Lang.t("A storm over the field. Keep your powder dry!"), 5.0)
 	else:
 		hud.show_message(Lang.t("Form the line! They're coming..."), 4.5)
 	Loading.done(self)
@@ -1221,6 +1249,7 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	if _fire_light != null:
 		_flicker(delta)
+	_weather_tick(delta)
 	if victory:
 		victory_t += delta
 	if Input.is_action_just_pressed("volley"):
@@ -2063,11 +2092,86 @@ func _add_key(action: String, key: Key) -> void:
 	InputMap.action_add_event(action, ev)
 
 
+var _wx_env: Environment
+var _wx_rain_fx: GPUParticles3D
+var _wx_bolt_t := 3.0
+var _wx_flash := 0.0
+var _wx_amb := 1.0
+
+
+## The weather on the field: rain falling round you, the light greyed, fog
+## thickened, heat haze, lightning and thunder in a storm.
+func _weather_fx() -> void:
+	if wx.is_empty() or _wx_env == null:
+		return
+	var rain := float(wx["rain"])
+	var fog := float(wx["fog"])
+	var heat := float(wx["heat"])
+	var sun = _wx_env.get_meta("sun") if _wx_env.has_meta("sun") else null
+	if rain > 0.1:
+		_wx_env.fog_density += 0.006 * rain
+		_wx_env.fog_light_color = _wx_env.fog_light_color.lerp(Color(0.55, 0.58, 0.62), 0.6 * rain)
+		_wx_env.ambient_light_energy *= 1.0 - 0.3 * rain
+		if sun != null:
+			sun.light_energy *= 1.0 - 0.6 * rain
+		_wx_rain_fx = GPUParticles3D.new()
+		_wx_rain_fx.amount = int(1400 * clampf(rain, 0.3, 1.0))
+		_wx_rain_fx.lifetime = 0.7
+		_wx_rain_fx.local_coords = false
+		_wx_rain_fx.visibility_aabb = AABB(Vector3(-30, -20, -30), Vector3(60, 40, 60))
+		var pm := ParticleProcessMaterial.new()
+		pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		pm.emission_box_extents = Vector3(22, 0.5, 22)
+		pm.direction = Vector3(0.15, -1, 0.05).normalized()
+		pm.spread = 3.0
+		pm.initial_velocity_min = 24.0
+		pm.initial_velocity_max = 28.0
+		pm.gravity = Vector3.ZERO
+		_wx_rain_fx.process_material = pm
+		var streak := BoxMesh.new()
+		streak.size = Vector3(0.012, 0.6, 0.012)
+		var sm := StandardMaterial3D.new()
+		sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		sm.albedo_color = Color(0.75, 0.8, 0.88, 0.35)
+		sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		streak.material = sm
+		_wx_rain_fx.draw_pass_1 = streak
+		add_child(_wx_rain_fx)
+	if fog > 0.2:
+		_wx_env.fog_density += 0.02 * fog
+		_wx_env.fog_light_color = _wx_env.fog_light_color.lerp(Color(0.78, 0.8, 0.8), 0.7 * fog)
+	if heat > 0.3:
+		_wx_env.fog_light_color = _wx_env.fog_light_color.lerp(Color(0.92, 0.82, 0.6), 0.5 * heat)
+		if sun != null:
+			sun.light_color = (sun.light_color as Color).lerp(Color(1.0, 0.88, 0.66), 0.5 * heat)
+	_wx_amb = _wx_env.ambient_light_energy
+	if field != null:
+		field.fog = _wx_env.fog_density
+
+
+func _weather_tick(delta: float) -> void:
+	if _wx_rain_fx != null and player != null:
+		var c: Camera3D = get_viewport().get_camera_3d()
+		var at: Vector3 = c.global_position if c != null else player.global_position
+		_wx_rain_fx.global_position = at + Vector3(0, 12, 0)
+	if not wx.is_empty() and bool(wx["storm"]):
+		_wx_bolt_t -= delta
+		if _wx_bolt_t <= 0.0:
+			_wx_bolt_t = randf_range(5.0, 14.0)
+			_wx_flash = 1.0
+			var d := randf_range(0.3, 2.5)
+			get_tree().create_timer(d).timeout.connect(func(): play_sound_ui("thunder", clampf(-2.0 - d * 4.0, -14.0, -2.0)) if sounds.has("thunder") else null)
+		if _wx_env != null:
+			_wx_flash = maxf(0.0, _wx_flash - delta * 6.0)
+			_wx_env.ambient_light_energy = _wx_amb * (1.0 + 3.0 * _wx_flash)
+
+
 func _build_world() -> void:
 	# Sky, light and air (look.gd), for the time of day the fight happens at.
 	var look := _terrain_look()
 	var tod := "night" if night else _battle_time()
 	var env := Look.environment(self, tod, look["haze"], look["fog"])
+	_wx_env = env
 	if prologue:
 		env.fog_density = 0.009
 		env.fog_light_color = Color(0.78, 0.8, 0.78)
