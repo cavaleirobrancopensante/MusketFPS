@@ -794,7 +794,9 @@ static func native_kit(p: Dictionary) -> Dictionary:
 			g["secondary"] = "long_knife"
 	if job in ["guard", "smith", "miner", "stonecutter", "mason"]:
 		g["torso"] = "jack"
-		if job == "guard" or fac == "dwarves":
+		if fac == "dwarves":
+			g["head"] = "dwarf_helm"
+		elif job == "guard":
 			g["head"] = "kettle_hat"
 	var ammo: int = {"bow": 24, "crossbow": 16}.get(role, 0)
 	var tag: String = {"bow": "Bows", "crossbow": "Crossbows"}.get(role, "Spears")

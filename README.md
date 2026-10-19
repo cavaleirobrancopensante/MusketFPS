@@ -636,7 +636,7 @@ warbands, or guard the dwarf traders on the roads.
   musket, which they keep to copy (and once they can make muskets...).
 
 Dwarf traders fight beside you when you save them: crossbowmen with their
-own heavy crossbows and shieldmen in mail, short, broad and bearded.
+own heavy crossbows and shieldmen in mail, short, broad and bearded, in round steel helms with a nose guard.
 
 ### The kingdoms' armies (medieval) and your horse
 

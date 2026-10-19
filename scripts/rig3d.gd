@@ -507,6 +507,13 @@ func _build_hat(hat: String) -> void:
 			_part(head, _cyl_mesh(0.06, 0.12, 0.14), STEEL.darkened(0.1), Vector3(0, 0.26, 0))
 			_part(head, _box_mesh(Vector3(0.025, 0.12, 0.02)), STEEL.darkened(0.1), Vector3(0, 0.15, -0.12))
 			_part(head, _box_mesh(Vector3(0.25, 0.16, 0.24)), MAIL, Vector3(0, 0.06, 0.02))
+		"dwarf_helm":
+			# A dwarf's helm: a round steel cap with a brow band and a broad
+			# nose guard, nothing over the beard.
+			_part(head, [SPHERE, Vector3(0.25, 0.2, 0.25)], STEEL.darkened(0.05), Vector3(0, 0.2, 0.005))
+			_part(head, _cyl_mesh(0.12, 0.12, 0.035), STEEL.darkened(0.25), Vector3(0, 0.17, 0.005)) # the brow band
+			_part(head, _box_mesh(Vector3(0.035, 0.09, 0.022)), STEEL.darkened(0.2), Vector3(0, 0.13, -0.122)) # the nose guard
+			_part(head, _sphere_mesh(0.022), STEEL.darkened(0.2), Vector3(0, 0.3, 0)) # a knob on top
 		"kettle_hat":
 			_part(head, _cyl_mesh(0.1, 0.115, 0.11), STEEL.darkened(0.15), Vector3(0, 0.24, 0))
 			_part(head, _cyl_mesh(0.2, 0.2, 0.014), STEEL.darkened(0.1), Vector3(0, 0.19, 0)) # the broad brim
