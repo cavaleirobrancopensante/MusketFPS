@@ -213,12 +213,262 @@ func _ready() -> void:
 	ctrl.player = self
 	ctrl.rig = rig
 	add_child(ctrl)
+	_ctrl = ctrl
 	_update_camera()
 
 
 ## The retreat's bayonet charge (field_rearguard.gd): every officer, of
 ## whatever kind, goes in on foot with a musket and bayonet.
 var bayonet_drill := false
+var _ctrl = null
+
+# ---------------------------------------------------------------- picking things up
+# (pickups.gd: whatever the fallen carried; gun tools and rounds)
+
+## Weapons you've picked up on this field: gear keys added to your kit.
+var extra_gear := {}
+## Gun tools you carry (rammer, linstock) and the round in your arms.
+var tools := {}
+var carry := "" # "roundshot" or "canister": a gun's round, carried to the muzzle
+## Javelins picked up from fallen lizards: thrown with the JAVELIN button.
+var javelins := 0
+## A job at a gun that takes a moment (sponge, load, ram): [what, left, total, gun].
+var work: Array = []
+const WORK_TIMES := {"sponge": 2.4, "load": 1.0, "ram": 1.6, "take": 0.6}
+
+
+## What the context button would do here: {"id", "label", "ok"} or {}.
+## A gun whose crew is down comes first, then anything lying at your feet.
+func context_action() -> Dictionary:
+	if not alive or mounted or gun != null or fishing != null:
+		return {}
+	if not work.is_empty():
+		var w: Array = work
+		return {"id": "work", "label": "%s %d%%" % [_work_label(String(w[0])), int(100.0 * (1.0 - float(w[1]) / float(w[2])))], "ok": false}
+	var ga := _gun_action()
+	if bool(ga.get("ok", false)):
+		return ga
+	var pk = battle.get("pickups")
+	if pk != null:
+		var d: Dictionary = pk.nearest(global_position, 2.2)
+		if not d.is_empty():
+			var nm: String = pk.item_name(String(d["item"]))
+			if int(d["n"]) > 1:
+				nm += " (%d)" % int(d["n"])
+			return {"id": "pick", "label": Lang.t("PICK UP: %s") % nm, "ok": true}
+	return ga
+
+
+## At a gun whose crew is down: what needs doing next, where you stand.
+func _gun_action() -> Dictionary:
+	var g = _silent_gun_near(6.0)
+	if g != null:
+		var c = g.crew
+		var me := global_position
+		if Vector2(me.x - c.box_point().x, me.z - c.box_point().z).length() < 2.0 and carry == "" and c.box_total() > 0:
+			var k := gun_shot if int(c.box.get(gun_shot, 0)) > 0 else ("canister" if gun_shot == "roundshot" else "roundshot")
+			return {"id": "take", "label": Lang.t("TAKE A ROUND: %s (%d)") % [Lang.t("BALL") if k == "roundshot" else Lang.t("CANISTER"), int(c.box[k])], "ok": true}
+		var mo: Vector3 = c.mouth_point()
+		if Vector2(me.x - mo.x, me.z - mo.z).length() < 2.4:
+			if not c.solo_clean:
+				return {"id": "sponge", "label": Lang.t("SPONGE OUT THE BORE") if tools.has("rammer") else Lang.t("FIND THE RAMMER"), "ok": tools.has("rammer")}
+			if c.solo_charge == "":
+				if carry != "":
+					return {"id": "load", "label": Lang.t("LOAD THE ROUND"), "ok": true}
+				return {"id": "none", "label": Lang.t("FETCH A ROUND FROM THE BOX"), "ok": false}
+			if not c.solo_rammed:
+				return {"id": "ram", "label": Lang.t("RAM IT HOME") if tools.has("rammer") else Lang.t("FIND THE RAMMER"), "ok": tools.has("rammer")}
+	return {}
+
+
+func _work_label(w: String) -> String:
+	return {"sponge": Lang.t("SPONGING"), "load": Lang.t("LOADING"), "ram": Lang.t("RAMMING"), "take": Lang.t("TAKING A ROUND")}.get(w, w.to_upper())
+
+
+## The context button pressed.
+func do_context() -> void:
+	var a := context_action()
+	if a.is_empty():
+		return
+	var id := String(a["id"])
+	if id == "pick":
+		_pick_up()
+		return
+	if not bool(a.get("ok", false)):
+		if id == "sponge" or id == "ram":
+			battle.hud.show_message(Lang.t("The rammer: the crew's long pole with the sponge on one end. Look for it on the ground by the gun."), 2.5)
+		elif id == "none":
+			battle.hud.show_message(Lang.t("The ammunition box is behind the gun, on its left."), 2.0)
+		return
+	var g = _silent_gun_near(6.0)
+	if g == null:
+		return
+	work = [id, float(WORK_TIMES[id]), float(WORK_TIMES[id]), g, global_position]
+	battle.play_sound_ui("crank" if id != "take" else "thud", -12.0)
+
+
+## A job at the gun runs while you stand there; walk off and it stops.
+func _work_tick(delta: float) -> void:
+	if work.is_empty():
+		return
+	var at: Vector3 = work[4]
+	if global_position.distance_to(at) > 0.8 or not alive:
+		work = []
+		return
+	work[1] = float(work[1]) - delta
+	if float(work[1]) > 0.0:
+		return
+	var g = work[3]
+	var id := String(work[0])
+	work = []
+	if not is_instance_valid(g):
+		return
+	var c = g.crew
+	match id:
+		"take":
+			carry = c.take_round(gun_shot)
+		"sponge":
+			c.solo_clean = true
+			battle.play_sound_ui("ramrod", -8.0)
+		"load":
+			c.solo_charge = carry
+			carry = ""
+		"ram":
+			c.solo_rammed = true
+			battle.play_sound_ui("ramrod", -6.0)
+			battle.hud.show_hint(Lang.t("Loaded! Go behind the gun: MAN THE GUN, lay it, FIRE with the linstock."), 4.0)
+
+
+## A gun nearby whose crew is down (yours or theirs): you can work it alone.
+func _silent_gun_near(r: float):
+	if battle.field == null:
+		return null
+	var best = null
+	var bd := r
+	for g in battle.guns_down:
+		if not is_instance_valid(g) or not g.crew.silent:
+			continue
+		var d := global_position.distance_to(g.crew.global_position)
+		if d < bd:
+			bd = d
+			best = g
+	return best
+
+
+## Pick up whatever lies closest: use what you can, and weapons go on the
+## wagon after the fight.
+func _pick_up() -> void:
+	var pk = battle.get("pickups")
+	if pk == null:
+		return
+	var d: Dictionary = pk.nearest(global_position, 2.2)
+	if d.is_empty():
+		return
+	var item := String(d["item"])
+	var n := int(d["n"])
+	var what: String = pk.item_name(item)
+	var said := ""
+	match item:
+		"cartridges":
+			if ammo < 0:
+				said = Lang.t("You've cartridges enough.")
+			else:
+				var room := maxi(0, 60 - ammo)
+				var got := mini(n, room)
+				if got <= 0:
+					battle.hud.show_message(Lang.t("Your cartridge box is full."), 1.5)
+					return
+				ammo += got
+				if not loaded and weapon == "musket" and reload_left <= 0.0:
+					reload_left = reload_time
+				said = Lang.t("+%d cartridges (%d in your box).") % [got, ammo]
+		"arrows", "bolts":
+			if Company.active:
+				Company.stores[item] = int(Company.stores.get(item, 0)) + n
+			said = Lang.t("%d %s into the quiver.") % [n, what.to_lower()]
+		"javelins":
+			javelins += n
+			said = Lang.t("%d javelins: throw them with JAVELIN.") % n
+		"rammer", "linstock":
+			if tools.has(item):
+				battle.hud.show_message(Lang.t("You already have one."), 1.2)
+				return
+			tools[item] = true
+			said = Lang.t("You take up the %s.") % what.to_lower()
+		"roundshot", "canister":
+			if carry != "":
+				battle.hud.show_message(Lang.t("Your arms are full."), 1.2)
+				return
+			carry = item
+			said = Lang.t("You lift the %s.") % what.to_lower()
+		_:
+			said = _take_weapon(item, what)
+	pk.remove(d)
+	battle.play_sound_ui("thud", -14.0)
+	if said != "":
+		battle.hud.show_message(said, 2.2)
+
+
+## A weapon off the ground: one you can use joins your kit for this fight
+## (a bow, a crossbow, a sword, a pistol); every one goes on the wagon.
+func _take_weapon(item: String, what: String) -> String:
+	if Company.active:
+		Company.add_item(item, 1)
+	var slot := String(Company.ITEMS.get(item, {}).get("slot", ""))
+	var spec: Dictionary = Company.ITEMS.get(item, {})
+	var missile := String(spec.get("missile", ""))
+	if missile == "arrow" and not has_bow:
+		has_bow = true
+		extra_gear["bow"] = item
+		_rebuild_rig()
+		return Lang.t("You take up the %s. (BOW along the bottom.)") % what.to_lower()
+	if missile == "bolt" and not has_crossbow:
+		has_crossbow = true
+		extra_gear["crossbow"] = item
+		_rebuild_rig()
+		return Lang.t("You take up the %s. (CROSSBOW along the bottom.)") % what.to_lower()
+	if slot == "sword" and not has_saber:
+		has_saber = true
+		extra_gear["sword"] = item
+		_rebuild_rig()
+		return Lang.t("You take up the %s. (SABRE along the bottom.)") % what.to_lower()
+	if item == "pistol" and not has_pistol:
+		has_pistol = true
+		pistol_loaded = ammo != 0
+		extra_gear["pistol"] = item
+		_rebuild_rig()
+		return Lang.t("You stick the pistol in your belt.")
+	return Lang.t("%s: onto the wagon after the fight.") % what
+
+
+## Your body again with what you've picked up (a new weapon to draw).
+func _rebuild_rig() -> void:
+	if rig == null or _ctrl == null:
+		return
+	var g: Dictionary = (_gear() if Company.active else {}).duplicate()
+	g.merge(extra_gear, true)
+	var old = rig
+	rig = Rig3D.new()
+	rig.kind = "officer"
+	rig.gear = g
+	rig.manual = true
+	add_child(rig)
+	_ctrl.rig = rig
+	old.queue_free()
+
+
+## Throw a javelin you picked up, along your look.
+func throw_javelin() -> void:
+	if not alive or javelins <= 0 or gun != null or throw_left > 0.0:
+		return
+	javelins -= 1
+	var fwd := -camera.global_transform.basis.z
+	var from := camera.global_position + fwd * 0.6
+	var v := fwd * 30.0 + Vector3.UP * 2.5
+	var p: Dictionary = battle.projectiles.fire("javelin", from, v, self)
+	p["dmg_mult"] = 1.2
+	battle.play_sound_ui("swish", -6.0)
+	fired.emit(false)
 
 
 func _gear() -> Dictionary:
@@ -562,16 +812,22 @@ func nearest_gun():
 		return null
 	var best = null
 	var bd := GUN_REACH
+	var cands: Array = battle.guns_down.duplicate()
 	for r in battle.field.regs:
-		if r.side != 0 or r.kind != "gun":
+		if r.kind == "gun":
+			cands.append_array(r.members)
+	for g in cands:
+		if not is_instance_valid(g) or g.manned or g.engine != "gun":
 			continue
-		for g in r.members:
-			if not is_instance_valid(g) or not g.alive or g.crew.silent or g.manned:
-				continue
-			var d := global_position.distance_to(trail_point(g))
-			if d < bd:
-				bd = d
-				best = g
+		# Your own gun with its crew, or any gun whose crew is down (yours
+		# or one taken from them).
+		var live: bool = int(g.side) == 0 and g.alive and not g.crew.silent
+		if not live and not g.crew.silent:
+			continue
+		var d := minf(global_position.distance_to(trail_point(g)), global_position.distance_to(g.crew.global_position) + 0.5)
+		if d < bd:
+			bd = d
+			best = g
 	return best
 
 
@@ -611,7 +867,7 @@ func _leave_gun() -> void:
 ## At the trail: the gun turns (slowly) to where you look and the barrel
 ## rises and falls with your look; you stay at your post.
 func _lay_gun() -> void:
-	if not is_instance_valid(gun) or not gun.alive or gun.crew.silent:
+	if not is_instance_valid(gun) or (not gun.alive and not gun.crew.silent):
 		_leave_gun()
 		return
 	var tp: Vector3 = trail_point(gun)
@@ -627,11 +883,19 @@ func toggle_shot() -> void:
 
 ## Give the word: the crew stand clear and the match goes to the vent.
 func _fire_gun() -> void:
-	if not gun.crew.ready():
-		battle.hud.show_message(Lang.t("Still loading!"), 0.8)
+	if gun.crew.silent:
+		if not gun.crew.ready():
+			battle.hud.show_message(Lang.t("It isn't loaded: sponge, load a round and ram it home at the muzzle first."), 2.0)
+			return
+		if not tools.has("linstock"):
+			battle.hud.show_message(Lang.t("You need the linstock (the burning match) to fire it. Look on the ground by the gun."), 2.0)
+			return
+	elif not gun.crew.ready():
+		battle.hud.show_message(Lang.t("Still loading!") if gun.crew.box_total() > 0 else Lang.t("The ammunition box is empty!"), 0.8)
 		return
 	if gun.crew.fire_laid(gun_shot, Company.Officer.gun_scatter_mult(), self):
-		gun.reg.fired()
+		if gun.reg != null and is_instance_valid(gun.reg):
+			gun.reg.fired()
 		_shake = maxf(_shake, 0.7)
 		fired.emit(false)
 
@@ -845,6 +1109,7 @@ func _physics_process(delta: float) -> void:
 			velocity.z = 0.0
 			_lay_gun()
 
+		_work_tick(delta)
 		_update_switch(delta)
 		_update_swing(delta)
 		_couch_tick(delta)

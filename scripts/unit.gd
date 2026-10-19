@@ -325,6 +325,9 @@ func _die() -> void:
 	sprite_node.rotation = Vector3(-PI * 0.5, 0, 0)
 	_sprite_col = Color(0.55, 0.55, 0.55)
 	rotation.y = randf() * TAU
+	# What he carried falls with him: anyone can pick it up (pickups.gd).
+	if battle != null and battle.get("pickups") != null:
+		battle.pickups.drop_from(self)
 	_on_died()
 
 

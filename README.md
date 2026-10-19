@@ -1219,6 +1219,24 @@ The gun fires only when the drill is done and it's laid on the target, so
 the battery's shots come raggedly, gun by gun. Lizards that reach a gun cut
 the crew down and it falls silent.
 
+Each gun has an **ammunition box** behind it on the left (30 round shot and
+10 canister; a light gun 20 and 8). The crew draws every round from it, and
+when it's empty the gun is done. When a crew is cut down they drop the
+rammer and the linstock, and you can **work the gun alone**: pick them up,
+then at the muzzle a gold button walks you through it (SPONGE OUT THE BORE,
+TAKE A ROUND at the box, LOAD THE ROUND, RAM IT HOME), and at the trail MAN
+THE GUN, lay it and FIRE with the linstock. Leaving a gun is never final:
+walk back to its trail and MAN THE GUN shows again.
+
+### Picking things up
+
+Whatever a fallen man or lizard carried lies on the ground where he fell
+(`pickups.gd`): his weapon, what's left of his cartridges, arrows or bolts,
+a skirmisher's javelins, a crew's gun tools. Walk over it and press PICK UP:
+cartridges fill your box, arrows and bolts go to the stores, javelins are
+thrown with JAVELIN, a bow, crossbow, sword or pistol joins your kit, and
+anything else goes on the wagon after the fight.
+
 ### Tests (on the main menu)
 
 **Tests** opens a list of fights outside the campaign:

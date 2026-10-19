@@ -229,9 +229,18 @@ func _buttons() -> Array:
 		list.append({"id": "gun", "circle": false, "rect": mb, "label": Lang.t("LEAVE THE GUN")})
 	elif player.can_man_gun():
 		list.append({"id": "gun", "circle": false, "rect": mb, "label": Lang.t("MAN THE GUN")})
-	elif player.horse != null and not player.horse.dead and player.alive:
+	elif player.horse != null and not player.horse.dead and player.alive and player.context_action().is_empty():
 		var near: bool = player.global_position.distance_to(player.horse.global_position) < player.MOUNT_REACH
 		list.append({"id": "mount", "circle": false, "rect": mb, "label": Lang.t("MOUNT") if near else Lang.t("CALL HORSE")})
+	# Whatever you can do right here: pick something up, or work a gun whose
+	# crew is down (sponge, take a round, load, ram).
+	var ca: Dictionary = player.context_action()
+	if not ca.is_empty():
+		var cr := Rect2(20, my + (66 if list.any(func(b): return b.get("rect") == mb) else 0), 300, 58)
+		list.append({"id": "context", "circle": false, "rect": cr, "label": String(ca["label"]), "primary": bool(ca.get("ok", false))})
+	if player.javelins > 0 and player.gun == null:
+		list.append({"id": "javelin", "circle": true, "pos": Vector2(s.x - 470, s.y - 220), "r": 44.0,
+			"label": Lang.t("JAVELIN %d") % player.javelins})
 	if Settings.playground:
 		# The range's own controls, down the left side.
 		var pl := [["pg_still1", Lang.t("+1 TARGET")], ["pg_still5", Lang.t("+5 TARGETS")], ["pg_charge5", Lang.t("+5 CHARGING")],
@@ -435,6 +444,10 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			player.toggle_mount()
 		"gun":
 			player.toggle_gun()
+		"context":
+			player.do_context()
+		"javelin":
+			player.throw_javelin()
 		"shot":
 			player.toggle_shot()
 		"end_hunt":
@@ -500,6 +513,19 @@ func _draw() -> void:
 	_draw_swing_indicator(c)
 	if player.gun != null:
 		_draw_gun_sight()
+		var gc = player.gun.crew
+		var box_t: String = Lang.t("AMMUNITION BOX: %d ball · %d canister") % [int(gc.box["roundshot"]), int(gc.box["canister"])]
+		if gc.silent:
+			box_t = Lang.t("WORKING IT ALONE: %s · %s · %s") % [Lang.t("sponged") if gc.solo_clean else Lang.t("foul"),
+				(Lang.t("loaded") if gc.solo_charge != "" else Lang.t("empty")), (Lang.t("rammed") if gc.solo_rammed else Lang.t("not rammed"))]
+		_text_center(box_t, Vector2(size.x * 0.5, size.y - 40), 17, Color(1, 0.9, 0.7, 0.9))
+	elif player.carry != "" or not player.tools.is_empty():
+		var bits: Array = []
+		if player.carry != "":
+			bits.append(Lang.t("Carrying: %s") % (Lang.t("round shot") if player.carry == "roundshot" else Lang.t("canister")))
+		if not player.tools.is_empty():
+			bits.append(Lang.t("Tools: %s") % ", ".join(player.tools.keys().map(func(k): return Lang.t("rammer") if k == "rammer" else Lang.t("linstock"))))
+		_text_center("  ·  ".join(bits), Vector2(size.x * 0.5, size.y - 40), 17, Color(1, 0.9, 0.7, 0.9))
 	if player.fishing != null:
 		_draw_fishing()
 	_draw_horse_marker()
@@ -791,6 +817,10 @@ func _draw_button(b: Dictionary) -> void:
 		edge = Color(1, 1, 1, 0.25)
 	if id == "grenade" and (player.grenades == 0 or player.is_throwing()):
 		label_col = Color(1, 1, 1, 0.35)
+	if id == "context":
+		# Gold when it can be done now; dim when something's missing first.
+		edge = UI.BRASS if bool(b.get("primary", false)) else Color(1, 1, 1, 0.3)
+		label_col = UI.BRASS.lightened(0.2) if bool(b.get("primary", false)) else Color(1, 1, 1, 0.6)
 	var swinging: bool = id.begins_with("swing") and player.swing_phase != "idle" \
 		and int(id.substr(5)) == player.swing_dir
 	if swinging:

@@ -207,22 +207,28 @@ stakes and whose gate the guns batter. Next:
   storm damage to the wagon, work sites stopped by rain, weather pop-up
   events, and the weather inside battles.
 
-### Pickable overhaul (next)
+### Pickable overhaul ✅
 
-- Everything anyone carries on the battlefield can be picked up when they
-  die: every weapon (muskets, pikes, bows, crossbows, swords, javelins,
-  lances, pistols), ammunition (cartridges, arrows, bolts, powder, shot) and
-  other things you can use (rammers, tools, grenades, the colours).
+- Everything a fallen man or lizard carried lies where he fell: muskets,
+  pikes, bows, crossbows, swords, pistols, cleavers and shields, cartridges,
+  arrows, bolts and javelins, and a dead gun crew's rammer and linstock.
+  Walk up and PICK UP: ammunition refills you, a bow, crossbow, sword or
+  pistol joins your kit, javelins can be thrown (JAVELIN), and everything
+  else goes on the wagon.
+- Later: powder kegs, grenades, picking up the colours.
 
-### Cannon overhaul (next)
+### Cannon overhaul ✅ (mostly)
 
-- An ammunition box by every gun (round shot, canister, powder) that can be
-  emptied and refilled.
-- Working a gun alone: pick up the tools (rammer, sponge, linstock), carry
-  the powder and shot from the box, load it step by step and fire it.
-- Take control of any gun by selecting it (walk up and tap it, or from the
-  command view) and lay it in first person; it's always clear how to get
-  back on a gun you've left.
+- Every gun has an ammunition box (round shot and canister); the crew's
+  drill draws on it and a gun with an empty box falls silent.
+- Working a gun alone when its crew is down: pick up the rammer and the
+  linstock, sponge out the bore, fetch a round from the box, load it, ram it
+  home, then MAN THE GUN at the trail, lay it and fire. A gold button at the
+  bottom left always says what to do next.
+- Any gun, yours or one fallen silent, can be manned again by walking back
+  to its trail (MAN THE GUN); a hint says so when you leave it.
+- Later: refilling the box from the wagon, taking a gun from the command
+  view, powder carried apart from the shot.
 
 ### Boats and ships (future)
 

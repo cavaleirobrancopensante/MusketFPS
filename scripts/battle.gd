@@ -100,6 +100,8 @@ var prologue := false
 ## storm, and how damp the powder is. Damp powder misfires and loads slow;
 ## rain slackens bowstrings (archers shoot wide and soft).
 var wx := {}
+var pickups = null # pickups.gd: what the fallen leave on the field
+var guns_down: Array = [] # guns whose crews are dead (gun_post.gd): anyone may work them alone
 var wx_misfire := 0.0
 var wx_reload := 1.0
 var wx_rain := 0.0
@@ -153,6 +155,9 @@ func _ready() -> void:
 	projectiles = ProjectilesScript.new()
 	projectiles.battle = self
 	add_child(projectiles)
+	pickups = preload("res://scripts/pickups.gd").new()
+	pickups.battle = self
+	add_child(pickups)
 	soldier_frames = batcher.add_sprite_kind("soldier", SpriteFactory.soldier_frames())
 	lizard_frames = batcher.add_sprite_kind("lizard", SpriteFactory.lizard_frames())
 	smoke_tex = SpriteFactory.smoke_texture()

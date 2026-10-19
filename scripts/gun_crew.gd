@@ -46,6 +46,16 @@ var manned := false
 var elev := 0.0 # the barrel's elevation (radians, up +)
 const TRAVERSE := 1.1 # rad/s: the trail shifted round by handspike
 var _crew := {} # role -> {"holder", "rig"}
+## The ammunition box behind the gun (cannon overhaul): rounds of each
+## kind. The crew loads from it; empty, the gun waits. You can carry rounds
+## from it yourself (one at a time).
+var box := {"roundshot": 30, "canister": 10}
+## Working the gun alone, once its crew is down (player.gd): sponge the
+## bore, put a round in the muzzle, ram it home, then fire it with the
+## linstock. (The crew's own drill doesn't run then.)
+var solo_clean := true
+var solo_charge := ""
+var solo_rammed := false
 var _cartridge := -1
 var _flash: OmniLight3D
 
@@ -58,6 +68,11 @@ static func make(b, at: Vector3, yaw: float, reload_s := 12.0) -> Node3D:
 	c.rotation.y = yaw
 	c.want_yaw = yaw
 	return c
+
+
+func _enter_tree() -> void:
+	if light:
+		box = {"roundshot": 20, "canister": 8}
 
 
 func _ready() -> void:
@@ -121,19 +136,53 @@ func _post_full(role: String) -> Vector3:
 
 
 func ready() -> bool:
-	return not silent and t >= 1.0
+	if silent:
+		return solo_rammed and solo_charge != ""
+	return t >= 1.0
 
 
 ## 0..1 through loading (for a HUD).
 func progress() -> float:
+	if silent:
+		return (float(solo_clean) + float(solo_charge != "") + float(solo_rammed)) / 3.0
 	return t
+
+
+func box_total() -> int:
+	return int(box["roundshot"]) + int(box["canister"])
+
+
+## Where the box is (world).
+func box_point() -> Vector3:
+	return to_global(BOX_AT * (Vector3(0.85, 1, 0.74) if light else Vector3.ONE))
+
+
+## The muzzle (world).
+func mouth_point() -> Vector3:
+	return barrel.global_transform * Vector3(0, 0, MUZZLE_Z)
+
+
+## Take a round out of the box: `kind`, or the other kind if that's out.
+## Returns the kind taken, or "".
+func take_round(kind: String) -> String:
+	if int(box.get(kind, 0)) <= 0:
+		kind = "canister" if kind == "roundshot" else "roundshot"
+	if int(box.get(kind, 0)) <= 0:
+		return ""
+	box[kind] = int(box[kind]) - 1
+	return kind
 
 
 func _process(delta: float) -> void:
 	if silent:
+		if manned:
+			# Working it alone: you shift the trail and set the elevation.
+			var d0 := angle_difference(rotation.y, want_yaw)
+			rotation.y += clampf(d0, -TRAVERSE * 0.6 * delta, TRAVERSE * 0.6 * delta)
+			barrel.rotation.x = lerpf(barrel.rotation.x, elev, 1.0 - exp(-3.0 * delta))
 		return
-	if t < 1.0:
-		t = minf(1.0, t + delta / reload)
+	if t < 1.0 and box_total() > 0:
+		t = minf(1.0, t + delta / reload) # (an empty box: they wait)
 	# The gunner lays the gun while it's being loaded and after.
 	if manned:
 		# You shift the trail yourself, a handspike's pace.
@@ -152,7 +201,10 @@ func fire_at(aim: Vector3, canister_range := 28.0) -> bool:
 		return false
 	var muzzle: Vector3 = barrel.global_transform * Vector3(0, 0, MUZZLE_Z)
 	var d := muzzle.distance_to(aim)
-	if d < canister_range:
+	var took := take_round("canister" if d < canister_range else "roundshot")
+	if took == "":
+		return false
+	if took == "canister":
 		for i in 12:
 			var v: Vector3 = battle.projectiles.spread_dir(aim - muzzle, 0.1) * 260.0
 			battle.projectiles.fire("canister", muzzle, v, null)
@@ -178,6 +230,15 @@ func fire_at(aim: Vector3, canister_range := 28.0) -> bool:
 func fire_laid(kind: String, scatter: float, shooter: Node3D) -> bool:
 	if not ready():
 		return false
+	if silent:
+		kind = solo_charge # (what you loaded yourself)
+		solo_clean = false
+		solo_charge = ""
+		solo_rammed = false
+	else:
+		kind = take_round(kind)
+		if kind == "":
+			return false
 	var muzzle: Vector3 = barrel.global_transform * Vector3(0, 0, MUZZLE_Z)
 	var bore := (barrel.global_transform.basis * Vector3(0, 0, -1)).normalized()
 	if kind == "canister":
@@ -232,9 +293,17 @@ func overrun() -> void:
 	if silent:
 		return
 	silent = true
+	solo_clean = t >= 0.3 # (sponged already, or still foul from the last shot)
+	solo_charge = ""
+	solo_rammed = false
 	for role in _crew:
 		var r = _crew[role]["rig"]
 		r.die()
+	# Their tools lie where they fell: anyone can pick them up and work the gun.
+	var pk = battle.get("pickups")
+	if pk != null:
+		pk.drop(to_global(_post("rammer")), "rammer", 1)
+		pk.drop(to_global(_post("firer")), "linstock", 1)
 
 
 # ---------------------------------------------------------------- the drill

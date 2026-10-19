@@ -142,5 +142,7 @@ func _die() -> void:
 	remove_from_group("enemies")
 	remove_from_group("friendlies")
 	crew.overrun()
+	if engine == "gun" and battle.get("guns_down") != null:
+		battle.guns_down.append(self)
 	battle.play_sound("grunt", global_position + Vector3.UP * 1.5, -2.0)
 	field.unit_died(self)
