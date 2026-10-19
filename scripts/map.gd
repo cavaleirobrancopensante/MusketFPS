@@ -16,6 +16,7 @@ const Econ := preload("res://scripts/economy.gd")
 const UI := preload("res://scripts/ui.gd")
 
 const Gen := preload("res://scripts/world_gen.gd")
+const SoundFactory := preload("res://scripts/sound_factory.gd")
 const Lore := preload("res://scripts/lore.gd")
 const Men := preload("res://scripts/men.gd")
 const LogisticsPopup := preload("res://scripts/logistics_popup.gd")
@@ -87,6 +88,15 @@ var _prev_vis: Array = []
 var _player: Node3D
 var _path_mesh: ImmediateMesh
 var _tracks_mm: MultiMesh # the tracks you've seen (World.tracks)
+var _sky := {} # storm id -> Node3D: its clouds and its rain (weather.gd)
+var _bolt: Array = [] # the lightning's segments
+var _bolt_t := 0.0
+var _bolt_cd := 2.0
+var _wx_rain := 0.0
+var _wx_fog := 0.0
+var _wx_heat := 0.0
+var _flash: OmniLight3D
+var _flash_e := 0.0
 var _tracks_t := 0.0
 var _markers := {} # party id -> Node3D
 var _labels := {} # settlement id -> Label3D
@@ -602,6 +612,175 @@ func _update_tracks(delta: float) -> void:
 		_tracks_mm.set_instance_color(i, c)
 
 
+# ---------------------------------------------------------------- weather
+
+const CLOUD_UP := 26.0 # how high the cloud base rides over the ground
+
+func _storm_node(s: Dictionary) -> Node3D:
+	var n := Node3D.new()
+	var clouds := Node3D.new()
+	clouds.name = "clouds"
+	n.add_child(clouds)
+	var mat := StandardMaterial3D.new()
+	var dark: bool = s["kind"] == "thunder"
+	mat.albedo_color = Color(0.24, 0.25, 0.3, 0.0) if dark else Color(0.36, 0.38, 0.43, 0.0)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_BACK
+	clouds.set_meta("mat", mat)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(s["id"]) * 7919
+	# A dozen flattened puffs, for a storm 10 cells across (scaled to size).
+	for k in 12:
+		var m := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radial_segments = 12
+		sm.rings = 6
+		var rad := rng.randf_range(5.0, 9.0)
+		sm.radius = rad
+		sm.height = rad * 2.0
+		m.mesh = sm
+		m.material_override = mat
+		var a := rng.randf() * TAU
+		var d := rng.randf_range(0.0, 11.0)
+		m.position = Vector3(cos(a) * d, rng.randf_range(0.0, 4.0), sin(a) * d)
+		m.scale = Vector3(1.0, rng.randf_range(0.22, 0.35), 1.0)
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		clouds.add_child(m)
+	# The rain: streaks falling from the cloud base, leaning with the wind.
+	var rain := GPUParticles3D.new()
+	rain.name = "rain"
+	rain.amount = 700
+	rain.lifetime = 0.55
+	rain.local_coords = false
+	rain.visibility_aabb = AABB(Vector3(-60, -60, -60), Vector3(120, 80, 120))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(16, 0.5, 16)
+	var wd: Vector2 = World.weather.wind
+	pm.direction = Vector3(wd.x * 0.25, -1.0, wd.y * 0.25).normalized()
+	pm.spread = 2.0
+	pm.initial_velocity_min = 48.0
+	pm.initial_velocity_max = 56.0
+	pm.gravity = Vector3.ZERO
+	rain.process_material = pm
+	var streak := BoxMesh.new()
+	streak.size = Vector3(0.07, 2.4, 0.07)
+	var smat := StandardMaterial3D.new()
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.albedo_color = Color(0.72, 0.78, 0.9, 0.5)
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	streak.material = smat
+	rain.draw_pass_1 = streak
+	n.add_child(rain)
+	add_child(n)
+	return n
+
+
+func _build_bolt() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.92, 0.95, 1.0)
+	for k in 7:
+		var m := MeshInstance3D.new()
+		var cm := BoxMesh.new()
+		cm.size = Vector3(0.45, 0.45, 1.0)
+		m.mesh = cm
+		m.material_override = mat
+		m.visible = false
+		add_child(m)
+		_bolt.append(m)
+	_flash = OmniLight3D.new()
+	_flash.omni_range = 160.0
+	_flash.light_color = Color(0.85, 0.9, 1.0)
+	_flash.light_energy = 0.0
+	add_child(_flash)
+
+
+func _update_weather(delta: float) -> void:
+	var wx = World.weather
+	if wx == null:
+		return
+	if _bolt.is_empty():
+		_build_bolt()
+	var fade := clampf((_dist - 25.0) / 70.0, 0.0, 1.0) # (zoomed right in, you're under the cloud)
+	var alive := {}
+	var strike: Dictionary = {}
+	for s in wx.storms:
+		var id := int(s["id"])
+		alive[id] = true
+		var n: Node3D = _sky.get(id, null)
+		if n == null:
+			n = _storm_node(s)
+			_sky[id] = n
+		var at := Vector2(float(s["x"]), float(s["y"]))
+		var ground := _world_pos(at)
+		var base_y := maxf(ground.y, Gen.SEA_LEVEL * HS) + CLOUD_UP
+		n.position = n.position.lerp(Vector3(at.x * CELL, base_y, at.y * CELL), 1.0 if n.position == Vector3.ZERO else 1.0 - exp(-3.0 * delta))
+		var size := float(s["r"]) * CELL / 11.0
+		var clouds := n.get_node("clouds") as Node3D
+		clouds.scale = Vector3(size, 1.0, size)
+		var str_s := float(s["s"])
+		var mat: StandardMaterial3D = clouds.get_meta("mat")
+		mat.albedo_color.a = clampf(str_s * 0.8, 0.0, 0.62) * fade
+		var rain := n.get_node("rain") as GPUParticles3D
+		(rain.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(size * 9.0, 0.5, size * 9.0)
+		rain.amount_ratio = clampf(str_s, 0.0, 1.0)
+		rain.emitting = str_s > 0.15 and _dist < 520.0
+		if str_s > 0.75 and strike.is_empty() and Vector2(_target.x, _target.z).distance_to(Vector2(at.x * CELL, at.y * CELL)) < _dist * 1.6 + 60.0:
+			strike = s
+	for id in _sky.keys():
+		if not alive.has(id):
+			(_sky[id] as Node3D).queue_free()
+			_sky.erase(id)
+	# Lightning, now and then, from the strongest storm in view.
+	_bolt_t -= delta
+	if _bolt_t <= 0.0:
+		for b in _bolt:
+			(b as MeshInstance3D).visible = false
+	_flash_e = maxf(0.0, _flash_e - delta * 14.0)
+	_flash.light_energy = _flash_e
+	if not strike.is_empty():
+		_bolt_cd -= delta
+		if _bolt_cd <= 0.0:
+			_bolt_cd = randf_range(2.5, 8.0)
+			_lightning(strike)
+
+
+func _lightning(s: Dictionary) -> void:
+	var r := float(s["r"]) * 0.6
+	var at := Vector2(float(s["x"]), float(s["y"])) + Vector2(randf_range(-r, r), randf_range(-r, r))
+	var ground := _world_pos(at)
+	var top := Vector3(ground.x, maxf(ground.y, Gen.SEA_LEVEL * HS) + CLOUD_UP, ground.z)
+	var pts: Array = [top]
+	for k in range(1, _bolt.size()):
+		var f := float(k) / _bolt.size()
+		pts.append(top.lerp(ground, f) + Vector3(randf_range(-2.5, 2.5), 0, randf_range(-2.5, 2.5)))
+	pts.append(ground)
+	for k in _bolt.size():
+		var m: MeshInstance3D = _bolt[k]
+		var a: Vector3 = pts[k]
+		var b: Vector3 = pts[k + 1]
+		var mid := (a + b) * 0.5
+		var len := a.distance_to(b)
+		m.transform = Transform3D(Basis.looking_at(b - a, Vector3.RIGHT).scaled(Vector3(1, 1, len)), mid)
+		m.visible = true
+	_bolt_t = 0.13
+	_flash.position = top
+	_flash_e = 7.0
+	# The thunder, after the flash (further off, later and fainter).
+	var d := Vector2(_target.x, _target.z).distance_to(Vector2(ground.x, ground.z))
+	var snd: Dictionary = SoundFactory.cached()
+	if snd.has("thunder"):
+		var p := AudioStreamPlayer.new()
+		p.stream = snd["thunder"]
+		p.volume_db = clampf(-4.0 - d / 25.0, -30.0, -4.0)
+		p.pitch_scale = randf_range(0.8, 1.05)
+		add_child(p)
+		p.finished.connect(p.queue_free)
+		get_tree().create_timer(clampf(d / 120.0, 0.2, 3.0)).timeout.connect(p.play)
+
+
 ## A party on the map: a little group of figures and a banner.
 func _figure(body: Color, banner: Color, scale_f: float, yours := false) -> Node3D:
 	var n := Node3D.new()
@@ -985,7 +1164,10 @@ func _update_hud() -> void:
 		for sc in World.scouts:
 			out += (sc["ids"] as Array).size()
 		scouting = Lang.t("\n%d scout%s out") % [out, "" if out == 1 else "s"]
-	_terrain_l.text = Lang.t("%s · pace ×%.2f · sight %d%s%s") % [what, g.speed_at(c.x, c.y) * World.party_pace(),
+	var wxw: String = World.weather.words() if World.weather != null else ""
+	if wxw != "":
+		what += " · " + wxw
+	_terrain_l.text = Lang.t("%s · pace ×%.2f · sight %d%s%s") % [what, g.speed_at(c.x, c.y) * World.party_pace() * World.weather.pace_mult(),
 		int(World.sight_radius()), eta, scouting]
 	_wait_btn.text = Lang.t("STOP") if World.waiting else Lang.t("WAIT")
 
@@ -1017,6 +1199,7 @@ func _process(delta: float) -> void:
 				World.go_to(Vector2i(int(p["x"]), int(p["y"])), {"kind": "party", "id": int(p["id"])})
 	_update_fog()
 	_update_tracks(delta)
+	_update_weather(delta)
 	_update_parties()
 	_update_player()
 	_update_light()
@@ -1105,6 +1288,32 @@ func _update_light() -> void:
 	_sun.light_color = Color(0.7, 0.75, 1.0).lerp(Color(1, 1, 0.96), day_f)
 	_env.ambient_light_color = Color(0.5, 0.55, 0.75).lerp(Color(0.8, 0.8, 0.82), day_f)
 	_env.ambient_light_energy = 0.5 + 0.2 * day_f
+	# The weather where you are: rain greys the day, fog lies in the low
+	# ground, the heat yellows it.
+	var wx = World.weather
+	if wx == null:
+		return
+	var rain: float = wx.rain_at(World.pos)
+	var fog: float = wx.fog_at(World.cell())
+	var heat: float = wx.heat_at(World.cell())
+	_wx_rain = lerpf(_wx_rain, rain, 0.05)
+	_wx_fog = lerpf(_wx_fog, fog, 0.05)
+	_wx_heat = lerpf(_wx_heat, heat, 0.05)
+	_sun.light_energy *= 1.0 - 0.55 * _wx_rain
+	_sun.light_color = _sun.light_color.lerp(Color(1.0, 0.86, 0.62), 0.6 * _wx_heat)
+	_env.ambient_light_energy *= 1.0 - 0.3 * _wx_rain
+	_env.ambient_light_color = _env.ambient_light_color.lerp(Color(0.95, 0.85, 0.65), 0.4 * _wx_heat)
+	var haze := maxf(_wx_fog, _wx_heat * 0.25)
+	_env.fog_enabled = haze > 0.02
+	if _env.fog_enabled:
+		_env.fog_light_color = Color(0.72, 0.74, 0.76).lerp(Color(0.85, 0.78, 0.62), _wx_heat).darkened(0.6 * (1.0 - day_f))
+		# (thinner as you zoom out, or the whole land goes grey)
+		_env.fog_density = (0.0002 + 0.0004 * _wx_heat) * clampf(140.0 / _dist, 0.15, 1.0)
+		_env.fog_sky_affect = 0.0
+		# Fog lies in the hollows: thick below the ground you stand on.
+		var gy := _world_pos(World.pos).y
+		_env.fog_height = gy + 3.0
+		_env.fog_height_density = 0.18 * _wx_fog
 
 
 func _update_labels() -> void:

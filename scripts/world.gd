@@ -19,6 +19,7 @@ const Men := preload("res://scripts/men.gd")
 const Events := preload("res://scripts/events.gd")
 const Econ := preload("res://scripts/economy.gd")
 const Calendar := preload("res://scripts/calendar.gd")
+const WeatherScript := preload("res://scripts/weather.gd")
 
 const HOURS_PER_SEC := 1.2 # game hours per real second while moving
 const WAIT_HOURS_PER_SEC := 4.0
@@ -56,6 +57,8 @@ var _dusk_pending := false # waiting for your answer at dusk
 var _event_cd := 4.0 # hours of marching before the next event may happen
 var _fight_t := 0.0
 var events := Events.new()
+var weather # weather.gd: the wind, storms, fog and heat (made with the map)
+var _wsight := 1.0
 var explored := PackedByteArray() # 1 once seen
 var in_sight := PackedByteArray() # 1 in sight right now
 var parties: Array = []
@@ -193,6 +196,8 @@ func _build() -> void:
 		gen = Gen.new()
 		gen.generate(seed)
 	_pre_gen = null
+	weather = WeatherScript.new(self)
+	weather.setup()
 	var n: int = Gen.SIZE * Gen.SIZE
 	explored.resize(n)
 	explored.fill(0)
@@ -242,7 +247,8 @@ func save() -> void:
 		"next_party": next_party, "places": places, "log": log.slice(-20),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 		"goal": goal, "path": path.map(func(c): return [c.x, c.y]), "camping": camping,
-		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest, "econ": econ, "tracks": tracks}
+		"night_march_day": night_march_day, "scouts": scouts, "event_cd": _event_cd, "lords": lords, "war": war, "harvest": harvest, "econ": econ, "tracks": tracks,
+		"weather": weather.to_dict()}
 	DirAccess.make_dir_recursive_absolute(Settings.slot_dir())
 	var f := FileAccess.open(save_path(), FileAccess.WRITE)
 	if f != null:
@@ -261,6 +267,7 @@ func load_world() -> bool:
 	pos = Vector2(data["pos"][0], data["pos"][1])
 	parties = data.get("parties", [])
 	tracks = data.get("tracks", [])
+	weather.from_dict(data.get("weather", {}))
 	for p in parties:
 		p["id"] = int(p["id"])
 		p["size"] = int(p["size"])
@@ -601,6 +608,11 @@ func advance(dh: float) -> void:
 		for p in parties.duplicate():
 			_party_tick(p, step)
 		_see_tracks()
+		weather.tick(step)
+		var ws: float = weather.sight_mult()
+		if absf(ws - _wsight) > 0.08:
+			_wsight = ws
+			update_sight(true)
 		_fight_t -= step
 		if _fight_t <= 0.0:
 			_fight_t = 0.5
@@ -623,7 +635,7 @@ var marched_today := false # (the company marched on the day now ending: no Sund
 func _walk(dh: float) -> void:
 	if not path.is_empty():
 		marched_today = true
-	var left := BASE_SPEED * party_pace() * dh * (NIGHT_PACE if is_night() else 1.0)
+	var left: float = BASE_SPEED * party_pace() * dh * (NIGHT_PACE if is_night() else 1.0) * weather.pace_mult()
 	while left > 0.0 and not path.is_empty():
 		var nxt: Vector2i = path[0]
 		var target := Vector2(nxt) + Vector2(0.5, 0.5)
@@ -824,7 +836,17 @@ func _note_water() -> void:
 
 func _midnight() -> void:
 	_prune_tracks()
+	# The weather's day: a good soaking fills the barrels; the heat empties them.
+	var wd: Dictionary = weather.end_day()
+	var caught := false
+	if float(wd["rain"]) >= 1.5 and _day_water != "clean":
+		_day_water = "clean"
+		caught = true
+	if Company.active:
+		Company.hot_day = float(wd["heat"]) >= 2.5
 	var notes: PackedStringArray = Company.pass_day(_day_water) if Company.active else PackedStringArray()
+	if caught:
+		notes.append(Lang.t("Rain-water caught in sailcloth: the barrels are full."))
 	_war_tick()
 	_sieges_tick()
 	# Nests not under siege fill up again, and mend their stakes.
@@ -1041,7 +1063,10 @@ func sight_radius() -> float:
 		r -= 6.0
 	if hours_of_day() < 5.0 or hours_of_day() > 21.0:
 		r *= 0.6 # night
-	return r * Company.Officer.sight_mult()
+	r *= Company.Officer.sight_mult()
+	if weather != null:
+		r = maxf(3.0, r * weather.sight_mult()) # rain and fog
+	return r
 
 
 func hours_of_day() -> float:

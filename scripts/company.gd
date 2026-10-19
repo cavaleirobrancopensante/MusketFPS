@@ -1921,6 +1921,10 @@ func buy(key: String) -> void:
 ## resentment. Fed men heal and recover. Returns the day's notes.
 ## `water`: "random" (the old march), or what the map found today:
 ## "clean", "foul", or "" (a dry day).
+## The day just marched was a hot one (weather.gd): the men drank more.
+var hot_day := false
+
+
 func _road_day(water := "random") -> Dictionary:
 	var day_notes := {"thirsty": 0, "hungry": 0, "sick": 0, "died": [], "unfair": false, "grog": 0, "dry": 0}
 	loot = [] # marching on leaves whatever you didn't take where it lay
@@ -1939,6 +1943,8 @@ func _road_day(water := "random") -> Dictionary:
 	for m in roster:
 		var pack: Dictionary = m["pack"]
 		var drank := _take(pack, "water")
+		if hot_day and drank and randf() < 0.5:
+			drank = _take(pack, "water") # (a day in the heat: two lots)
 		# A fast day of the Church (Lent, the Ember Days): many keep it on
 		# a crust, and the rations go further.
 		var fed := true if (fast > 0.0 and randf() < fast) else _take(pack, "rations")

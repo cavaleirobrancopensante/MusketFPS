@@ -203,6 +203,22 @@ with every seed.
   Aurest in the west and the Vellish Marches in the east (at war), the
   dwarf holds of the Greyspine mountains in the north, and the lizard nests
   in the south-west swamps. One nest holds the ship's stores.
+- **Weather** (`weather.gd`), from the land the map generator made, so it
+  makes sense on every map. Each map has a prevailing wind off its own sea.
+  Storms form over the sea near the coast (most in winter and autumn) and
+  drift inland with it, raining hardest where the land rises and spending
+  themselves over high ground, so the far side of a ridge lies in a rain
+  shadow; summer afternoons brew short thunderstorms over the hills. Fog
+  lies in low wet ground (swamps, lakes, river bottoms, the beach) on some
+  mornings, likelier in autumn and after rain, and lifts by mid-morning.
+  Summer hot spells bake the open ground in the afternoon. Rain and fog
+  cut how far you see; rain and heat slow the march; rain **washes out
+  tracks**; a good soaking fills the water barrels, and a hot day's march
+  costs extra water. On the 3D map: storm clouds riding the wind, rain
+  falling from them, lightning (and thunder after it), fog lying in the
+  hollows, a greyer light in the rain and a yellow one in the heat. The
+  HUD's bottom line names the weather. (Next: rivers rising after rain,
+  damp powder and slack bowstrings in battle; see the roadmap.)
 - **Tracks** (`World.tracks`, as in Mount & Blade): every party on the
   move leaves a trail of arrows on the map, pointing the way it went, that
   fades over two days. You only see tracks near you (5 cells, +2 a level of

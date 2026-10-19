@@ -194,6 +194,23 @@ stakes and whose gate the guns batter. Next:
   dismounting dragoons.
 - Riding yourself: you on a horse, leading the cavalry.
 
+### Weather (stage 1 done: 1.68)
+
+- Stage 1 ✅: a prevailing wind off each map's sea, storms that form over the
+  sea and travel inland with it (rain heavier on rising ground, a rain
+  shadow behind ridges), dawn fog in low wet ground, summer heat on the
+  plains; rain washes out tracks and slows marching; clouds, rain and
+  lightning on the 3D map.
+- Stage 2: rivers rising after rain upstream (the flood travels down a day
+  later), fords closing, flooded rivers drawn wider.
+- Stage 3: damp powder (misfires, slower loading), slack bowstrings,
+  storm damage to the wagon, work sites stopped by rain, weather pop-up
+  events, and the weather inside battles.
+
+### Boats and ships (future)
+
+- River and sea travel: boats on the rivers, ships along the coast.
+
 ### M9: Polish and release
 
 - Music, UI and touch polish, balance, Android export.
