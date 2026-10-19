@@ -842,6 +842,87 @@ func settlement_at(p: Vector2) -> int:
 	return -1
 
 
+## The water where you stand: {"kind": "wells"|"spring"|"river"|"lake"|
+## "swamp"|"" , "from": what to call it ("the city wells"), "foul": bool}.
+func water_source() -> Dictionary:
+	if gen == null:
+		return {"kind": "", "from": "", "foul": false} # (no map yet: the beach)
+	var sid := settlement_at(pos)
+	if sid >= 0:
+		var k := String(settlement(sid).get("kind", ""))
+		if k != "nest":
+			return {"kind": "wells", "from": {"village": Lang.t("the village well"), "town": Lang.t("the town wells"),
+				"city": Lang.t("the city wells"), "hold": Lang.t("the hold's cisterns")}.get(k, Lang.t("the wells")), "foul": false}
+	var rh := resource_here()
+	if rh >= 0 and String(resource(rh).get("kind", "")) == "spring":
+		return {"kind": "spring", "from": Lang.t("the spring"), "foul": false}
+	var c := cell()
+	var here_swamp: bool = gen.t(c.x, c.y) == T.SWAMP
+	var found := ""
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var x := c.x + dx
+			var y := c.y + dy
+			if not gen.inside(x, y):
+				continue
+			var i: int = Gen.idx(x, y)
+			if gen.river[i] != 0 and found in ["", "swamp", "lake"]:
+				found = "river"
+			elif gen.terrain[i] == T.LAKE and found in ["", "swamp"]:
+				found = "lake"
+			elif gen.terrain[i] == T.SWAMP and found == "":
+				found = "swamp"
+	if found == "":
+		return {"kind": "", "from": "", "foul": false}
+	if here_swamp or found == "swamp":
+		return {"kind": "swamp", "from": Lang.t("the swamp"), "foul": true}
+	return {"kind": found, "from": Lang.t("the river") if found == "river" else Lang.t("the lake"), "foul": false}
+
+
+## Water you can fill the barrels from where you stand: "clean", "foul"
+## or "" (none).
+func water_here() -> String:
+	var ws := water_source()
+	if String(ws["kind"]) == "":
+		return ""
+	return "foul" if bool(ws["foul"]) else "clean"
+
+
+## What the fill button should say, and whether it can be pressed:
+## [text, enabled].
+func fill_state() -> Array:
+	var ws := water_source()
+	if String(ws["kind"]) == "":
+		return [Lang.t("NO WATER SOURCE NEARBY"), false]
+	var have := int(Company.stores.get("water", 0))
+	var foul_now := bool(Company.stores.get("foul", false))
+	if bool(ws["foul"]):
+		if have >= Company.WATER_CART / 3:
+			return [Lang.t("ONLY FOUL SWAMP WATER HERE"), false]
+		return [Lang.t("FILL FROM THE SWAMP (FOUL)"), true]
+	if have >= Company.WATER_CART and not foul_now:
+		return [Lang.t("THE BARRELS ARE FULL"), false]
+	return [Lang.t("FILL FROM %s") % String(ws["from"]).to_upper(), true]
+
+
+## Is it worth filling the barrels here?
+func can_fill() -> bool:
+	return bool(fill_state()[1])
+
+
+## Fill the barrels here. Returns what you got ("" if there's no water).
+func fill_barrels() -> String:
+	if not can_fill():
+		return ""
+	var w := water_here()
+	Company.stores["water"] = maxi(int(Company.stores["water"]), Company.WATER_CART)
+	Company.stores["foul"] = w == "foul"
+	if w == "clean":
+		_day_water = "clean"
+	Company.save()
+	return w
+
+
 ## Rivers and lakes give clean water (unless you drink it in a swamp);
 ## swamp water is foul. The best water of the day fills the barrels.
 func _note_water() -> void:
@@ -868,15 +949,13 @@ func _midnight() -> void:
 	_prune_tracks()
 	# The weather's day: a good soaking fills the barrels; the heat empties them.
 	var wd: Dictionary = weather.end_day()
-	var caught := false
-	if float(wd["rain"]) >= 1.5 and _day_water != "clean":
-		_day_water = "clean"
-		caught = true
+	var caught := int(weather.caught)
+	weather.caught = 0.0
 	if Company.active:
 		Company.hot_day = float(wd["heat"]) >= 2.5
 	var notes: PackedStringArray = Company.pass_day(_day_water) if Company.active else PackedStringArray()
-	if caught:
-		notes.append(Lang.t("Rain-water caught in sailcloth: the barrels are full."))
+	if caught > 0:
+		notes.append(Lang.t("Rain-water caught in the sailcloth today: %d days of water into the barrels.") % caught)
 	_war_tick()
 	_sieges_tick()
 	# Nests not under siege fill up again, and mend their stakes.

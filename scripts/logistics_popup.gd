@@ -20,6 +20,31 @@ const GOLD := Color("d4ad55") # brass (ui.gd)
 const RED := Color(0.95, 0.42, 0.35)
 const GREEN := Color(0.55, 0.9, 0.55)
 const DIM := Color("9aa3b8") # slate (ui.gd)
+const WagonView := preload("res://scripts/wagon_view.gd")
+
+## A line on each store, for the wagon view's details.
+const STORE_TEXT := {
+	"water": "Drinking water in the barrels: a day's water a man. Fill them at wells, rivers, lakes and springs (the button shows on the map when you're close); they also top up at midnight from the best water you passed that day, and from the rain if you collect it.",
+	"rations": "Biscuit, salt meat, smoked meat and bread: a ration a man a day.",
+	"meat": "Fresh meat and fish: it goes off on the march, but the men smoke it into rations whenever you make camp.",
+	"grain": "Grain: bake it into bread (CRAFT).",
+	"ammo": "Paper cartridges, powder and ball: what the muskets fire.",
+	"powder": "Gunpowder, by the pound: roll it into cartridges with lead.",
+	"lead": "Lead, by the pound: cast into balls for cartridges.",
+	"rum": "Rum, by the tot: grog makes foul water safe, and a tot on feast days cheers the men.",
+	"arrows": "Arrows for the bowmen.",
+	"bolts": "Bolts for the crossbowmen.",
+	"saltpetre": "Saltpetre: three parts in four of gunpowder (CRAFT).",
+	"sulphur": "Sulphur: a tenth of gunpowder (CRAFT).",
+	"charcoal": "Charcoal: for powder, for smelting, for smoking meat.",
+	"ore": "Ore: smelt it into lead, or a smith forges it into blades and barrels.",
+	"wood": "Timber: tools, pikes, wooden shot.",
+}
+
+var _wagon
+var _detail: RichTextLabel
+var _detail_btns: HBoxContainer
+var _pick := ""
 
 var _grid: GridContainer
 var _info: RichTextLabel
@@ -68,22 +93,36 @@ func _ready() -> void:
 	_cargo.visible = false
 	_cargo.add_theme_constant_override("separation", 6)
 	v.add_child(_cargo)
-	_cargo_head = RichTextLabel.new()
-	_cargo_head.bbcode_enabled = true
-	_cargo_head.fit_content = true
-	_cargo_head.scroll_active = false
-	_cargo_head.add_theme_font_size_override("normal_font_size", 18)
-	_cargo.add_child(_cargo_head)
-	var sc := UI.scroll()
-	sc.custom_minimum_size = Vector2(0, 330)
-	_cargo.add_child(sc)
-	_cargo_list = VBoxContainer.new()
-	_cargo_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(_cargo_list)
+	var wrow := HBoxContainer.new()
+	wrow.add_theme_constant_override("separation", 12)
+	_cargo.add_child(wrow)
+	_wagon = WagonView.new()
+	_wagon.custom_minimum_size = Vector2(620, 400)
+	_wagon.picked.connect(_on_pick)
+	wrow.add_child(_wagon)
+	var dv := VBoxContainer.new()
+	dv.custom_minimum_size = Vector2(320, 0)
+	dv.add_theme_constant_override("separation", 8)
+	wrow.add_child(dv)
+	_detail = RichTextLabel.new()
+	_detail.bbcode_enabled = true
+	_detail.fit_content = true
+	_detail.scroll_active = false
+	_detail.custom_minimum_size = Vector2(320, 0)
+	_detail.add_theme_font_size_override("normal_font_size", 17)
+	_detail.add_theme_font_size_override("bold_font_size", 19)
+	dv.add_child(_detail)
+	_detail_btns = HBoxContainer.new()
+	_detail_btns.add_theme_constant_override("separation", 8)
+	dv.add_child(_detail_btns)
+	var dv2 := VBoxContainer.new()
+	dv2.add_theme_constant_override("separation", 8)
+	dv.add_child(dv2)
+	_detail_btns.set_meta("more", dv2)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	v.add_child(row)
-	_cargo_btn = _button(Lang.t("CARGO"), _toggle_cargo)
+	_cargo_btn = _button(Lang.t("SUPPLIES"), _toggle_cargo)
 	row.add_child(_cargo_btn)
 	_grog = _button("", _on_grog)
 	row.add_child(_grog)
@@ -97,6 +136,11 @@ func _ready() -> void:
 
 
 func open() -> void:
+	# The wagon itself first: what's in it, and where.
+	_cargo.visible = true
+	_grid.visible = false
+	_info.visible = false
+	_cargo_btn.text = Lang.t("SUPPLIES")
 	refresh()
 	visible = true
 
@@ -167,7 +211,13 @@ func refresh() -> void:
 			_grid.add_child(Control.new())
 		# You can only buy where someone sells: at a settlement on the map.
 		var offer := _offer(key)
-		if not offer.is_empty():
+		if key == "water":
+			var fs: Array = World.fill_state()
+			var fb := _button(String(fs[0]), _on_fill)
+			fb.add_theme_font_size_override("font_size", 14)
+			fb.disabled = not bool(fs[1])
+			_grid.add_child(fb)
+		elif not offer.is_empty():
 			var buy := _button(Lang.t("BUY %d (%d cr)") % [int(offer[0]), int(offer[1])], _on_buy.bind(key))
 			buy.add_theme_font_size_override("font_size", 15)
 			buy.disabled = Company.money < int(offer[1])
@@ -280,26 +330,99 @@ func _toggle_cargo() -> void:
 	_cargo.visible = not _cargo.visible
 	_grid.visible = not _cargo.visible
 	_info.visible = not _cargo.visible
-	_cargo_btn.text = Lang.t("SUPPLIES") if _cargo.visible else Lang.t("CARGO")
+	_cargo_btn.text = Lang.t("SUPPLIES") if _cargo.visible else Lang.t("THE WAGON")
 	_fill_cargo()
 
 
-## Everything in the wagon: stores and spare kit, with their weight.
+## The wagon, drawn (wagon_view.gd), and what you picked in it.
 func _fill_cargo() -> void:
 	if not _cargo.visible:
 		return
-	var load := Company.wagon_load()
-	_cargo_head.text = Lang.t("[b]CARGO[/b]   %d / %d kg   ·   space %.0f / %.0f") % [int(load[0]), int(Company.wagon_kg()),
-		load[1], Company.wagon_space()]
-	for c in _cargo_list.get_children():
+	_wagon.selected = _pick
+	_wagon.refresh()
+	_pick = _wagon.selected
+	_fill_detail()
+
+
+func _on_pick(id: String) -> void:
+	_pick = id
+	if _wagon.selected != id:
+		_wagon.selected = id
+		_wagon.queue_redraw()
+	_fill_detail()
+
+
+func _fill_detail() -> void:
+	for c in _detail_btns.get_children():
 		c.queue_free()
-	var rows: Array = []
-	for k in Company.CONSUMABLES:
-		if int(Company.stores.get(k, 0)) > 0:
-			rows.append([k, int(Company.stores[k])])
-	for id in Company.stores["items"]:
-		rows.append([id, int(Company.stores["items"][id])])
-	for r in rows:
-		var l := Company.load_of(String(r[0]), int(r[1]))
-		_cargo_list.add_child(_label(Lang.t("%s ×%d   ·   %.1f kg   ·   %.1f space") % [Company.item_label(r[0]), int(r[1]), l[0], l[1]],
-			18, Color.WHITE))
+	var more: VBoxContainer = _detail_btns.get_meta("more")
+	for c in more.get_children():
+		c.queue_free()
+	if _pick == "":
+		var t := Lang.t("[b]THE WAGON[/b]\nTap anything in it to see what it is, what it weighs and what to do with it.\n\nEvery square is a slot of room in the wagon; the bigger the load, the more slots it takes. The barrels on the side are the drinking water.")
+		_detail.text = t
+		_water_buttons(more)
+		return
+	var id := _pick
+	var n := int(Company.stores.get(id, 0)) if Company.CONSUMABLES.has(id) else Company.item_count(id)
+	var l := Company.load_of(id, n)
+	var desc := ""
+	if STORE_TEXT.has(id):
+		desc = Lang.t(STORE_TEXT[id])
+	elif Company.ITEMS.has(id):
+		desc = Lang.t(String(Company.ITEMS[id].get("desc", "")))
+	var t := Lang.t("[b]%s[/b]  ×%d\n%.1f kg  ·  %d slots\n\n%s") % [Company.item_label(id), n, l[0], maxi(1, int(ceil(l[1] - 0.001))), desc]
+	if Company.ITEMS.has(id) and String(Company.ITEMS[id].get("slot", "")) != "":
+		t += Lang.t("\n\n[color=#%s]Give it to a man on the COMPANY screen (tap him, then his kit).[/color]") % DIM.to_html(false)
+	if id == "water":
+		t += Lang.t("\n\n%d days' water for %d men.%s") % [int(Company.days_left("water")), Company.roster.size(),
+			Lang.t(" [color=#%s]It's foul: serve it as grog.[/color]") % RED.to_html(false) if bool(Company.stores["foul"]) else ""]
+	_detail.text = t
+	var share_key := "ammo" if id in ["ammo", "arrows", "bolts"] else id
+	if id in ["water", "rations", "ammo", "arrows", "bolts"]:
+		_detail_btns.add_child(_button(Lang.t("SHARE OUT"), _on_share.bind(share_key)))
+	if id == "water":
+		_water_buttons(more)
+	if n > 0 and id != "water":
+		more.add_child(_button(Lang.t("THROW ONE OUT"), _on_dump.bind(id, 1)))
+		if n > 1:
+			more.add_child(_button(Lang.t("THROW IT ALL OUT"), _on_dump.bind(id, n)))
+
+
+## Filling the barrels (from whatever is here, named), and catching rain.
+func _water_buttons(box: VBoxContainer) -> void:
+	var fs: Array = World.fill_state()
+	var fb := _button(String(fs[0]), _on_fill)
+	fb.disabled = not bool(fs[1])
+	fb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fb.custom_minimum_size = Vector2(320, 54)
+	box.add_child(fb)
+	var on := bool(Company.stores.get("rain_catch", true))
+	var rb := _button(Lang.t("COLLECT RAIN WATER: ON") if on else Lang.t("COLLECT RAIN WATER: OFF"), func():
+		Company.stores["rain_catch"] = not bool(Company.stores.get("rain_catch", true))
+		Company.save()
+		_fill_detail())
+	rb.custom_minimum_size = Vector2(320, 54)
+	box.add_child(rb)
+	var note := _label(Lang.t("When it rains, sailcloth is spread to fill the barrels with clean water; but the rain gets at the powder in the wagon too.") if on \
+		else Lang.t("The cover stays shut in the rain: the powder keeps drier, but no rain-water goes into the barrels."), 14, DIM)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(320, 0)
+	box.add_child(note)
+
+
+## Lighten the wagon: leave things by the road.
+func _on_dump(id: String, n: int) -> void:
+	if Company.CONSUMABLES.has(id):
+		Company.stores[id] = maxi(0, int(Company.stores.get(id, 0)) - n)
+	else:
+		Company.add_item(id, -n)
+	Company.save()
+	refresh()
+	changed.emit()
+
+
+func _on_fill() -> void:
+	World.fill_barrels()
+	refresh()
+	changed.emit()

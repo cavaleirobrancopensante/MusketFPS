@@ -1047,6 +1047,31 @@ line sit on a strip of night at the top left.
   each, the sutler, the grog switch, whether the water is foul, how fair the
   rations are, and the company's morale.
 
+  It opens on **the wagon itself**, drawn from the side with its canvas cut
+  away: its bed is sixty slots of room, and everything aboard takes the
+  slots its bulk needs (barrels, sacks, crates, kegs, bundles of arrows,
+  weapons, helmets, tools), with bars for its weight and its room. Tap
+  anything for what it is, its weight, and what to do with it (share it
+  out, throw it out to lighten the load). The water barrels hang on its
+  side and show how full they are, and whether the water's gone foul.
+
+### Water
+
+A man drinks a day's water a day from the wagon's barrels. They fill:
+
+- **by hand** wherever there's water: the button on the map (and in the
+  wagon) names the source: the city wells, the village well, the hold's
+  cisterns, a spring, the river, the lake. Swamp water fills them only when
+  they're nearly dry, and it's foul (serve it as grog). Away from water the
+  button says NO WATER SOURCE NEARBY;
+- **by themselves** at midnight, from the best water you passed that day;
+- **from the rain**, if COLLECT RAIN WATER is on (in the wagon): sailcloth
+  spread to catch it, clean water into the barrels, but the rain gets at
+  the powder too.
+
+Fresh meat and fish go off on the march, but whenever you make camp the
+men smoke them over the fires into rations that keep.
+
 Kit shows on the 3D models in battle too: hats, coats, the rifle's brass
 patchbox, the longer sword bayonet, and a canteen, haversack and cartridge
 box only when he actually carries water, food and shot.

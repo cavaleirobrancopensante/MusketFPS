@@ -2120,8 +2120,10 @@ func _weather_fx() -> void:
 		if sun != null:
 			sun.light_energy *= 1.0 - 0.6 * rain
 		_wx_rain_fx = GPUParticles3D.new()
-		_wx_rain_fx.amount = int(1400 * clampf(rain, 0.3, 1.0))
+		_wx_rain_fx.amount = int(650 * clampf(rain, 0.3, 1.0))
 		_wx_rain_fx.lifetime = 0.7
+		_wx_rain_fx.fixed_fps = 24 # (interpolated: smooth, at a fraction of the cost)
+		_wx_rain_fx.interpolate = true
 		_wx_rain_fx.local_coords = false
 		_wx_rain_fx.visibility_aabb = AABB(Vector3(-30, -20, -30), Vector3(60, 40, 60))
 		var pm := ParticleProcessMaterial.new()
@@ -2134,7 +2136,7 @@ func _weather_fx() -> void:
 		pm.gravity = Vector3.ZERO
 		_wx_rain_fx.process_material = pm
 		var streak := BoxMesh.new()
-		streak.size = Vector3(0.012, 0.6, 0.012)
+		streak.size = Vector3(0.018, 0.7, 0.018)
 		var sm := StandardMaterial3D.new()
 		sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		sm.albedo_color = Color(0.75, 0.8, 0.88, 0.35)

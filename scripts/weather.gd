@@ -36,6 +36,8 @@ var last_rain_h := -99.0 # when it last rained where you are
 var state := "" # "storm", "rain", "fog", "heat" or "" where you are now
 var _seed := 0
 # Stage 3: what the weather does to the company.
+var caught := 0.0 # rain-water caught today (days of water), for the midnight note
+var _catch_acc := 0.0
 var damp := 0.0 # 0 dry .. 1 soaked: the powder and the cartridges (misfires, slow loading)
 var covered_until := -1.0 # the kegs under tarpaulin (a squall's COVER THE POWDER)
 var site_rain := {} # work post key -> hours of rain on it today (Company._posts_day)
@@ -181,10 +183,21 @@ func tick(dh: float) -> void:
 		s["s"] = clampf(float(s["s"]) - spend * dh, 0.0, 1.0)
 		if float(s["s"]) < 0.06 or x < -30 or y < -30 or x > Gen.SIZE + 30 or y > Gen.SIZE + 30:
 			storms.erase(s)
-	_wash_tracks(dh)
-	_rivers_tick(dh)
-	_here(dh)
-	_sites_tick(dh)
+	# The slow work (rivers, tracks, the weather where you are, the work
+	# sites) in quarter-hour lumps, not every frame.
+	_slow_acc += dh
+	if _slow_acc < SLOW_STEP:
+		return
+	var sdh := _slow_acc
+	_slow_acc = 0.0
+	_wash_tracks(sdh)
+	_rivers_tick(sdh)
+	_here(sdh)
+	_sites_tick(sdh)
+
+
+const SLOW_STEP := 0.25 # game hours
+var _slow_acc := 0.0
 
 
 func _spawn_storm() -> void:
@@ -495,6 +508,23 @@ func _here(dh: float) -> void:
 	# air and sun dry it out again.
 	if r > 0.15:
 		var shelter := 0.35 if (w.camping or w.hours < covered_until) else 1.0
+		# Catching rain (Company.stores.rain_catch): sailcloth spread and the
+		# cover opened to funnel it into the barrels. Clean water, but the
+		# rain gets at the powder too.
+		var catch: bool = Company.active and bool(Company.stores.get("rain_catch", true))
+		if catch:
+			shelter *= 1.4
+			var room := float(Company.WATER_CART - int(Company.stores.get("water", 0)))
+			var got := minf(room, r * dh * 8.0)
+			if got > 0.0:
+				_catch_acc += got
+				var whole := int(_catch_acc)
+				if whole > 0:
+					_catch_acc -= whole
+					Company.stores["water"] = int(Company.stores["water"]) + whole
+					caught += whole
+					if int(Company.stores["water"]) >= Company.WATER_CART / 2:
+						Company.stores["foul"] = false # (fresh rain over what was there)
 		damp = minf(1.0, damp + r * dh * 0.3 * shelter)
 	else:
 		damp = maxf(0.0, damp - dh * (0.04 + 0.12 * ht))

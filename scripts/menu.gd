@@ -133,6 +133,44 @@ func _ready() -> void:
 			print("SIEGE (day 40) LORD ", World.lord_full(l), " army ", int(l["army"]), " home ", World.settlement(int(l["home"]))["name"])
 		get_tree().quit()
 		return
+	if "--watertest" in args:
+		# Headless check of water: named sources, filling, catching rain.
+		Company.new_campaign(_test_start())
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		World.new_world(4321)
+		var g = World.gen
+		Company.stores["water"] = 10
+		Company.stores["foul"] = false
+		for want in ["city", "village", "hold"]:
+			for st in g.settlements:
+				if st["kind"] == want:
+					World.pos = Vector2(st["x"], st["y"]) + Vector2(0.5, 0.5)
+					print("WATER at a ", want, ": ", World.fill_state())
+					break
+		for i in g.river.size():
+			if g.river[i] != 0 and g.terrain[i] != 6 and i % 7 == 0:
+				World.pos = Vector2(i % 512, i / 512) + Vector2(1.5, 0.5)
+				if World.settlement_at(World.pos) < 0:
+					print("WATER by a river: ", World.fill_state(), " -> fill ", World.fill_barrels(), " ", Company.stores["water"], " then ", World.fill_state())
+					break
+		World.pos = Vector2(256, 256)
+		for k in 400:
+			if World.water_source()["kind"] == "":
+				break
+			World.pos += Vector2(1.7, 0.9)
+		print("WATER dry ground: ", World.fill_state())
+		for on in [true, false]:
+			Company.stores["water"] = 10
+			Company.stores["rain_catch"] = on
+			World.weather.damp = 0.0
+			World.weather.caught = 0.0
+			World.weather.storms = [{"id": 1, "x": World.pos.x, "y": World.pos.y, "r": 12.0, "s": 0.9, "vx": 0.0, "vy": 0.0, "kind": "storm", "age": 3.0}]
+			for h in 12:
+				World.weather.tick(0.25)
+				World.weather.storms[0]["s"] = 0.9
+			print("WATER rain 3h, catching ", on, ": water ", Company.stores["water"], " caught ", World.weather.caught, " damp ", snappedf(World.weather.damp, 0.01))
+		get_tree().quit()
+		return
 	if "--productiontest" in args:
 		# Headless check of production: smiths at the camp forge, musket drill.
 		Company.new_campaign(_test_start())

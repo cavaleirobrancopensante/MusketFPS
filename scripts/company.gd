@@ -2200,12 +2200,17 @@ func march_days() -> int:
 func pass_day(water: String) -> PackedStringArray:
 	day += 1
 	var notes: PackedStringArray = []
-	# Fresh meat and fish go off: a third of it a day, unless it's smoked.
+	# Fresh meat and fish go off: a third of it a day, unless the men smoke
+	# it (they do, at every camp: smoke_at_camp).
 	var meat := int(stores.get("meat", 0))
-	if meat > 0:
+	if meat > 0 and World.camping:
+		var sm := smoke_at_camp()
+		if sm > 0:
+			notes.append(Lang.t("Your men smoked %d lb of meat over the fires: rations that will keep.") % sm)
+	elif meat > 0:
 		var off := maxi(1, meat / 3)
 		stores["meat"] = meat - off
-		notes.append(Lang.t("%d lb of fresh meat went off. Smoke it (CRAFT) to keep it.") % off)
+		notes.append(Lang.t("%d lb of fresh meat went off on the march. Make camp at dusk and the men smoke it.") % off)
 	var dn := _road_day(water)
 	if int(dn["thirsty"]) > 0:
 		notes.append(Lang.t("%d men went thirsty.") % int(dn["thirsty"]))
@@ -2879,3 +2884,16 @@ func _drill_day() -> PackedStringArray:
 func drill_battle(m: Dictionary) -> void:
 	if needs_drill(m):
 		m["drill"] = minf(1.0, float(m.get("drill", 0.0)) + DRILL_BATTLE * (1.0 + 0.15 * Officer.skill("training")))
+
+
+## In camp the men smoke whatever fresh meat and fish there is over the
+## fires: a pound of meat, a ration that keeps. Returns the pounds smoked.
+func smoke_at_camp() -> int:
+	var meat := int(stores.get("meat", 0))
+	if meat <= 0:
+		return 0
+	var n := meat # (a pound of meat weighs and packs like a ration)
+	stores["meat"] = meat - n
+	stores["rations"] = int(stores["rations"]) + n
+	save()
+	return n

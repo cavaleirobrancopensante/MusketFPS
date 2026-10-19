@@ -618,6 +618,9 @@ func _update_tracks(delta: float) -> void:
 # ---------------------------------------------------------------- weather
 
 const CLOUD_UP := 26.0 # how high the cloud base rides over the ground
+const WX_STEP := 0.1 # seconds between weather updates on the map
+var _puff: SphereMesh = null
+var _wx_acc := 0.0
 
 func _storm_node(s: Dictionary) -> Node3D:
 	var n := Node3D.new()
@@ -633,28 +636,32 @@ func _storm_node(s: Dictionary) -> Node3D:
 	clouds.set_meta("mat", mat)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(s["id"]) * 7919
-	# A dozen flattened puffs, for a storm 10 cells across (scaled to size).
-	for k in 12:
+	# Eight flattened puffs, for a storm 10 cells across (scaled to size):
+	# one low-poly sphere shared by all of them (cheap on a phone).
+	if _puff == null:
+		_puff = SphereMesh.new()
+		_puff.radial_segments = 9
+		_puff.rings = 4
+		_puff.radius = 1.0
+		_puff.height = 2.0
+	for k in 8:
 		var m := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radial_segments = 12
-		sm.rings = 6
-		var rad := rng.randf_range(5.0, 9.0)
-		sm.radius = rad
-		sm.height = rad * 2.0
-		m.mesh = sm
+		var rad := rng.randf_range(6.0, 10.0)
+		m.mesh = _puff
 		m.material_override = mat
 		var a := rng.randf() * TAU
 		var d := rng.randf_range(0.0, 11.0)
 		m.position = Vector3(cos(a) * d, rng.randf_range(0.0, 4.0), sin(a) * d)
-		m.scale = Vector3(1.0, rng.randf_range(0.22, 0.35), 1.0)
+		m.scale = Vector3(rad, rad * rng.randf_range(0.22, 0.35), rad)
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		clouds.add_child(m)
 	# The rain: streaks falling from the cloud base, leaning with the wind.
 	var rain := GPUParticles3D.new()
 	rain.name = "rain"
-	rain.amount = 700
+	rain.amount = 260
 	rain.lifetime = 0.55
+	rain.fixed_fps = 20 # (the rain runs at 20 frames a second, interpolated)
+	rain.interpolate = true
 	rain.local_coords = false
 	rain.visibility_aabb = AABB(Vector3(-60, -60, -60), Vector3(120, 80, 120))
 	var pm := ParticleProcessMaterial.new()
@@ -723,7 +730,7 @@ func _update_floods(delta: float) -> void:
 	if _flood_v == wx.flood_version and _flood_t > 0.0:
 		return
 	_flood_v = wx.flood_version
-	_flood_t = 1.0
+	_flood_t = 6.0 # (and every few seconds, for newly explored banks)
 	var g = World.gen
 	var cells: Array = []
 	var cols: Array = []
@@ -750,10 +757,19 @@ func _update_floods(delta: float) -> void:
 		_flood_mm.set_instance_color(i, cols[i])
 
 
-func _update_weather(delta: float) -> void:
+func _update_weather(frame_delta: float) -> void:
 	var wx = World.weather
 	if wx == null:
 		return
+	# The flash fades every frame; the rest ten times a second.
+	_flash_e = maxf(0.0, _flash_e - frame_delta * 14.0)
+	if _flash != null:
+		_flash.light_energy = _flash_e
+	_wx_acc += frame_delta
+	if _wx_acc < WX_STEP:
+		return
+	var delta := _wx_acc
+	_wx_acc = 0.0
 	_update_floods(delta)
 	if _bolt.is_empty():
 		_build_bolt()
@@ -780,7 +796,9 @@ func _update_weather(delta: float) -> void:
 		var rain := n.get_node("rain") as GPUParticles3D
 		(rain.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(size * 9.0, 0.5, size * 9.0)
 		rain.amount_ratio = clampf(str_s, 0.0, 1.0)
-		rain.emitting = str_s > 0.15 and _dist < 520.0
+		var near_view := Vector2(_target.x, _target.z).distance_to(Vector2(at.x * CELL, at.y * CELL)) < _dist * 1.4 + size * 12.0
+		rain.emitting = str_s > 0.15 and _dist < 520.0 and near_view
+		rain.visible = rain.emitting
 		if str_s > 0.75 and strike.is_empty() and Vector2(_target.x, _target.z).distance_to(Vector2(at.x * CELL, at.y * CELL)) < _dist * 1.6 + 60.0:
 			strike = s
 	for id in _sky.keys():
@@ -792,8 +810,6 @@ func _update_weather(delta: float) -> void:
 	if _bolt_t <= 0.0:
 		for b in _bolt:
 			(b as MeshInstance3D).visible = false
-	_flash_e = maxf(0.0, _flash_e - delta * 14.0)
-	_flash.light_energy = _flash_e
 	if not strike.is_empty():
 		_bolt_cd -= delta
 		if _bolt_cd <= 0.0:
@@ -968,6 +984,24 @@ func _build_hud() -> void:
 	br.add_child(_button(Lang.t("CENTRE"), func(): _follow = true))
 	br.add_child(_button("−", func(): _zoom(1.35)))
 	br.add_child(_button("+", func(): _zoom(1.0 / 1.35)))
+	# Fresh water close by: fill the barrels now (they also fill themselves
+	# at midnight from the best water you passed that day).
+	_fill_btn = _button(Lang.t("FILL THE BARRELS"), func():
+		var from := String(World.water_source()["from"])
+		var w := World.fill_barrels()
+		if w == "clean":
+			_push_toast(Lang.t("The men fill the water barrels from %s: %d days of clean water.") % [from, int(Company.days_left("water"))])
+		elif w == "foul":
+			_push_toast(Lang.t("Swamp water: it'll do, served as grog. The barrels are full, and foul."))
+		_fill_btn.visible = false)
+	_fill_btn.anchor_left = 1.0
+	_fill_btn.anchor_right = 1.0
+	_fill_btn.anchor_top = 1.0
+	_fill_btn.anchor_bottom = 1.0
+	_fill_btn.position = Vector2(-540, -140)
+	_fill_btn.custom_minimum_size = Vector2(300, 56)
+	_fill_btn.visible = false
+	root.add_child(_fill_btn)
 
 	_popup = _panel(Color(UI.WOOL, 0.97))
 	_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -1254,6 +1288,12 @@ func _process(delta: float) -> void:
 	_update_fog()
 	_update_tracks(delta)
 	_update_weather(delta)
+	_fill_t -= delta
+	if _fill_t <= 0.0 and _fill_btn != null:
+		_fill_t = 0.5
+		var fs: Array = World.fill_state()
+		_fill_btn.visible = Company.active and not _popup.visible and bool(fs[1])
+		_fill_btn.text = String(fs[0])
 	_update_parties()
 	_update_player()
 	_update_light()
@@ -2307,6 +2347,8 @@ func _visit(st: Dictionary) -> void:
 	_popup_open(title, text, buttons)
 
 
+var _fill_btn: Button
+var _fill_t := 0.0
 var _rest_until := -1.0
 var _siege_id := -1 # the nest you're besieging (a day's siege is running)
 
@@ -2609,7 +2651,10 @@ func _on_dusk() -> void:
 	_popup_open("Dusk", Lang.t("The light is going. Make camp and sleep until dawn, or march on through the night: slower, half blind, and the men won't thank you."),
 		[[Lang.t("MAKE CAMP"), func():
 			_popup_close()
-			World.make_camp()], [Lang.t("MARCH ON IN THE DARK"), func():
+			World.make_camp()
+			var sm := Company.smoke_at_camp()
+			if sm > 0:
+				_push_toast(Lang.t("Your men smoked %d lb of meat over the fires: rations that will keep.") % sm)], [Lang.t("MARCH ON IN THE DARK"), func():
 			_popup_close()
 			World.march_through_night()]], false)
 
