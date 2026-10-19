@@ -72,7 +72,7 @@ func _ready() -> void:
 	bm.size = Vector3(0.9, 0.5, 0.6)
 	box.mesh = bm
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.3, 0.22, 0.13)
+	mat.albedo_color = Color(0.26, 0.27, 0.29)
 	box.material_override = mat
 	box.position = BOX_AT + Vector3(0, 0.25, 0)
 	add_child(box)

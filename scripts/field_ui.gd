@@ -502,6 +502,10 @@ func _buttons() -> Array:
 			out.append({"id": "o_" + k[0], "rect": Rect2(ox, oy, 200, 48), "label": k[1]})
 			oy += 54.0
 	out.append({"id": "all", "rect": Rect2(14, s.y - CARD_H - 18 - 58, 120, 48), "label": Lang.t("ALL")})
+	if not lesson.is_empty():
+		# The lesson goes when you've read it.
+		var lr := _lesson_rect()
+		out.append({"id": "lesson_ok", "rect": Rect2(lr.get_center().x - 110.0, lr.end.y - 60.0, 220.0, 48.0), "label": Lang.t("GOT IT"), "primary": true})
 	if not selected.is_empty():
 		out.append({"id": "none", "rect": Rect2(142, s.y - CARD_H - 18 - 58, 120, 48), "label": Lang.t("NONE")})
 	return out
@@ -963,6 +967,8 @@ func _button(id: String) -> void:
 			close()
 		"autopause":
 			auto_pause = not auto_pause
+		"lesson_ok":
+			lesson = []
 		"restart":
 			get_tree().paused = false
 			Engine.time_scale = 1.0
@@ -1060,13 +1066,21 @@ func _draw() -> void:
 		_draw_card(c[0], c[1])
 
 
-func _draw_lesson() -> void:
+## The lesson's box (with room for its ✓ GOT IT button at the bottom).
+func _lesson_rect() -> Rect2:
 	var w := minf(size.x - 80.0, 820.0)
+	var n := 0
+	for i in range(1, lesson.size()):
+		n += _wrap(String(lesson[i]), w - 48.0, 19).size()
+	return Rect2(size.x * 0.5 - w * 0.5, 132.0, w, 64.0 + n * 27.0 + 14.0 + 62.0)
+
+
+func _draw_lesson() -> void:
+	var rect := _lesson_rect()
+	var w := rect.size.x
 	var lines: Array = []
 	for i in range(1, lesson.size()):
 		lines.append_array(_wrap(String(lesson[i]), w - 48.0, 19))
-	var h := 64.0 + lines.size() * 27.0 + 14.0
-	var rect := Rect2(size.x * 0.5 - w * 0.5, 132.0, w, h)
 	draw_style_box(_box(Color(UI.NIGHT, 0.86), Color(UI.BRASS, 0.7)), rect)
 	_text_c(String(lesson[0]), Vector2(size.x * 0.5, rect.position.y + 42.0), 26, UI.BRASS, display)
 	var y := rect.position.y + 76.0

@@ -25,6 +25,11 @@ const SoundFactory := preload("res://scripts/sound_factory.gd")
 const Look := preload("res://scripts/look.gd")
 const UI := preload("res://scripts/ui.gd")
 const AFTERMATH := "res://scenes/aftermath.tscn"
+const BATTLE := "res://scenes/battle.tscn"
+## Part one ends at the foot of the path: more lizards, bayonets, the charge
+## (played in first person: field_rearguard.gd); part two picks up after it.
+const T_CHARGE := T_REAR + 7.6 # (into the battle)
+const T_RESUME := T_REAR + 4.4 # (where part two starts)
 
 const T_REAR := 9.0
 const T_GLASS := 17.0
@@ -51,6 +56,10 @@ var _sarge := "Sergeant"
 # The shots' actors.
 var _runners: Array = [] # [holder, rig, speed, fire_at]
 var _chasers: Array = [] # [holder, rig, speed, stop_x, dead_at]
+var _resume := false # part two: after the bayonet charge
+var _start_t := 0.0
+var _wave2: Array = [] # more lizards coming along the sand after the volley
+var _duels: Array = [] # stragglers caught: {"m": soldier, "l": lizard, "end": t, "wins": bool, "phase": float}
 var _rear: Array = [] # the kneeling rank
 var _looters: Array = []
 var _boats: Array = []
@@ -81,6 +90,11 @@ var _feast: Array = [] # the lizards' fire and its smoke (lit once the beach is 
 
 func _ready() -> void:
 	Music.set_context("intro")
+	if "--retreat-resume" in OS.get_cmdline_user_args():
+		Engine.set_meta("retreat_resume", true) # (tests: part two)
+	if Engine.has_meta("retreat_resume"):
+		_resume = bool(Engine.get_meta("retreat_resume"))
+		Engine.remove_meta("retreat_resume")
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--snaps="):
 			for v in a.substr(8).split(","):
@@ -101,7 +115,8 @@ func _ready() -> void:
 		[0.6, 4.4, Lang.t("The line is broken. What is left of the company runs along the sand for the cliff path.")],
 		[4.8, 8.6, Lang.t("Some turn to fire at what's behind them. Not many.")],
 		[9.4, 12.6, Lang.t("%s: \"Here! Form on me! Make ready... Present...\"") % _sarge],
-		[12.8, 16.6, Lang.t("The lizards stop at the volley, hiss, and go back down the beach. There is easier meat there.")],
+		[12.6, 14.4, Lang.t("%s: \"More of them! Fix bayonets!\"") % _sarge],
+		[14.6, 16.4, Lang.t("%s: \"Charge! Into them!\"") % _sarge],
 		[17.4, 22.6, Lang.t("From the ridge, through the Major's glass, the beach.")],
 		[22.8, 28.6, Lang.t("They strip the dead of everything. Then they begin to eat them.")],
 		[29.4, 35.8, Lang.t("In the gully below, the ammunition cart, overturned but whole. They right it and haul it up.")],
@@ -110,8 +125,16 @@ func _ready() -> void:
 		[46.6, 50.4, Lang.t("%s: \"There is nothing for us here, sir.\"") % _sarge],
 		[50.6, 53.6, Lang.t("\"Then we go inland,\" %s. \"Every man who can walk.\"") % (Lang.t("you say") if me == "" else Lang.t("says %s") % me)],
 	]
-	_voices = [[9.5, "shout", 1.0, -4.0], [10.5, "talk3", 0.95, -6.0], [11.4, "shout", 0.92, -2.0],
-		[46.7, "talk3", 0.95, -6.0], [48.4, "talk1", 0.95, -7.0], [50.7, "talk2", 1.05, -6.0], [52.2, "talk4", 1.0, -8.0]]
+	_voices = [[9.5, "shout", 1.0, -4.0], [10.5, "talk2", 0.95, -6.0], [11.4, "shout", 0.92, -2.0],
+		[12.7, "shout", 1.05, -2.0], [13.2, "talk2", 0.95, -6.0], [14.7, "shout", 0.95, 0.0], [14.9, "roar", 0.9, -4.0],
+		[46.7, "talk2", 0.95, -6.0], [48.4, "talk2", 0.9, -7.0], [50.7, "talk1", 1.05, -6.0], [52.2, "talk1", 1.0, -8.0]]
+	if _resume:
+		# Part two: the charge has thrown them back.
+		_captions = _captions.filter(func(c): return float(c[0]) >= T_GLASS)
+		_captions.push_front([T_RESUME + 0.4, T_GLASS - 0.3, Lang.t("The charge throws them back down the beach. They don't come again: there is easier meat there.")])
+		_voices = _voices.filter(func(v): return float(v[0]) >= T_RESUME)
+		_t = T_RESUME
+		_start_t = T_RESUME
 
 	var env := Look.environment(self, "dusk", Color(0.85, 0.7, 0.6), 0.004)
 	var sun: DirectionalLight3D = env.get_meta("sun")
@@ -350,12 +373,19 @@ func _build_actors() -> void:
 		var l := _man(Vector3(-16 + rng.randf_range(-10, 6), 0, 17 + rng.randf_range(-7, 7)), Vector3.RIGHT, "lizard")
 		var dead := -1.0
 		if i == 1:
-			dead = 3.55
+			dead = 3.85
 		elif i == 4:
-			dead = 5.95
+			dead = 6.25
 		# [holder, rig, speed, -, dead_at]
 		_chasers.append([l[0], l[1], rng.randf_range(4.7, 5.2), 0.0, dead])
 		_kick_dust(l[0])
+	# Stragglers the lizards caught: a man at bay with the bayonet. One puts
+	# his lizard down and runs on; one goes down.
+	for d in [[Vector3(13.0, 0, 21.5), true, 3.7, 0.0], [Vector3(31.0, 0, 13.0), false, 6.3, 0.55], [Vector3(46.0, 0, 19.5), true, 8.1, 0.3]]:
+		var at: Vector3 = d[0]
+		var sm := _man(at, Vector3.LEFT)
+		var lz := _man(at + Vector3(-1.5, 0, 0.2), Vector3.RIGHT, "lizard")
+		_duels.append({"m": sm, "l": lz, "wins": d[1], "end": d[2], "phase": d[3]})
 	# A javelin, thrown at the slowest man.
 	_javelin = Node3D.new()
 	Props._box(_javelin, Vector3(0.04, 0.04, 1.6), Props.WOOD, Vector3.ZERO)
@@ -369,6 +399,10 @@ func _build_actors() -> void:
 	_sergeant = _man(Vector3(95.5, 0, 13.2), Vector3.LEFT, "soldier", {"primary": "pike", "secondary": ""})
 	_show(_rear, false)
 	_show([_sergeant], false)
+	for i in 9:
+		var w2 := _man(Vector3(60.0 - (i % 3) * 2.5 - rng.randf_range(0, 3), 0, 12 + (i / 3) * 2.6 + rng.randf_range(-1, 1)), Vector3.RIGHT, "lizard")
+		_wave2.append(w2)
+	_show(_wave2, false)
 	# The beach after: the dead, and the lizards over them.
 	for i in 14:
 		var at := Vector3(rng.randf_range(-30, 25), 0, rng.randf_range(4, 22))
@@ -480,7 +514,7 @@ func _build_overlay() -> void:
 	skip.add_theme_font_size_override("font_size", 22)
 	skip.position = Vector2(20, 76)
 	skip.size = Vector2(150, 56)
-	skip.pressed.connect(_finish)
+	skip.pressed.connect(func(): _to_battle() if not _resume else _finish())
 	root.add_child(skip)
 
 
@@ -517,6 +551,9 @@ func _process(delta: float) -> void:
 	if t < T_REAR:
 		_shot_rout(t, delta)
 	elif t < T_GLASS:
+		if not _resume and t >= T_CHARGE:
+			_to_battle()
+			return
 		_set_shot("rear")
 		_shot_rear(t - T_REAR, delta)
 	elif t < T_CART:
@@ -544,9 +581,12 @@ func _set_shot(name: String) -> void:
 	_shot_name = name
 	_cam_cut = true
 	_show(_runners, name == "rout")
+	for du in _duels:
+		_show([du["m"], du["l"]], name == "rout")
 	_show(_chasers, name in ["rout", "rear"])
 	_show(_rear, name == "rear")
 	_show([_sergeant], name == "rear")
+	_show(_wave2, name == "rear" and not _resume)
 	_show(_looters, name in ["glass", "ruin"])
 	_show(_haulers, name == "cart")
 	_cart.visible = name == "cart"
@@ -679,6 +719,65 @@ func _fall(u: Array) -> void:
 	_sand_puff((u[0] as Node3D).global_position, 1.3)
 
 
+## Turn a rig toward `want` at `rate` (radians a second), the short way
+## round (a straight lerp between opposite directions never turns at all).
+static func _turn_rig(r, want: Vector3, rate: float, delta: float) -> void:
+	var f: Vector3 = r.facing
+	f.y = 0.0
+	if f.length_squared() < 0.0001:
+		f = want
+	var ang := f.normalized().signed_angle_to(want.normalized(), Vector3.UP)
+	if absf(absf(ang) - PI) < 0.05:
+		ang = PI * 0.98 # (dead behind: turn through the sea side, toward the camera)
+	r.facing = (Basis(Vector3.UP, clampf(ang, -rate * delta, rate * delta)) * f.normalized()).normalized()
+
+
+## A straggler at bay: thrust and parry with the lizard that caught him,
+## until one of them goes down.
+func _duel(du: Dictionary, t: float, delta: float) -> void:
+	var m: Array = du["m"]
+	var l: Array = du["l"]
+	var sr = m[1]
+	var lr = l[1]
+	var end: float = du["end"]
+	var mh: Node3D = m[0]
+	var lh: Node3D = l[0]
+	if t < end:
+		var c := fmod(t + float(du["phase"]), 1.2)
+		sr.facing = (lh.position - mh.position).normalized()
+		lr.facing = -sr.facing
+		sr.move_speed = 0.0
+		lr.move_speed = 0.0
+		# He thrusts (wind back, lunge), the lizard rears and claws back.
+		sr.anim = "windup" if c < 0.3 else ("strike" if c < 0.55 else "block")
+		lr.anim = "stagger" if c >= 0.5 and c < 0.75 else ("windup" if c < 0.95 and c >= 0.75 else "strike")
+		if c >= 0.5 and c - delta < 0.5:
+			_play("thud", -14.0, randf_range(0.9, 1.15))
+		# A little give and take on the sand.
+		var sway := sin(t * 2.4 + float(du["phase"]) * 5.0) * 0.4
+		mh.position.x += (sway * 0.6) * delta
+		lh.position.x = mh.position.x - 1.45
+		return
+	if not du.get("done", false):
+		du["done"] = true
+		if bool(du["wins"]):
+			_fall(l)
+			_play("hiss", -8.0, 1.1)
+		else:
+			_fall(m)
+			_play("grunt", -6.0, 0.85)
+	if bool(du["wins"]) and not sr._dead:
+		# Free of it: off after the others.
+		_turn_rig(sr, Vector3.RIGHT, 9.0, delta)
+		sr.anim = "walk"
+		sr.move_speed = minf(5.0, (t - end) * 6.0)
+		mh.position.x += sr.move_speed * delta
+	elif not bool(du["wins"]) and not lr._dead:
+		# Over him: it stops to tear at what it caught.
+		lr.anim = "rummage"
+		lr.move_speed = 0.0
+
+
 ## The rout: they run along the sand for the path, the lizards gaining.
 ## Two turn and fire; a javelin brings one man down; the camera tracks
 ## alongside, low, from the sea side.
@@ -695,21 +794,24 @@ func _shot_rout(t: float, delta: float) -> void:
 			_play("grunt", -6.0, 0.9)
 			continue
 		if fire_at > 0.0 and t >= fire_at and t < fire_at + 1.25:
-			# Turn, fire, run on.
-			r.facing = r.facing.lerp(Vector3.LEFT, 1.0 - exp(-12.0 * delta)).normalized()
-			r.move_speed = move_toward(r.move_speed, 0.0, 14.0 * delta)
-			r.anim = "fire" if t >= fire_at + 0.4 else "aim"
+			# Stop, turn round to face them, fire, then run on.
+			r.move_speed = move_toward(r.move_speed, 0.0, 30.0 * delta)
+			h.position.x += r.move_speed * delta
+			_turn_rig(r, Vector3.LEFT, 11.0, delta)
+			var faced: bool = r.facing.dot(Vector3.LEFT) > 0.97
+			r.anim = "fire" if t >= fire_at + 0.55 and faced else ("aim" if faced else "idle")
 			(_dust[h] as CPUParticles3D).emitting = false
-			if t >= fire_at + 0.4 and not _fired.has(r):
+			if t >= fire_at + 0.55 and faced and not _fired.has(r):
 				_fired[r] = true
 				_shot_from(r)
-			h.position.x += r.move_speed * delta
 			continue
 		# Running: each at his own pace, which wavers with his stride.
 		var sp := float(u[2]) * (1.0 + 0.06 * sin(t * 2.3 + float(u[4])))
 		if fire_at > 0.0 and t > fire_at + 1.25:
 			sp *= 1.12 # (catching up)
-		r.facing = r.facing.lerp(Vector3.RIGHT, 1.0 - exp(-8.0 * delta)).normalized()
+		_turn_rig(r, Vector3.RIGHT, 10.0, delta)
+		if r.facing.dot(Vector3.RIGHT) < 0.5:
+			sp *= 0.2 # (turning back round before he runs: never running backwards)
 		r.anim = "walk"
 		r.move_speed = sp
 		(_dust[h] as CPUParticles3D).emitting = true
@@ -728,6 +830,8 @@ func _shot_rout(t: float, delta: float) -> void:
 		r2.anim = "walk"
 		r2.move_speed = float(u[2])
 		h2.position.x += float(u[2]) * delta
+	for du in _duels:
+		_duel(du, t, delta)
 	# The javelin: from the leading lizard to the slow man.
 	if t >= 2.2 and t < 2.9:
 		var thrower: Node3D = _chasers[0][0]
@@ -758,16 +862,65 @@ func _shot_rear(t: float, delta: float) -> void:
 	var sg = _sergeant[1]
 	sg.anim = "idle"
 	sg.facing = Vector3.LEFT if t < 1.0 or t > 3.0 else Vector3(-0.3, 0, -1)
+	var charging := not _resume and t >= 5.6
 	for m in _rear:
 		var r = m[1]
 		r.facing = Vector3.LEFT
-		r.anim = "idle" if t < 1.3 else ("aim" if t < 2.45 else ("fire" if t < 3.0 else "reload"))
+		if _resume:
+			# After the charge: back at the foot of the path, getting their breath.
+			r.anim = "idle"
+			r.move_speed = 0.0
+			continue
+		if charging:
+			# Bayonets fixed and levelled: in at a run.
+			r.anim = "guard"
+			r.bayonet_on = true
+			r.move_speed = minf(4.2, (t - 5.6) * 6.0)
+			(m[0] as Node3D).position.x -= r.move_speed * delta
+			continue
+		# "Fix bayonets!": each man grounds his musket, draws and fixes his
+		# bayonet (a little out of step), then levels it.
+		var fi: float = 3.75 + float(_rear.find(m) % 3) * 0.18
+		if t >= fi:
+			r.fix_k = clampf((t - fi) / 1.3, 0.0, 1.0)
+			r.anim = "fix" if r.fix_k < 1.0 else "guard"
+			r.bayonet_on = r.fix_k >= 0.72
+			if r.fix_k >= 0.72 and not r.has_meta("clicked"):
+				r.set_meta("clicked", true)
+				_play("thud", -18.0, 1.8) # (the click of the socket)
+		else:
+			r.bayonet_on = false # (in the scabbard until the word)
+			r.anim = "idle" if t < 1.3 else ("aim" if t < 2.45 else ("fire" if t < 3.0 else "reload"))
 		if t >= 2.45 and not _fired.has(r):
 			_fired[r] = true
 			_shot_from(r, -12.0 if m != _rear[3] else 2.0, true)
-	if t >= 2.45 and t - delta < 2.45:
+	if t >= 2.45 and t - delta < 2.45 and not _resume:
 		_shake = 1.0
 		_play("musket", 2.0, 0.85)
+	if charging:
+		sg.anim = "walk"
+		sg.facing = Vector3.LEFT
+		sg.move_speed = minf(4.4, (t - 5.6) * 6.0)
+		(_sergeant[0] as Node3D).position.x -= sg.move_speed * delta
+	# More of them along the sand, coming on.
+	if not _resume:
+		for u in _wave2:
+			var h3: Node3D = u[0]
+			var r3 = u[1]
+			if t < 2.8:
+				h3.visible = false
+				r3.visible = false
+				continue
+			h3.visible = true
+			r3.visible = true
+			var stop_x := 82.0 - float(_wave2.find(u) % 3) * 2.0
+			var sp3 := 5.2 if h3.position.x < stop_x else 0.0
+			if charging:
+				sp3 = 0.0
+			r3.facing = Vector3.RIGHT
+			r3.anim = "walk" if sp3 > 0.0 else ("windup" if charging else "idle")
+			r3.move_speed = sp3
+			h3.position.x += sp3 * delta
 	var n := 0
 	for u in _chasers:
 		var h: Node3D = u[0]
@@ -785,22 +938,35 @@ func _shot_rear(t: float, delta: float) -> void:
 			r2.anim = "walk"
 			r2.move_speed = sp
 			h.position.x += sp * delta
-		elif t < 4.6:
-			r2.anim = "idle"
+		elif t < 4.6 or not _resume:
+			# Checked at the smoke, snarling; then (part one) the others
+			# come up behind them.
+			r2.anim = "idle" if not (not _resume and t >= 5.6) else "windup"
 			r2.move_speed = 0.0
-			r2.facing = r2.facing.lerp(Vector3.LEFT, 1.0 - exp(-3.0 * delta)).normalized()
+			r2.facing = Vector3.RIGHT
 		else:
 			# They give it up and go back for the easier meat.
 			r2.facing = Vector3.LEFT
 			r2.anim = "walk"
 			r2.move_speed = minf(3.4, (t - 4.6) * 3.0)
 			h.position.x -= r2.move_speed * delta
-	if t > 3.6 and t - delta <= 3.6:
+	if t > 3.6 and t - delta <= 3.6 and not _resume:
 		_play("hiss", -4.0, 0.85)
 		_play("roar", -6.0, 0.9)
+	if _resume and t > 4.8 and t - delta <= 4.8:
+		_play("hiss", -6.0, 0.8)
 	# From the sea side and a little above the line, the pursuit beyond it;
 	# a slow push in.
 	var k := smoothstep(0.0, T_GLASS - T_REAR, t)
+	if not _resume and t >= 3.7 and t < 5.5:
+		# Close on the line: hands at the muzzles, the bayonets going on.
+		if t - delta < 3.7:
+			_cam_cut = true
+		var k3 := (t - 3.7) / 1.8
+		_set_cam(Vector3(91.0 + 1.5 * k3, 1.55, 27.0 - 1.0 * k3), Vector3(94.5, 1.25, 18.0), 40.0)
+		return
+	if not _resume and t >= 5.5 and t - delta < 5.5:
+		_cam_cut = true
 	_set_cam(Vector3(101.0 - 3.0 * k, 3.4 - 0.6 * k, 34.0 - 4.0 * k), Vector3(80.0 - 4.0 * k, 0.9, 16.0), 48.0)
 
 
@@ -924,8 +1090,10 @@ func _shot_go(t: float, delta: float) -> void:
 
 
 func _fade_amount(t: float) -> float:
-	if t < 0.8:
-		return 1.0 - t / 0.8
+	if t - _start_t < 0.8:
+		return 1.0 - (t - _start_t) / 0.8
+	if not _resume and t > T_CHARGE - 0.8:
+		return clampf((t - (T_CHARGE - 0.8)) / 0.7, 0.0, 1.0) # (into the fight)
 	for cut in [T_REAR, T_GLASS, T_CART, T_RUIN, T_GO]:
 		if absf(t - cut) < 0.35:
 			return clampf(1.0 - absf(t - cut) / 0.35, 0.0, 1.0) * 0.9
@@ -949,6 +1117,19 @@ func _update_caption(t: float) -> void:
 func _snap(st: float) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("res://r_%04.1f.png" % st)
+
+
+## Part one is over: the charge, in first person (field_rearguard.gd).
+func _to_battle() -> void:
+	if _done:
+		return
+	_done = true
+	if not _snaps.is_empty():
+		print("RETREAT PART ONE DONE at %.1fs" % _t)
+		get_tree().quit()
+		return
+	Company.next_battle = {"rearguard": true, "enemy": 18}
+	Loading.change(BATTLE)
 
 
 func _finish() -> void:

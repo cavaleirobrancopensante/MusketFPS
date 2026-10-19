@@ -127,6 +127,9 @@ var _heater: Node3D # a footman's shield, on the left arm
 var t_bow_up := Vector3.ZERO # when set (your own body), how the bow is held
 var _muzzle_z := MUZZLE
 var bayonet_in_hand := false
+## Anim "fix" (a cutscene drives it 0..1): musket grounded, the right hand
+## draws the bayonet from the scabbard and fixes it on the muzzle.
+var fix_k := 0.0
 var ramrod_on := false
 var show_head := true
 var _fp_hide: Array = [] # parts right under your eye (collar, epaulettes): hidden in first person
@@ -1295,6 +1298,22 @@ func _npc_pose() -> void:
 			t_hand_l = t_grip + t_dir.normalized() * 0.72
 			t_hand_r = muzzle + Vector3(0, 0.08 + 0.32 * absf(sin(anim_time * 5.0)), 0)
 			ramrod_on = true
+		"fix":
+			t_grip = Vector3(0.06, 0.52, -0.3)
+			t_dir = Vector3(0, 1, -0.1)
+			var muz := t_grip + t_dir.normalized() * MUZZLE
+			t_hand_l = t_grip + t_dir.normalized() * 0.72
+			var sheath := Vector3(-0.2, 0.92, 0.12) # (the scabbard on the left hip)
+			if fix_k < 0.3:
+				t_hand_r = Vector3(0.28, 0.95, -0.05).lerp(sheath, fix_k / 0.3)
+			elif fix_k < 0.72:
+				bayonet_in_hand = true
+				var k2 := (fix_k - 0.3) / 0.42
+				t_hand_r = sheath.lerp(muz + Vector3(0, 0.14, 0), k2) + Vector3(0, sin(k2 * PI) * 0.12, 0)
+			else:
+				# Socket on, a twist to lock it, the hand away.
+				t_hand_r = muz + Vector3(0.04 * sin(fix_k * 40.0), 0.06 - 0.1 * (fix_k - 0.72), 0)
+			pose_rate = 14.0
 		"guard":
 			t_grip = Vector3(0.18, 1.05, -0.25)
 			t_dir = Vector3(0, 0.33, -1)

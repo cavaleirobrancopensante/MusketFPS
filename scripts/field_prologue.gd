@@ -127,6 +127,9 @@ func spawn() -> void:
 		batteries.append(b)
 	for r in field.regs:
 		r.order_hold()
+		if r.is_gun():
+			# Dug in behind the works: they lay, they don't march.
+			r.emplaced = true
 	# You: in the gap in the middle of your company's front rank.
 	var p: Vector3 = you.pos
 	battle.player.position = Vector3(p.x, field.terrain.height(p.x, p.z) + 0.3, p.z)

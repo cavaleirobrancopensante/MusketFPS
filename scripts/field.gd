@@ -84,6 +84,8 @@ var enemy_z := 62.0
 var campaign := false # a fight from the campaign map (your own men; results go back)
 var prologue := false # the beach: the tutorial battle (see the prologue section)
 var hunt := "" # "game" or "fish": you alone with a musket, after meat (battle.gd)
+var rearguard := false # the bayonet charge at the foot of the cliff path (field_rearguard.gd)
+var rear = null
 var camp := false # attacked in the night camp (or a sortie from a besieged nest)
 var spotted := false # ...and the watch saw them coming
 var assault := false # storming a lizard nest (nest_assault.gd)
@@ -119,6 +121,13 @@ func setup(b, c: Dictionary) -> void:
 	campaign = bool(c.get("campaign", false))
 	prologue = bool(c.get("prologue", false))
 	hunt = String(c.get("hunt", ""))
+	rearguard = bool(c.get("rearguard", false))
+	if rearguard:
+		# The foot of the cliff path: your line, the lizards along the sand.
+		cfg["you"] = {"musket": 1}
+		cfg["foe"] = {"liz_warrior": 1}
+		ai_sides = [1]
+		return
 	if hunt != "":
 		cfg["you"] = {}
 		cfg["foe"] = {}
@@ -369,6 +378,14 @@ func spawn_hunt() -> void:
 ## The prologue (field_prologue.gd): the beach, the Major's battle, then yours.
 const Prologue := preload("res://scripts/field_prologue.gd")
 var story = null
+
+
+func spawn_rearguard() -> void:
+	rear = preload("res://scripts/field_rearguard.gd").new(self)
+	add_child(rear)
+	rear.spawn()
+	battle.player.melee_hit.connect(rear.on_hit)
+	battle.player.blocked.connect(rear.on_block)
 
 
 func spawn_prologue() -> void:
@@ -1192,6 +1209,9 @@ func player_order(what: String) -> void:
 
 
 func on_player_down() -> void:
+	if rear != null:
+		rear.player_down()
+		return
 	if story != null:
 		story.player_down()
 		return
@@ -1223,7 +1243,7 @@ func _check_end() -> void:
 		if clock > (600.0 if prologue else 300.0):
 			print("FIELD END timeout")
 			get_tree().quit()
-	if over != "" or prologue or hunt != "":
+	if over != "" or prologue or hunt != "" or rear != null:
 		return
 	var mine := regs.filter(func(r): return r.side == 0 and not r.broken())
 	var theirs := regs.filter(func(r): return r.side == 1 and not r.broken())

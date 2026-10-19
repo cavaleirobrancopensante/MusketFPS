@@ -8,6 +8,8 @@ const WOOD := Color(0.38, 0.26, 0.15)
 const SAIL := Color(0.86, 0.83, 0.74)
 const BRONZE := Color(0.42, 0.33, 0.2)
 const IRON := Color(0.16, 0.16, 0.18)
+const GUN_IRON := Color(0.19, 0.2, 0.22) # a cast-iron barrel, deep grey
+const GUN_PAINT := Color(0.29, 0.3, 0.32) # the carriage, painted grey
 const SAND := Color(0.68, 0.6, 0.42)
 const EARTH := Color(0.42, 0.33, 0.22)
 const WICKER := Color(0.5, 0.4, 0.24)
@@ -102,7 +104,7 @@ static func ship() -> Node3D:
 	_box(s, Vector3(5.1, 0.25, 26.2), Color(0.6, 0.5, 0.2), Vector3(0, 0.9, 1.0)) # yellow gunport band
 	_box(s, Vector3(4.8, 0.2, 25.0), WOOD, Vector3(0, 2.25, 1.0)) # deck
 	_box(s, Vector3(5.0, 2.4, 6.0), WOOD_DARK, Vector3(0, 3.3, 11.0)) # stern castle
-	_box(s, Vector3(0.25, 0.25, 7.0), WOOD, Vector3(0, 2.6, -19.0), Vector3(-18, 0, 0)) # bowsprit
+	_box(s, Vector3(0.25, 0.25, 7.0), WOOD, Vector3(0, 3.2, -19.0), Vector3(18, 0, 0)) # bowsprit, angled up off the bow
 	var masts := {"fore_mast": -7.5, "main_mast": 1.5, "mizzen_mast": 8.5}
 	for name in masts:
 		var m := Node3D.new()
@@ -136,18 +138,18 @@ static func longboat() -> Node3D:
 ## "barrel" (for recoil); its muzzle is at local (0, 0.95, -1.9).
 static func cannon() -> Node3D:
 	var g := Node3D.new()
-	_box(g, Vector3(0.7, 0.35, 2.2), WOOD, Vector3(0, 0.55, 0.5)) # carriage
-	_box(g, Vector3(0.4, 0.2, 1.8), WOOD, Vector3(0, 0.35, 1.7), Vector3(-12, 0, 0)) # trail
+	_box(g, Vector3(0.7, 0.35, 2.2), GUN_PAINT, Vector3(0, 0.55, 0.5)) # carriage (painted grey)
+	_box(g, Vector3(0.4, 0.2, 1.8), GUN_PAINT, Vector3(0, 0.35, 1.7), Vector3(-12, 0, 0)) # trail
 	for side in [-1.0, 1.0]:
-		_cyl(g, 0.55, 0.55, 0.12, WOOD_DARK, Vector3(side * 0.48, 0.55, -0.1), Vector3(0, 0, 90))
+		_cyl(g, 0.55, 0.55, 0.12, GUN_PAINT.darkened(0.25), Vector3(side * 0.48, 0.55, -0.1), Vector3(0, 0, 90))
 		_cyl(g, 0.12, 0.12, 0.16, IRON, Vector3(side * 0.48, 0.55, -0.1), Vector3(0, 0, 90))
 	var barrel := Node3D.new()
 	barrel.name = "barrel"
 	barrel.position = Vector3(0, 0.95, 0.0)
 	g.add_child(barrel)
-	_cyl(barrel, 0.13, 0.2, 2.4, BRONZE, Vector3(0, 0, -0.6), Vector3(90, 0, 0))
-	_cyl(barrel, 0.16, 0.16, 0.12, BRONZE.darkened(0.2), Vector3(0, 0, -1.78), Vector3(90, 0, 0))
-	_box(barrel, Vector3(0.14, 0.14, 0.2), BRONZE, Vector3(0, 0, 0.66))
+	_cyl(barrel, 0.13, 0.2, 2.4, GUN_IRON, Vector3(0, 0, -0.6), Vector3(90, 0, 0))
+	_cyl(barrel, 0.16, 0.16, 0.12, GUN_IRON.darkened(0.2), Vector3(0, 0, -1.78), Vector3(90, 0, 0))
+	_box(barrel, Vector3(0.14, 0.14, 0.2), GUN_IRON, Vector3(0, 0, 0.66))
 	return g
 
 

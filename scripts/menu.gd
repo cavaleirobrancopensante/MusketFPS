@@ -242,6 +242,13 @@ func _ready() -> void:
 				Company.next_battle = {"enemy": 34, "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "lizards",
 					"faction": "lizards", "comp": World.party_comp(wb), "map": "flat", "party_name": Lang.t("Test warband"),
 					"allies": {"faction": fac, "comp": World.party_comp(pp), "party": -1, "size": int(pp["size"])}}
+		elif "--rearguard" in args:
+			# The retreat's bayonet charge: -- --rearguard
+			Company.new_campaign(_test_start())
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			for m in Company.roster:
+				m["wounded_days"] = 0
+			Company.next_battle = {"rearguard": true, "enemy": 18}
 		elif "--assault" in args:
 			# Storming a nest: -- --autotest --assault [--walls=0.5]
 			Company.new_campaign(_test_start())

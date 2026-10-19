@@ -70,6 +70,9 @@ var allied := false # a nation's regiment fighting beside you (its general is fi
 var square := false
 var hold_fast := false # a nest's garrison: stays at its post (field.gd's general leaves it)
 var covered := false # ...behind the stakes, where nobody can shoot it
+## Guns dug in behind works (the beach): they never limber up and move;
+## they only swing a little either way to lay on a target.
+var emplaced := false
 var _arrive_t := 0.0
 
 
@@ -385,6 +388,10 @@ func tick(dt: float) -> void:
 		pos = centroid
 		return
 	braced = (kind == "pike" and not moving and not charging) or square
+	if emplaced:
+		_emplaced(dt)
+		_pick_fire_target()
+		return
 	match order:
 		"follow":
 			_follow(dt)
@@ -397,6 +404,25 @@ func tick(dt: float) -> void:
 		_:
 			moving = false
 	_pick_fire_target()
+
+
+## Dug in: hold the ground and shoot at what they're told to (each gun
+## lays itself, a little either way on its trail).
+func _emplaced(_dt: float) -> void:
+	if order in ["move", "charge", "follow"]:
+		order = "hold"
+	path = []
+	moving = false
+	charging = false
+	column = false
+	var aim = target if order == "attack" and target != null and not target.broken() else fire_target
+	if order == "attack" and (target == null or target.broken()):
+		order = "hold"
+	if aim != null and is_instance_valid(aim) and not aim.gone():
+		if order == "attack":
+			fire_target = aim
+		# (the line itself stays put: each gun swings on its own trail,
+		# gun_crew.gd's traverse, so none of them walks over the works)
 
 
 func _follow(_dt: float) -> void:

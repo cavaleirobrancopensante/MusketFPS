@@ -234,6 +234,8 @@ func _ready() -> void:
 			field.spawn_hunt()
 		elif field.prologue:
 			field.spawn_prologue()
+		elif field.rearguard:
+			field.spawn_rearguard()
 		elif field.campaign:
 			field.spawn_campaign()
 		else:
@@ -246,7 +248,7 @@ func _ready() -> void:
 		order = Order.HOLD
 		_snap_line_to_player()
 
-	if field == null or field.hunt == "":
+	if field == null or (field.hunt == "" and not field.rearguard):
 		Company.battle_begun()
 	await Loading.step(f[4], Lang.t("Fall in!"))
 	var layer := CanvasLayer.new()
@@ -290,6 +292,8 @@ func _ready() -> void:
 		hud.show_message(Lang.t("Deer in the woods: creep close."), 5.0)
 	elif field != null and field.hunt == "fish":
 		hud.show_message(Lang.t("Fish in the river. Hold CAST, let go to throw."), 5.0)
+	elif field != null and field.rearguard:
+		hud.show_message(Lang.t("The foot of the cliff path"), 3.0)
 	else:
 		hud.show_message(Lang.t("Form the line! They're coming..."), 4.5)
 	Loading.done(self)
@@ -414,6 +418,9 @@ func _field_config(nb: Dictionary) -> Dictionary:
 		return Settings.field
 	if prologue:
 		return {"map": "beach", "prologue": true, "pace": 0.75}
+	if bool(nb.get("rearguard", false)):
+		# The retreat's bayonet charge (field_rearguard.gd).
+		return {"map": "beach", "rearguard": true, "pace": 0.75}
 	if String(nb.get("hunt", "")) != "":
 		# Hunting or fishing yourself (map.gd, at a hunting ground or water).
 		return {"map": "river" if nb["hunt"] == "fish" else "forest", "hunt": String(nb["hunt"]), "pace": 0.75}

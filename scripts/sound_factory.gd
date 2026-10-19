@@ -296,62 +296,73 @@ static func shout() -> AudioStreamWAV:
 	return _to_wav(b)
 
 
-## Someone talking: a run of syllables through the voice's formants, the
-## pitch rising and falling like speech (no words: the captions carry them).
-## `seed_n` makes each a different voice; play them at different pitches
-## for different men (battle.say, the cutscenes).
-const _VOWELS := [[730.0, 1090.0, 2440.0], [530.0, 1840.0, 2480.0], [570.0, 840.0, 2410.0],
-	[300.0, 870.0, 2240.0], [660.0, 1720.0, 2410.0], [440.0, 1020.0, 2240.0]]
-
-
+## Someone talking, the way Robot Fighting's characters talk: a run of
+## short voice blips (saw + square through a soft low-pass, about 60 ms
+## each, 13 a second) with little gaps between words and the pitch
+## wandering a little and falling toward the end of the sentence. No words:
+## the captions carry them. `seed_n` picks the voice:
+##   1 clean (most men), 2 gravel (a growl in it: sergeants, old soldiers),
+##   3 smooth (round, warm: officers), 4 nasal (thin, reedy).
+## Pitched where phone speakers can play them (300 to 400 Hz); play them at
+## other pitches for other men (battle.speak, town, the cutscenes).
 static func talk(seed_n: int, seconds: float, base: float) -> AudioStreamWAV:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 900 + seed_n
 	var b := _buf(seconds)
-	# The syllables: [start, length, vowel, pitch], with little gaps between words.
-	var syl: Array = []
-	var t0 := 0.03
-	while t0 < seconds - 0.15:
-		var l := rng.randf_range(0.09, 0.2)
-		syl.append([t0, l, rng.randi() % _VOWELS.size(), rng.randf_range(0.9, 1.15)])
-		t0 += l + (rng.randf_range(0.08, 0.16) if rng.randf() < 0.25 else rng.randf_range(0.01, 0.03))
-	var ph := 0.0
-	var st: Array = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-	var si := 0
-	var vf: Array = _VOWELS[0].duplicate()
-	for i in b.size():
-		var t := float(i) / RATE
-		while si < syl.size() - 1 and t > float(syl[si][0]) + float(syl[si][1]):
-			si += 1
-		var sy: Array = syl[si]
-		var local := (t - float(sy[0])) / float(sy[1])
-		var on := 1.0 if local >= 0.0 and local <= 1.0 else 0.0
-		var env := on * smoothstep(0.0, 0.15, local) * (1.0 - smoothstep(0.7, 1.0, local))
-		# The sentence falls toward its end; each syllable has its own lilt.
-		var f0 := base * float(sy[3]) * lerpf(1.08, 0.88, t / seconds) * (1.0 + 0.03 * sin(t * 31.0))
-		ph += f0 / RATE
-		ph -= floorf(ph)
-		var target: Array = _VOWELS[int(sy[2])]
-		for k in 3:
-			vf[k] = lerpf(float(vf[k]), float(target[k]), 0.004) # (glide between vowels)
-		var src := (ph * 2.0 - 1.0) * 0.6 + _noise() * 0.12
-		# A consonant's hiss at the start of some syllables.
-		if local >= 0.0 and local < 0.12 and int(sy[2]) % 2 == 0:
-			src += _noise() * 0.5 * (1.0 - local / 0.12)
-		var y := 0.0
-		for k in 3:
-			var fr: float = vf[k]
-			var bw: float = [80.0, 100.0, 140.0][k]
-			var r := exp(-PI * bw / RATE)
-			var a1 := 2.0 * r * cos(TAU * fr / RATE)
-			var a2 := -r * r
-			var s2: Array = st[k]
-			var out := src + a1 * float(s2[0]) + a2 * float(s2[1])
-			s2[1] = s2[0]
-			s2[0] = out
-			y += out * [1.0, 0.5, 0.2][k]
-		b[i] = y * env
+	var f0: float = [360.0, 330.0, 300.0, 380.0][(seed_n - 1) % 4]
+	var t0 := 0.02
+	var in_word := 0
+	var word_len := rng.randi_range(2, 5)
+	while t0 < seconds - 0.08:
+		var lift := rng.randf_range(0.93, 1.08) * lerpf(1.06, 0.9, t0 / seconds)
+		_blip(b, int(t0 * RATE), seed_n, f0 * lift, rng)
+		in_word += 1
+		t0 += rng.randf_range(0.068, 0.084)
+		if in_word >= word_len:
+			in_word = 0
+			word_len = rng.randi_range(2, 5)
+			t0 += rng.randf_range(0.07, 0.14) # (between words)
 	return _to_wav(b)
+
+
+## One voice blip into `b` at sample `at`: a short sweep down from `f` with
+## a quick attack and a fast decay.
+static func _blip(b: PackedFloat32Array, at: int, kind: int, f: float, rng: RandomNumberGenerator) -> void:
+	var dur := 0.058 if kind != 3 else 0.062
+	var n := int(dur * RATE)
+	var ph := 0.0
+	var lp := 0.0
+	var lpn := 0.0
+	var growl := 1.0
+	for i in n:
+		var j := at + i
+		if j >= b.size():
+			break
+		var t := float(i) / RATE
+		var fr := lerpf(f, f * 0.88, t / dur)
+		ph += fr / RATE
+		ph -= floorf(ph)
+		var saw := ph * 2.0 - 1.0
+		var sq := 0.7 if ph < 0.5 else -0.7
+		var y := 0.0
+		match kind:
+			2: # gravel: a growl that stutters, and breath
+				if i % int(RATE * 0.0075) == 0:
+					growl = rng.randf_range(0.4, 1.0)
+				lp += 0.8 * (saw - lp)
+				lpn += 0.4 * (_noise() - lpn)
+				y = (lp + sq * 0.3) * growl + lpn * 0.25
+			3: # smooth: a round tone and its octave
+				y = sin(ph * TAU) + sin(ph * TAU * 2.0) * 0.25
+			4: # nasal: a thin, filtered saw
+				lp += 0.5 * (saw - lp)
+				y = lp * 1.4
+			_: # clean
+				lp += 0.7 * (saw - lp)
+				y = lp + sq * 0.25
+		var env := minf(1.0, t / 0.005) * exp(-t / 0.04)
+		var rel := clampf((dur - t) / 0.01, 0.0, 1.0)
+		b[j] += y * env * rel
 
 
 ## A bowstring let go: a low twang that dies fast, and the hiss of the shaft.

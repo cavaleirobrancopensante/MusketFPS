@@ -119,8 +119,9 @@ fight in the campaign: regiments, morale, the command view). You are the
 **Ensign** of Major Harrow's company, behind earthworks with the sea at
 your back: your company in the centre, a company on either side, and a
 battery of two guns in the embrasures between them. The guns fire round
-shot at range and canister close in; lizards wading over the earthworks
-are slowed. The Major gives the orders: FOLLOW, HOLD, CHARGE and VOLLEY are
+shot at range and canister close in; they're dug in, so they lay and fire
+but never march (none of them walks over the works); lizards wading over
+the earthworks are slowed. The Major gives the orders: FOLLOW, HOLD, CHARGE and VOLLEY are
 locked while he lives, the command view isn't yours yet, and he calls the
 volleys.
 
@@ -134,7 +135,7 @@ arrows: the story moves on by itself, in short cutscenes (`story_scene.gd`).
    cutscene: the sergeant's shout, you come through the smoke and kneel by
    him in the sand, and with his last words he gives you the regiment.
 3. **Your command:** the command view opens, paused, with a short lesson
-   (select a regiment by its card or on the field; tap the ground to march,
+   (GOT IT closes it; select a regiment by its card or on the field; tap the ground to march,
    drag along the ground to form a line, tap an enemy to attack). A third wave comes on,
    brutes in the centre and raptor riders on the right. Fight it from above
    or in the line, as you like.
@@ -143,13 +144,21 @@ arrows: the story moves on by itself, in short cutscenes (`story_scene.gd`).
    the left company breaks, the horde pours over the earthworks and in
    among the guns, and the battle ends there.
 
-Straight on into the retreat cutscene: the run along the sand
-with men turning to fire, a last volley at the foot of the path that turns
-the pursuit, the beach through the Major's glass (the lizards stripping the
-dead, and worse), the ammunition cart recovered from a gully, the horde
-pulling down the works and breaking up the boats, and the column turning
-inland. Everyone who speaks in the cutscenes and in battle has a voice
-(a synthesised mumble of syllables, each speaker his own).
+Straight on into the retreat cutscene: the run along the sand with men
+turning round to fire, stragglers caught by the lizards fighting it out
+with the bayonet, a volley at the foot of the path; then more of them come
+on, the line fixes bayonets (you see each man draw and fix his) and the
+sergeant calls the charge. **The charge is yours to play**, in first
+person (`field_rearguard.gd`, the bayonet lesson: fix bayonets, strike
+from a side, block when one rears up glowing, finish them; nothing counts
+on the books). Then the cutscene carries on: the charge throws them back,
+the beach through the Major's glass (the lizards stripping the dead, and
+worse), the ammunition cart recovered from a gully, the horde pulling down
+the works and breaking up the boats, and the column turning inland.
+Everyone who speaks in the cutscenes and in battle has a voice: a run of
+short voice blips while the line is up, the way Robot Fighting's
+characters talk (`SoundFactory.talk`: clean, gravel, smooth or nasal, each
+speaker at his own pitch).
 
 You start the campaign as castaways: low morale, a few days' food, and the
 ship's stores (muskets, powder, two guns, rum) in the lizards' hands.
