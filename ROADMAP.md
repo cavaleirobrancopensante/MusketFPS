@@ -172,16 +172,21 @@ The plan was:
   every day with the company and in every fight, faster with your Training.
 - Later: a forge cart, iron as its own ore, smiths' quality.
 
-### M7: Backgrounds and the officer
+### M7: Backgrounds and the officer ✅ (backgrounds 1.82)
 
 Who you were before the wreck, chosen at a new game: a gentleman's son who
 bought his commission, a sergeant promoted from the ranks, a ship's officer,
 an engineer... Each starts with different skills and men.
 
+Done (1.82): backgrounds, Mount & Blade style on the new-campaign screen:
+a childhood (six) and a youth (six), each with attributes, skills and
+something to start with (crowns, kit, stores, old comrades, the men's
+goodwill), then your branch.
+
 Done: your character sheet (YOU): six attributes, nine skills (Marksmanship,
 Bladework, Leadership, Tactics, Surgery, Logistics, Pathfinding, Trade,
 Training), each wired into battle, the march or the company; your own kit
-and cartridge box; levels. Still to come: backgrounds, and Diplomacy and
+and cartridge box; levels. Still to come: Diplomacy and
 Engineering (gunpowder and fortification) once factions and production
 exist.
 

@@ -46,6 +46,26 @@ each language still lacks.
   purse, bounties, the pay chest) and how fast the food goes. Ironman is
   Hard with one save that keeps itself: leave a battle half fought and,
   when you come back, it counts as lost.
+- **Your story**, in the middle of the screen, step by step like Mount &
+  Blade: **‹ ›** go back and forward, and each step has its own die.
+  1. *Where did you grow up?* A squire's son (+Presence, +Aim, Riding, 60
+     crowns), the docks (+Strength, +Fitness, Logistics, rum), the
+     vicarage (+Wits, +Presence, Tongues, the men like you), a hill farm
+     (+Constitution, +Strength, Pathfinding, 30 rations), the barracks
+     (+Fitness, +Aim, Training) or the city streets (+Fitness, +Wits,
+     Trade, 30 crowns).
+  2. *What did you do as a young man?* A bought commission (+Presence,
+     Leadership, Riding, 100 crowns), up from the ranks (+Constitution,
+     Bladework, Leadership, and two old comrades who follow you), a
+     midshipman (+Fitness, Pathfinding, Tactics, a ship's cutlass), an
+     apprentice engineer (+Wits, Gunnery, Logistics, powder and lead), a
+     surgeon's mate (+Wits, Surgery +2) or a merchant's clerk (+Wits,
+     Trade +2, 80 crowns).
+  3. *What kind of officer are you?* (below).
+
+  What they give shows in green on the attributes and skills at once; the
+  points you spent stay yours. The crowns and things come ashore with you
+  after the wreck; the YOU sheet remembers who you were.
 - **What kind of officer you are**, each with its own skills, kit, men and
   first battle (`officer.gd` BRANCHES). Every officer leads two units: a
   company of musketeers and his own kind (the line officer's second unit is

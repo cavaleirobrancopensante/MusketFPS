@@ -2,9 +2,12 @@ extends Control
 ## A new campaign: who you are before the ship goes down.
 ##
 ##   left    your name, and the difficulty (Easy, Normal, Hard, Ironman)
-##   middle  what kind of officer you are: the line, pikes, artillery or
-##           horse. Each brings its own skills, kit and men, and its own
-##           first battle on the beach (field_prologue.gd)
+##   middle  your story, step by step (back and forward, a dice for each):
+##           where you grew up, what you did as a young man (Officer.
+##           CHILDHOODS, YOUTHS: attributes, skills and something to start
+##           with), and what kind of officer you are: the line, pikes,
+##           artillery or horse, each with its own skills, kit and men, and
+##           its own first battle on the beach (field_prologue.gd)
 ##   right   your attributes and skills: points to spend (- takes one back)
 ##
 ## BEGIN starts the campaign in the slot the menu chose (the shipwreck
@@ -75,6 +78,16 @@ const ATTR_START_MAX := 8
 
 var difficulty := "normal"
 var branch := "line"
+var childhood := "squire"
+var youth := "commission"
+var step := 0 # the middle: 0 childhood, 1 youth, 2 your branch
+var _step_boxes: Array = []
+var _step_title: Label
+var _step_dots: Label
+var _prev_btn: Button
+var _next_btn: Button
+var _bg_btns := {}
+var _bg_text := {}
 var attrs := {}
 var spent := {} # skill -> points you put in
 var _name_edit: LineEdit
@@ -316,19 +329,82 @@ func _refresh_colours() -> void:
 	_uniform_view.queue_redraw()
 
 
+## The middle: your story in three steps (Mount & Blade style), back and
+## forward with the arrows, each with its own dice: where you grew up, what
+## you did as a young man, and what kind of officer you became.
 func _middle_column() -> Control:
 	var v := _panel(1.2)
-	v.add_child(UI.heading(Lang.t("What kind of officer are you?"), 22))
+	var nav := HBoxContainer.new()
+	nav.add_theme_constant_override("separation", 8)
+	v.add_child(nav)
+	_prev_btn = _button("‹", func(): _go_step(step - 1))
+	_prev_btn.custom_minimum_size = Vector2(UI.MIN_TOUCH, UI.MIN_TOUCH)
+	_prev_btn.add_theme_font_size_override("font_size", 28)
+	nav.add_child(_prev_btn)
+	var tv := VBoxContainer.new()
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tv.add_theme_constant_override("separation", 0)
+	nav.add_child(tv)
+	_step_title = UI.heading("", 22)
+	_step_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_step_title.custom_minimum_size = Vector2(60, 0)
+	tv.add_child(_step_title)
+	_step_dots = _label("", 14, DIM)
+	_step_dots.custom_minimum_size = Vector2(60, 0)
+	tv.add_child(_step_dots)
+	nav.add_child(_dice(func(): _random_step()))
+	_next_btn = _button("›", func(): _go_step(step + 1))
+	_next_btn.custom_minimum_size = Vector2(UI.MIN_TOUCH, UI.MIN_TOUCH)
+	_next_btn.add_theme_font_size_override("font_size", 28)
+	nav.add_child(_next_btn)
+	# Steps 1 and 2: the backgrounds.
+	for which in ["childhood", "youth"]:
+		var box := VBoxContainer.new()
+		box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		box.add_theme_constant_override("separation", 8)
+		v.add_child(box)
+		_step_boxes.append(box)
+		var grid := GridContainer.new()
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		box.add_child(grid)
+		var table: Dictionary = Officer.CHILDHOODS if which == "childhood" else Officer.YOUTHS
+		var order: Array = Officer.CHILDHOOD_ORDER if which == "childhood" else Officer.YOUTH_ORDER
+		_bg_btns[which] = {}
+		for k in order:
+			var b := _button(Lang.t(table[k]["name"]), _on_background.bind(which, k))
+			b.toggle_mode = true
+			b.focus_mode = Control.FOCUS_NONE
+			b.custom_minimum_size = Vector2(0, 58)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			grid.add_child(b)
+			_bg_btns[which][k] = b
+		var rt := RichTextLabel.new()
+		rt.bbcode_enabled = true
+		rt.fit_content = true
+		rt.scroll_active = false
+		rt.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		rt.add_theme_font_size_override("normal_font_size", 17)
+		rt.add_theme_font_size_override("bold_font_size", 19)
+		box.add_child(rt)
+		_bg_text[which] = rt
+	# Step 3: your branch.
+	var ob := VBoxContainer.new()
+	ob.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	ob.add_theme_constant_override("separation", 8)
+	v.add_child(ob)
+	_step_boxes.append(ob)
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
-	v.add_child(grid)
+	ob.add_child(grid)
 	for k in Officer.BRANCH_ORDER:
 		var b := Button.new()
 		b.toggle_mode = true
 		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(0, 78)
+		b.custom_minimum_size = Vector2(0, 62)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_on_branch.bind(k))
 		var emblem := Emblem.new()
@@ -352,7 +428,7 @@ func _middle_column() -> Control:
 	_branch_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_branch_text.add_theme_font_size_override("normal_font_size", 16)
 	_branch_text.add_theme_font_size_override("bold_font_size", 19)
-	v.add_child(_branch_text)
+	ob.add_child(_branch_text)
 	v.add_child(UI.heading(Lang.t("Difficulty"), 22))
 	var dg := HBoxContainer.new()
 	dg.add_theme_constant_override("separation", 8)
@@ -366,6 +442,32 @@ func _middle_column() -> Control:
 	_diff_text = _label("", 15, DIM)
 	v.add_child(_diff_text)
 	return _wrap(v)
+
+
+const STEP_TITLES := ["Where did you grow up?", "What did you do as a young man?", "What kind of officer are you?"]
+const STEP_NAMES := ["Childhood", "Youth", "Commission"]
+
+
+func _go_step(n: int) -> void:
+	step = clampi(n, 0, 2)
+	_refresh()
+
+
+## The dice in the middle: a random pick for the step you're on.
+func _random_step() -> void:
+	match step:
+		0: _on_background("childhood", Officer.CHILDHOOD_ORDER.pick_random())
+		1: _on_background("youth", Officer.YOUTH_ORDER.pick_random())
+		2: _on_branch(Officer.BRANCH_ORDER.pick_random())
+
+
+func _on_background(which: String, k: String) -> void:
+	if which == "childhood":
+		childhood = k
+	else:
+		youth = k
+	_trim_skills()
+	_refresh()
 
 
 func _right_column() -> Control:
@@ -445,14 +547,36 @@ func _skill_left() -> int:
 
 
 ## A skill's level as you'd start: Tongues 1 (you've a little of the
-## language of the coast traders), your branch's, and what you spent.
+## language of the coast traders), your branch's, your backgrounds', and
+## what you spent.
 func _skill(k: String) -> int:
 	var base := 1 if k == "tongues" else 0
-	return base + int(Officer.BRANCHES[branch]["skills"].get(k, 0)) + int(spent.get(k, 0))
+	return base + int(Officer.BRANCHES[branch]["skills"].get(k, 0)) + _bg_skill(k) + int(spent.get(k, 0))
+
+
+## What your childhood and youth add to an attribute and a skill.
+func _bg_attr(k: String) -> int:
+	return int(Officer.CHILDHOODS[childhood]["attrs"].get(k, 0)) + int(Officer.YOUTHS[youth]["attrs"].get(k, 0))
+
+
+func _bg_skill(k: String) -> int:
+	return int(Officer.CHILDHOODS[childhood]["skills"].get(k, 0)) + int(Officer.YOUTHS[youth]["skills"].get(k, 0))
+
+
+## An attribute as you'd start: what you set (attrs) and your backgrounds.
+func _attr(k: String) -> int:
+	return int(attrs[k]) + _bg_attr(k)
 
 
 func _cap(k: String) -> int:
-	return int(attrs[String(Officer.SKILLS[k]["attr"])])
+	return _attr(String(Officer.SKILLS[k]["attr"]))
+
+
+## Points you spent over a skill's cap (after a change) come back to you.
+func _trim_skills() -> void:
+	for s in spent.keys():
+		while int(spent[s]) > 0 and _skill(s) > _cap(s):
+			spent[s] = int(spent[s]) - 1
 
 
 func _on_difficulty(d: String) -> void:
@@ -462,16 +586,13 @@ func _on_difficulty(d: String) -> void:
 
 func _on_branch(k: String) -> void:
 	branch = k
-	# Points over a skill's cap come back to you.
-	for s in spent.keys():
-		while int(spent[s]) > 0 and _skill(s) > _cap(s):
-			spent[s] = int(spent[s]) - 1
+	_trim_skills()
 	_refresh()
 
 
 func _on_attr(k: String, d: int) -> void:
 	var v := int(attrs[k]) + d
-	if d > 0 and (_attr_left() <= 0 or v > ATTR_START_MAX):
+	if d > 0 and (_attr_left() <= 0 or _attr(k) + 1 > ATTR_START_MAX):
 		return
 	if d < 0 and v < ATTR_BASE - 1:
 		return # (a point below 5 buys a point elsewhere, no more)
@@ -516,18 +637,36 @@ func _refresh() -> void:
 		bt += "[color=#%s]•  %s:[/color] %s\n" % [GOLD.to_html(false), Lang.t(row[0]), Lang.t(row[1])]
 	bt += "\n[color=#%s]%s[/color]" % [DIM.to_html(false), Lang.t(br["text"])]
 	_branch_text.text = bt
+	# The story in the middle: which step, and what each background gives.
+	for i in _step_boxes.size():
+		(_step_boxes[i] as Control).visible = i == step
+	_step_title.text = Lang.t(STEP_TITLES[step])
+	var dots: Array = []
+	for i in 3:
+		dots.append(("● " if i == step else "○ ") + Lang.t(STEP_NAMES[i]))
+	_step_dots.text = "   ".join(dots)
+	_prev_btn.disabled = step <= 0
+	_next_btn.disabled = step >= 2
+	for which in ["childhood", "youth"]:
+		var cur := childhood if which == "childhood" else youth
+		for k in _bg_btns[which]:
+			(_bg_btns[which][k] as Button).button_pressed = k == cur
+		var bg: Dictionary = (Officer.CHILDHOODS if which == "childhood" else Officer.YOUTHS)[cur]
+		(_bg_text[which] as RichTextLabel).text = "[b][color=#%s]%s[/color][/b]\n%s\n\n[color=#%s]%s[/color] %s" % [GOLD.to_html(false), Lang.t(bg["name"]),
+			Lang.t(bg["text"]), GREEN.to_html(false), Lang.t("You get:"), Officer.background_gives(bg)]
 	_attr_pts.text = Lang.t("%d to spend") % _attr_left()
 	for k in _attr_rows:
 		var row: Array = _attr_rows[k]
-		(row[0] as Label).text = str(int(attrs[k]))
+		(row[0] as Label).text = str(_attr(k))
+		(row[0] as Label).add_theme_color_override("font_color", GREEN if _bg_attr(k) > 0 else GOLD)
 		(row[1] as Button).disabled = int(attrs[k]) <= ATTR_BASE - 1
-		(row[2] as Button).disabled = _attr_left() <= 0 or int(attrs[k]) >= ATTR_START_MAX
+		(row[2] as Button).disabled = _attr_left() <= 0 or _attr(k) >= ATTR_START_MAX
 	_skill_pts.text = Lang.t("%d to spend") % _skill_left()
 	for k in _skill_rows:
 		var row: Array = _skill_rows[k]
 		var lv := _skill(k)
 		(row[0] as Label).text = str(lv)
-		(row[0] as Label).add_theme_color_override("font_color", GREEN if int(br["skills"].get(k, 0)) > 0 else GOLD)
+		(row[0] as Label).add_theme_color_override("font_color", GREEN if int(br["skills"].get(k, 0)) + _bg_skill(k) > 0 else GOLD)
 		(row[1] as Button).disabled = int(spent.get(k, 0)) <= 0
 		(row[2] as Button).disabled = _skill_left() <= 0 or lv + 1 > _cap(k)
 		(row[3] as Label).tooltip_text = Lang.t(String(Officer.SKILLS[k]["help"]))
@@ -564,7 +703,7 @@ func _random_attrs() -> void:
 	while _attr_left() > 0 and guard < 200:
 		guard += 1
 		var k: String = Officer.ATTRS.pick_random()
-		if int(attrs[k]) < ATTR_START_MAX and int(attrs[k]) >= ATTR_BASE:
+		if _attr(k) < ATTR_START_MAX and int(attrs[k]) >= ATTR_BASE:
 			attrs[k] = int(attrs[k]) + 1
 	spent.clear()
 	_refresh()
@@ -632,8 +771,12 @@ func _on_begin() -> void:
 	for k in Officer.SKILL_ORDER:
 		skills[k] = _skill(k)
 	Settings.delete_slot(Settings.slot)
+	var totals := {}
+	for k in attrs:
+		totals[k] = _attr(k)
 	Company.new_campaign({"difficulty": difficulty, "branch": branch, "name": _name_edit.text,
-		"attrs": attrs.duplicate(), "attr_points": maxi(0, _attr_left()),
+		"childhood": childhood, "youth": youth,
+		"attrs": totals, "attr_points": maxi(0, _attr_left()),
 		"skills": skills, "skill_points": maxi(0, _skill_left()), "colours": _colours()})
 	World.reset() # a new land for a new campaign
 	Loading.change(INTRO) # the shipwreck, then the beach

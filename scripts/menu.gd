@@ -133,6 +133,17 @@ func _ready() -> void:
 			print("SIEGE (day 40) LORD ", World.lord_full(l), " army ", int(l["army"]), " home ", World.settlement(int(l["home"]))["name"])
 		get_tree().quit()
 		return
+	if "--bgtest" in args:
+		# Headless check of backgrounds: what each brings to a new campaign.
+		for pair in [["docks", "ranks"], ["squire", "commission"], ["hill_farm", "engineer"], ["vicarage", "navy"]]:
+			Company.new_campaign({"branch": "line", "childhood": pair[0], "youth": pair[1]})
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			var vets: int = Company.roster.filter(func(m): return bool(m.get("comrade", false))).size()
+			print("BG ", pair, ": money ", Company.money, " men ", Company.roster.size(), " comrades ", vets, " rum ", Company.stores["rum"],
+				" rations ", Company.stores["rations"], " powder ", Company.stores["powder"], " cutlass ", Company.item_count("cutlass"),
+				" morale0 ", Company.roster[5]["morale"], " | ", Company.Officer.background_gives(Company.Officer.YOUTHS[pair[1]]))
+		get_tree().quit()
+		return
 	if "--watertest" in args:
 		# Headless check of water: named sources, filling, catching rain.
 		Company.new_campaign(_test_start())

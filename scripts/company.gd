@@ -439,6 +439,7 @@ func new_campaign(start: Dictionary = {}) -> void:
 				m["gear"] = {"head": "shako", "torso": "coat", "primary": "lance", "secondary": ""}
 				m["pack"]["ammo"] = 0
 		roster.append(m)
+	_apply_backgrounds()
 	tags = DEFAULT_TAGS.duplicate()
 	if roster.any(func(mm): return bool(mm.get("horse", false))):
 		tags.append("Horse")
@@ -470,10 +471,50 @@ func new_campaign(start: Dictionary = {}) -> void:
 	save()
 
 
+## What your childhood and youth bring (Officer.CHILDHOODS, YOUTHS): money,
+## things in the wagon, old comrades, the men's goodwill. (Their attributes
+## and skills come in with the rest from the new-campaign screen.)
+func _backgrounds() -> Array:
+	return [Officer.CHILDHOODS.get(String(officer.get("childhood", "")), {}), Officer.YOUTHS.get(String(officer.get("youth", "")), {})]
+
+
+## The money and things your backgrounds bring: after the wreck (the
+## wagon is what was saved from the beach, plus what's yours).
+func _background_kit() -> void:
+	for bg in _backgrounds():
+		money += int(bg.get("money", 0))
+		for k in bg.get("items", {}):
+			add_item(String(k), int(bg["items"][k]))
+		for k in bg.get("stores", {}):
+			stores[k] = int(stores.get(k, 0)) + int(bg["stores"][k])
+
+
+## Old comrades and the men's goodwill: from the very start (the beach).
+func _apply_backgrounds() -> void:
+	for bg in _backgrounds():
+		for i in int(bg.get("veterans", 0)):
+			var m := make_recruit()
+			m["rank"] = 2
+			m["xp"] = RANK_XP[2] + randi_range(20, 90)
+			Men.auto_spend(m, (Men.level(m) - 1) * Men.POINTS_PER_LEVEL)
+			m["morale"] = 80
+			m["battles"] = randi_range(6, 12)
+			m["gear"] = REGULAR_GEAR.duplicate()
+			m["pack"] = {"water": 1, "rations": 8, "ammo": 24}
+			m["tag"] = "Musketeers"
+			m["comrade"] = true # (he served with you in the ranks)
+			roster.append(m)
+		if int(bg.get("morale", 0)) != 0:
+			for m in roster:
+				Men.add_morale(m, int(bg["morale"]))
+
+
 ## Your officer as the new-campaign screen made him: his kind (its skills
 ## and kit), his name, and the points you spent.
 func _apply_start(start: Dictionary) -> void:
 	var o := officer
+	o["childhood"] = String(start.get("childhood", ""))
+	o["youth"] = String(start.get("youth", ""))
 	var branch := String(start.get("branch", "line"))
 	if not Officer.BRANCHES.has(branch):
 		branch = "line"
@@ -889,6 +930,7 @@ func _after_prologue(summary: Dictionary) -> void:
 	stores = {"items": {"rifle": 1, "sword_bayonet": 1, "musket": 1, "bayonet": 1, "axe": 2, "pickaxe": 2, "shovel": 3, "fishing_rod": 2},
 		"water": 30, "rations": 50, "ammo": 50, "rum": 4, "foul": false, "grog": true,
 		"arrows": 0, "bolts": 0, "powder": 1, "lead": 6, "saltpetre": 0, "sulphur": 0, "charcoal": 0, "ore": 0, "meat": 0}
+	_background_kit() # (what you brought ashore of your own)
 	summary["pay"] = 0
 
 

@@ -394,6 +394,10 @@ func _refresh() -> void:
 		_name_edit.text = String(o.get("name", ""))
 	var lv := Officer.level()
 	_rank.text = Lang.t("%s  ·  %s  ·  Level %d") % [Lang.t(String(o.get("rank", "Ensign"))), Lang.t(String(Officer.BRANCHES.get(Officer.branch(), Officer.BRANCHES["line"])["name"])), lv]
+	var ch: Dictionary = Officer.CHILDHOODS.get(String(o.get("childhood", "")), {})
+	var yo: Dictionary = Officer.YOUTHS.get(String(o.get("youth", "")), {})
+	if not ch.is_empty() and not yo.is_empty():
+		_rank.text += "\n" + Lang.t("%s, then %s") % [Lang.t(ch["name"]), Lang.t(yo["name"]).to_lower()]
 	var into := int(o["xp"]) % Officer.LEVEL_XP
 	_xp_bar.max_value = Officer.LEVEL_XP
 	_xp_bar.value = into

@@ -62,6 +62,63 @@ const SKILL_ORDER := ["marksmanship", "bladework", "riding", "gunnery", "leaders
 ## What kind of officer you are (chosen when the campaign starts): the
 ## skills it gives you, its kit, the men it brings, and the beach battle
 ## that teaches it (field_prologue.gd).
+## Who you were before the commission (chosen on the new-campaign screen,
+## Mount & Blade style: a childhood, then a youth, then your branch). Each
+## adds to your attributes and skills, and brings something with it:
+## "money" (crowns), "items" (into the wagon), "stores", "veterans" (old
+## soldiers who follow you), "morale" (the men's opinion of you at the start).
+const CHILDHOODS := {
+	"squire": {"name": "A squire's son", "attrs": {"presence": 1, "aim": 1}, "skills": {"riding": 1}, "money": 60,
+		"text": "You grew up in a manor house with tutors, horses and a fowling piece, and learned early that people do what a gentleman tells them."},
+	"docks": {"name": "The docks", "attrs": {"strength": 1, "fitness": 1}, "skills": {"logistics": 1}, "stores": {"rum": 6},
+		"text": "Your father was a shipwright. You hauled timber and rope on the quays, and know how to stow a hold so nothing shifts."},
+	"vicarage": {"name": "The vicarage", "attrs": {"wits": 1, "presence": 1}, "skills": {"tongues": 1}, "morale": 4,
+		"text": "A parson's child: Latin and Greek at the kitchen table, sick-visiting in the parish, and a voice that carries in church."},
+	"hill_farm": {"name": "A hill farm", "attrs": {"constitution": 1, "strength": 1}, "skills": {"pathfinding": 1}, "stores": {"rations": 30},
+		"text": "Sheep, stone walls and long winters. You can walk all day on a crust, and find your way home across the fells in a fog."},
+	"barracks": {"name": "The barracks", "attrs": {"fitness": 1, "aim": 1}, "skills": {"training": 1},
+		"text": "Your father was a sergeant of the line. You grew up among soldiers' wives and drummer boys, and could strip a musket before you could read."},
+	"streets": {"name": "The city streets", "attrs": {"fitness": 1, "wits": 1}, "skills": {"trade": 1}, "money": 30,
+		"text": "An orphan of the back lanes: running errands, haggling for bread and keeping one step ahead of the watch. Nobody cheats you twice."},
+}
+const CHILDHOOD_ORDER := ["squire", "docks", "vicarage", "hill_farm", "barracks", "streets"]
+const YOUTHS := {
+	"commission": {"name": "A bought commission", "attrs": {"presence": 1}, "skills": {"leadership": 1, "riding": 1}, "money": 100,
+		"text": "Your family paid for an ensign's commission and a good coat. You learned the drill-book, the mess and the duelling code, and you have money of your own."},
+	"ranks": {"name": "Up from the ranks", "attrs": {"constitution": 1}, "skills": {"bladework": 1, "leadership": 1}, "veterans": 2,
+		"text": "You took the shilling as a private, made sergeant, and won your commission in the field. Two old comrades follow you still, and the men know you're one of them."},
+	"navy": {"name": "Midshipman", "attrs": {"fitness": 1}, "skills": {"pathfinding": 1, "tactics": 1}, "items": {"cutlass": 1},
+		"text": "You went to sea at twelve: knots, signals and navigation by the stars, then a transfer to the army. You still carry your ship's cutlass."},
+	"engineer": {"name": "Apprentice engineer", "attrs": {"wits": 1}, "skills": {"gunnery": 1, "logistics": 1}, "stores": {"powder": 6, "lead": 12},
+		"text": "Surveying, fortification and the mathematics of gunnery at the Academy. You know powder and you know how to make it go further."},
+	"surgeon": {"name": "Surgeon's mate", "attrs": {"wits": 1}, "skills": {"surgery": 2},
+		"text": "Two years at a hospital, sawing and stitching, before you bought your way into the line. The men trust you with their wounds."},
+	"clerk": {"name": "A merchant's clerk", "attrs": {"wits": 1}, "skills": {"trade": 2}, "money": 80,
+		"text": "Ledgers, bills of lading and haggling with foreign traders in a counting-house, until you wanted something better than ink."},
+}
+const YOUTH_ORDER := ["commission", "ranks", "navy", "engineer", "surgeon", "clerk"]
+
+
+## A short line of what a background gives: "+1 Presence, +1 Aim, Riding +1, 60 crowns".
+static func background_gives(bg: Dictionary) -> String:
+	var bits: Array = []
+	for k in bg.get("attrs", {}):
+		bits.append("+%d %s" % [int(bg["attrs"][k]), Lang.t(ATTR_NAMES[k])])
+	for k in bg.get("skills", {}):
+		bits.append("%s +%d" % [Lang.t(SKILLS[k]["name"]), int(bg["skills"][k])])
+	if int(bg.get("money", 0)) > 0:
+		bits.append(Lang.t("%d crowns") % int(bg["money"]))
+	if int(bg.get("veterans", 0)) > 0:
+		bits.append(Lang.t("%d veterans follow you") % int(bg["veterans"]))
+	if int(bg.get("morale", 0)) > 0:
+		bits.append(Lang.t("the men like you"))
+	for k in bg.get("items", {}):
+		bits.append(Company.item_name(String(k)).to_lower())
+	for k in bg.get("stores", {}):
+		bits.append("%d %s" % [int(bg["stores"][k]), Company.item_label(String(k)).to_lower()])
+	return ", ".join(bits)
+
+
 const BRANCHES := {
 	"line": {"name": "Officer of the Line", "short": "LINE INFANTRY",
 		"text": "A musket in your hands and two companies of musketeers in two ranks behind you. You start with more musketeers and a sharp eye: you shoot straighter and load faster. Your company's volleys are your weapon.",
