@@ -117,14 +117,32 @@ func _ready() -> void:
 	margin.add_child(root)
 	var top := HBoxContainer.new()
 	root.add_child(top)
+	top.add_theme_constant_override("separation", 10)
 	var title := UI.heading(Lang.t("A New Campaign"), 34)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.size_flags_stretch_ratio = 0.6
 	top.add_child(title)
+	# Your name, in the middle of the top.
+	var nr := HBoxContainer.new()
+	nr.add_theme_constant_override("separation", 8)
+	nr.alignment = BoxContainer.ALIGNMENT_CENTER
+	nr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var nl := UI.heading(Lang.t("Your name"), 22)
+	nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	nr.add_child(nl)
+	_name_edit = LineEdit.new()
+	_name_edit.text = String(Officer.blank()["name"])
+	_name_edit.custom_minimum_size = Vector2(300, 54)
+	_name_edit.add_theme_font_size_override("font_size", 22)
+	_name_edit.max_length = 28
+	nr.add_child(_name_edit)
+	nr.add_child(_dice(_random_name))
+	top.add_child(nr)
 	var back := _button(Lang.t("Back"), func(): Loading.change(MENU))
-	back.custom_minimum_size = Vector2(150, 54)
+	back.custom_minimum_size = Vector2(130, 54)
 	top.add_child(back)
 	var begin := _button(Lang.t("BEGIN"), _on_begin, true)
-	begin.custom_minimum_size = Vector2(220, 54)
+	begin.custom_minimum_size = Vector2(190, 54)
 	top.add_child(begin)
 
 	var cols := HBoxContainer.new()
@@ -186,48 +204,21 @@ func _small(text: String, cb: Callable) -> Button:
 # ---------------------------------------------------------------- the columns
 
 func _left_column() -> Control:
-	var v := _panel(0.8)
-	v.add_child(UI.heading(Lang.t("Your name"), 22))
-	_name_edit = LineEdit.new()
-	_name_edit.text = String(Officer.blank()["name"])
-	_name_edit.custom_minimum_size = Vector2(0, UI.MIN_TOUCH)
-	_name_edit.add_theme_font_size_override("font_size", 22)
-	_name_edit.max_length = 28
-	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var nr := HBoxContainer.new()
-	nr.add_theme_constant_override("separation", 6)
-	nr.add_child(_name_edit)
-	nr.add_child(_dice(_random_name))
-	v.add_child(nr)
-	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 8)
-	v.add_child(gap)
-	v.add_child(UI.heading(Lang.t("Difficulty"), 22))
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	v.add_child(grid)
-	for d in Officer.DIFFICULTY_ORDER:
-		var b := _button(Lang.t(Officer.DIFFICULTY[d]["name"]), _on_difficulty.bind(d))
-		b.toggle_mode = true
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid.add_child(b)
-		_diff_btns[d] = b
-	_diff_text = _label("", 15, DIM)
-	v.add_child(_diff_text)
-	# Your colours: the coat and the flag, previewed side by side.
+	# Your colours: the coat and the flag, previewed side by side, and big
+	# swatches filling the column.
+	var v := _panel(1.0)
+	v.add_theme_constant_override("separation", 6)
 	v.add_child(UI.heading(Lang.t("Your colours"), 22))
 	var prev := HBoxContainer.new()
 	prev.add_theme_constant_override("separation", 12)
 	prev.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(prev)
 	_uniform_view = Uniform.new()
-	_uniform_view.custom_minimum_size = Vector2(100, 104)
+	_uniform_view.custom_minimum_size = Vector2(120, 124)
 	_uniform_view.owner_screen = self
 	prev.add_child(_uniform_view)
 	_flag_view = TextureRect.new()
-	_flag_view.custom_minimum_size = Vector2(156, 104)
+	_flag_view.custom_minimum_size = Vector2(186, 124)
 	_flag_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_flag_view.stretch_mode = TextureRect.STRETCH_SCALE
 	_flag_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -239,17 +230,19 @@ func _left_column() -> Control:
 	var pl := _label(Lang.t("Flag"), 19, DIM)
 	pl.custom_minimum_size = Vector2(70, 0)
 	pl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	pl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	pr.add_child(pl)
 	pr.add_child(_small("‹", func(): pattern_i = (pattern_i + Colours.PATTERNS.size() - 1) % Colours.PATTERNS.size(); _refresh()))
 	_pattern_l = _label("", 20)
 	_pattern_l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_pattern_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pattern_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_pattern_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pr.add_child(_pattern_l)
 	pr.add_child(_small("›", func(): pattern_i = (pattern_i + 1) % Colours.PATTERNS.size(); _refresh()))
 	v.add_child(_swatch_row(Lang.t("Field"), "field", Colours.FLAG_COLOURS))
 	v.add_child(_swatch_row(Lang.t("Device"), "charge", Colours.FLAG_COLOURS))
-	# (all of it in a scroll, now the colours are big enough to tap)
+	# (in a scroll only in case a small screen can't fit it)
 	var panel := _wrap(v)
 	panel.remove_child(v)
 	var sc := UI.scroll()
@@ -264,17 +257,19 @@ func _left_column() -> Control:
 func _swatch_row(title: String, key: String, cols: Array) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	var l := _label(title, 19, DIM)
+	var l := _label(title, 18, DIM)
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	box.add_child(l)
-	var h := HFlowContainer.new()
+	var h := GridContainer.new()
+	h.columns = 5
 	h.add_theme_constant_override("h_separation", 6)
 	h.add_theme_constant_override("v_separation", 6)
 	box.add_child(h)
 	var list: Array = []
 	for i in cols.size():
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(44, 44)
+		b.custom_minimum_size = Vector2(44, 46)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.focus_mode = Control.FOCUS_NONE
 		b.set_meta("col", cols[i])
 		b.pressed.connect(func():
@@ -322,7 +317,7 @@ func _refresh_colours() -> void:
 
 
 func _middle_column() -> Control:
-	var v := _panel(1.25)
+	var v := _panel(1.2)
 	v.add_child(UI.heading(Lang.t("What kind of officer are you?"), 22))
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -333,7 +328,7 @@ func _middle_column() -> Control:
 		var b := Button.new()
 		b.toggle_mode = true
 		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(0, 92)
+		b.custom_minimum_size = Vector2(0, 78)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_on_branch.bind(k))
 		var emblem := Emblem.new()
@@ -355,9 +350,21 @@ func _middle_column() -> Control:
 	_branch_text.fit_content = true
 	_branch_text.scroll_active = false
 	_branch_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_branch_text.add_theme_font_size_override("normal_font_size", 17)
+	_branch_text.add_theme_font_size_override("normal_font_size", 16)
 	_branch_text.add_theme_font_size_override("bold_font_size", 19)
 	v.add_child(_branch_text)
+	v.add_child(UI.heading(Lang.t("Difficulty"), 22))
+	var dg := HBoxContainer.new()
+	dg.add_theme_constant_override("separation", 8)
+	v.add_child(dg)
+	for d in Officer.DIFFICULTY_ORDER:
+		var b := _button(Lang.t(Officer.DIFFICULTY[d]["name"]), _on_difficulty.bind(d))
+		b.toggle_mode = true
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		dg.add_child(b)
+		_diff_btns[d] = b
+	_diff_text = _label("", 15, DIM)
+	v.add_child(_diff_text)
 	return _wrap(v)
 
 
