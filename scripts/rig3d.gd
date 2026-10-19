@@ -156,6 +156,7 @@ var _mtail: Array = []
 var trousers := Color(0.32, 0.27, 0.22)
 var female := false
 var dwarf := false
+var shaman := false # a lizard shaman: staff, feathers, paint (field_lizard.gd)
 
 # --- Smoothed state.
 var _grip := Vector3(0.22, 1.12, 0.02)
@@ -594,6 +595,19 @@ func _build_musket(primary := "musket", secondary := "bayonet") -> void:
 		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
 		_p_vis[ramrod] = false
 		return
+	if primary == "dwarf_axe":
+		# A dwarf's axe: a short haft and a broad bearded head.
+		_part(musket, _box_mesh(Vector3(0.035, 0.035, 0.62)), WOOD, Vector3(0, 0, -0.2))
+		_part(musket, _box_mesh(Vector3(0.025, 0.2, 0.13)), STEEL, Vector3(0, 0.06, -0.48))
+		_part(musket, _box_mesh(Vector3(0.026, 0.07, 0.05)), STEEL.darkened(0.2), Vector3(0, -0.07, -0.47)) # the beard
+		bayonet = Node3D.new()
+		musket.add_child(bayonet)
+		hand_bayonet = Node3D.new()
+		body.add_child(hand_bayonet)
+		hand_bayonet.visible = false
+		ramrod = _part(body, _box_mesh(Vector3(0.012, 0.012, 1.0)), STEEL, Vector3.ZERO)
+		_p_vis[ramrod] = false
+		return
 	if primary == "arming_sword":
 		# A straight sword: grip and cross at the hand, the blade forward.
 		_part(musket, _box_mesh(Vector3(0.03, 0.03, 0.16)), LEATHER, Vector3(0, 0, 0.04))
@@ -652,7 +666,7 @@ static func _weapon_of(primary: String) -> String:
 		return "bow"
 	if primary in ["crossbow", "dwarf_crossbow"]:
 		return "crossbow"
-	if primary in ["pike", "spear", "war_spear", "lance", "rammer", "linstock", "spade", "arming_sword"]:
+	if primary in ["pike", "spear", "war_spear", "lance", "rammer", "linstock", "spade", "arming_sword", "dwarf_axe"]:
 		return "pole"
 	if primary == "none":
 		return "none"
@@ -876,18 +890,37 @@ func _build_lizard() -> void:
 	_segment("l_fore", 0.1, HIDE, _arm)
 	_arm["r_hand"] = _part(body, _sphere_mesh(0.06), HIDE_DARK, Vector3.ZERO)
 	_arm["l_hand"] = _part(body, _box_mesh(Vector3(0.12, 0.06, 0.12)), BONE, Vector3.ZERO)
-	# Round shield on the left arm.
+	# Round shield on the left arm (a shaman: a bone rattle instead).
 	shield = Node3D.new()
 	body.add_child(shield)
-	_part(shield, _cyl_mesh(0.32, 0.32, 0.03), STEEL, Vector3(0, 0, 0.012), Vector3(90, 0, 0))
-	_part(shield, _cyl_mesh(0.3, 0.3, 0.045), WOOD, Vector3.ZERO, Vector3(90, 0, 0))
-	_part(shield, _sphere_mesh(0.07), STEEL, Vector3(0, 0, -0.025))
+	if shaman:
+		_part(shield, _sphere_mesh(0.07), BONE, Vector3(0, 0, -0.05))
+		_part(shield, _box_mesh(Vector3(0.025, 0.025, 0.18)), WOOD, Vector3(0, 0, 0.06))
+	else:
+		_part(shield, _cyl_mesh(0.32, 0.32, 0.03), STEEL, Vector3(0, 0, 0.012), Vector3(90, 0, 0))
+		_part(shield, _cyl_mesh(0.3, 0.3, 0.045), WOOD, Vector3.ZERO, Vector3(90, 0, 0))
+		_part(shield, _sphere_mesh(0.07), STEEL, Vector3(0, 0, -0.025))
 	_sack = _part(body, _box_mesh(Vector3(0.2, 0.16, 0.14)), Color(0.72, 0.6, 0.4), Vector3.ZERO)
 	_p_vis[_sack] = false
 	cleaver = Node3D.new()
 	body.add_child(cleaver)
-	_part(cleaver, _box_mesh(Vector3(0.035, 0.035, 0.32)), WOOD, Vector3(0, 0, -0.12))
-	_part(cleaver, _box_mesh(Vector3(0.02, 0.2, 0.26)), STEEL, Vector3(0, 0.1, -0.36))
+	if shaman:
+		# A shaman: a tall staff topped with a horned skull and feathers,
+		# a feathered crown, and white paint on his chest.
+		_part(cleaver, _box_mesh(Vector3(0.04, 0.04, 1.5)), WOOD.darkened(0.2), Vector3(0, 0, -0.35))
+		_part(cleaver, _box_mesh(Vector3(0.12, 0.1, 0.14)), BONE, Vector3(0, 0, -1.12))
+		_part(cleaver, _box_mesh(Vector3(0.22, 0.03, 0.03)), BONE, Vector3(0, 0.05, -1.14), Vector3(0, 0, 0))
+		for k in 3:
+			_part(cleaver, _box_mesh(Vector3(0.02, 0.16, 0.05)), [Color(0.85, 0.15, 0.12), Color(0.15, 0.45, 0.8), Color(0.95, 0.8, 0.2)][k],
+				Vector3(-0.05 + k * 0.05, 0.12, -1.08), Vector3(-20, 0, 0))
+		for k in 5:
+			_part(head, _box_mesh(Vector3(0.035, 0.26, 0.05)), [Color(0.85, 0.15, 0.12), Color(0.95, 0.8, 0.2), Color(0.15, 0.45, 0.8)][k % 3],
+				Vector3(-0.12 + k * 0.06, 0.32, 0.06), Vector3(-15, 0, (k - 2) * 12.0))
+		for k in 3:
+			_part(spine, _box_mesh(Vector3(0.36, 0.035, 0.065)), Color(0.92, 0.9, 0.82), Vector3(0, 0.18 + k * 0.12, -0.2), Vector3.ZERO, true)
+	else:
+		_part(cleaver, _box_mesh(Vector3(0.035, 0.035, 0.32)), WOOD, Vector3(0, 0, -0.12))
+		_part(cleaver, _box_mesh(Vector3(0.02, 0.2, 0.26)), STEEL, Vector3(0, 0.1, -0.36))
 	# Digitigrade legs: thigh, shin, long foot.
 	for side in ["l", "r"]:
 		_segment(side + "_thigh", 0.16, HIDE, _leg)

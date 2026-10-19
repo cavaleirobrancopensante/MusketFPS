@@ -98,6 +98,7 @@ var nation := ""
 ## A nation fighting beside you (Company.next_battle.allies), its coats.
 var ally_nation := ""
 var ally_coat := Color(0.62, 0.12, 0.1)
+var _shamans_left := 0 # lizard shamans still to put with a warrior regiment
 var _making_allied := false # (while its men are made: they dress as its soldiers)
 var _making_light := false # (while the artillery officer's galloper is made)
 ## How fast the battle goes (the setup's PACE): marching, loading and blows
@@ -249,8 +250,8 @@ func make_sprites() -> void:
 	for name in want:
 		var k: String = want[name][0]
 		var s: int = want[name][1]
-		if KINDS[k].has("guns"):
-			continue
+		if not KINDS.has(k) or KINDS[k].has("guns"):
+			continue # (a shaman walks with the warriors, and looks like one far off)
 		var spec := _sprite_spec(k, s)
 		var frames: Dictionary = await Impostor.render(battle, spec)
 		if frames.is_empty():
@@ -261,7 +262,7 @@ func make_sprites() -> void:
 
 func _sprite_name(kind: String, side: int) -> String:
 	match kind:
-		"liz_warrior", "liz_skirm":
+		"liz_warrior", "liz_skirm", "liz_shaman":
 			return "f_lizard"
 		"liz_brute":
 			return "f_brute"
@@ -475,8 +476,13 @@ func spawn_campaign() -> void:
 	var theirs: Array = []
 	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "musket": 20, "xbow": 14, "bow": 14, "cav": 10,
 		"sword": 24, "longbow": 14, "knight": 8, "catapult": 2}
+	_shamans_left = int(comp.get("liz_shaman", 0)) # (they go with the warriors: _make_reg)
 	for k in World.COMP_ORDER:
+		if k == "liz_shaman":
+			continue
 		var n := int(comp.get(k, 0))
+		if k == "liz_warrior":
+			n += _shamans_left
 		while n > 0:
 			var take := mini(n, int(cap[k]))
 			if n - take > 0 and n - take < 4:
@@ -807,14 +813,20 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	if allied:
 		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], Lang.t({"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse", "musket": "musketeers"}.get(kind, String(r.info["name"]).to_lower()))]
 		if ally_nation == "dwarves":
-			r.title = Lang.t({"xbow": "Dwarf crossbows", "sword": "Dwarf shieldmen", "musket": "Dwarf musketeers"}.get(kind, "Dwarves"))
+			r.title = Lang.t({"xbow": "Dwarf crossbows", "sword": "Dwarf axemen", "musket": "Dwarf musketeers"}.get(kind, "Dwarves"))
+		if campaign and Company.next_battle.has("defend"):
+			r.title = Lang.t({"pike": "Village spearmen", "longbow": "Village bowmen"}.get(kind, "Villagers"))
 	_making_allied = allied
 	regs.append(r)
 	_deaths[r] = 0
 	if yours:
 		player_reg = r
+	var shaman_at := -1
+	if side == 1 and kind == "liz_warrior" and _shamans_left > 0 and n >= 6:
+		shaman_at = n - 1 # (at the back of the mob)
+		_shamans_left -= 1
 	for i in n:
-		var u = _make_unit(side, kind) if i >= recs.size() else (Rider.from_record(battle, self, recs[i], side, Company.role_of(recs[i])) if bool(KINDS[kind].get("cav", false)) else FieldSoldier.from_record(battle, self, recs[i], side))
+		var u = (FieldLizard.make(battle, self, "shaman") if i == shaman_at else _make_unit(side, kind)) if i >= recs.size() else (Rider.from_record(battle, self, recs[i], side, Company.role_of(recs[i])) if bool(KINDS[kind].get("cav", false)) else FieldSoldier.from_record(battle, self, recs[i], side))
 		if not r.info.has("guns"):
 			_dress(u, kind, 2 if allied else side)
 		u.reg = r

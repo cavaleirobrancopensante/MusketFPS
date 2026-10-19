@@ -190,12 +190,16 @@ and cartridge box; levels. Still to come: Diplomacy and
 Engineering (gunpowder and fortification) once factions and production
 exist.
 
-### M8: Battle variety
+### M8: Battle variety (mostly ✅, 1.83)
 
-- Terrain sets from the map; objectives (defend a village, storm a nest,
-  escort a wagon); morale and rout on both sides; retreat; deployment.
-- Enemy variety: lizard skirmishers (javelins), shield brutes, raptor riders,
-  shamans; human pikes, archers, knights; dwarf crossbows and axes.
+- Terrain sets from the map; objectives (defend a village ✅, storm a
+  nest ✅, escort a wagon); morale and rout on both sides ✅; retreat ✅;
+  deployment ✅.
+- Enemy variety: lizard skirmishers (javelins) ✅, shield brutes ✅,
+  raptor riders ✅, shamans ✅ (no magic: a chant that steadies the
+  lizards near him, and they waver when he falls); human pikes, archers,
+  knights ✅; dwarf crossbows and axes ✅.
+- Still to come: escorting a wagon or a caravan to a town.
 
 ### The Total War layer (one battle system)
 

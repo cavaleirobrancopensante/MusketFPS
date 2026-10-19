@@ -124,6 +124,8 @@ const ITEMS := {
 	# The kingdoms' arms: a few centuries behind yours.
 	"arming_sword": {"name": "Arming sword", "slot": "primary", "melee": 40.0, "reach": 1.5, "kg": 1.2, "space": 0.5, "value": 12,
 		"desc": "A knight's straight sword, fit for one hand. Quick, with a shield on the other arm."},
+	"dwarf_axe": {"name": "Dwarf axe", "slot": "primary", "melee": 48.0, "reach": 1.4, "kg": 1.8, "space": 0.6, "value": 30,
+		"desc": "A short haft and a broad bearded head, dwarf-forged. Hooks a shield down and splits what's behind it."},
 	"heater_shield": {"name": "Heater shield", "slot": "secondary", "armour": 0.08, "shield": true, "kg": 3.0, "space": 1.2, "value": 6,
 		"desc": "Painted wood and leather. Catches arrows and bolts and blades; a musket ball goes through it."},
 	"mail": {"name": "Mail shirt", "slot": "torso", "armour": 0.3, "pace": -0.05, "kg": 9.0, "space": 1.0, "value": 30,

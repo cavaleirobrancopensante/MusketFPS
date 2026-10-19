@@ -156,6 +156,7 @@ func _ready() -> void:
 	World.day_passed.connect(_on_day)
 	World.news.connect(func(t): _push_toast(t))
 	World.encounter.connect(_on_encounter)
+	World.village_raid.connect(_on_village_raid)
 	World.fight_near.connect(_on_fight_near)
 	World.arrived.connect(_on_arrived)
 	World.dusk.connect(_on_dusk)
@@ -2988,6 +2989,36 @@ func _on_fight_near(friend: Dictionary, foe: Dictionary) -> void:
 		_popup_close()
 
 
+## A warband falling on a village near you: march to its defence (a battle
+## in the village, its people fighting beside you), or leave it to burn.
+func _on_village_raid(p: Dictionary, st: Dictionary) -> void:
+	var fac := String(st.get("faction", "aurest"))
+	var n_e := "%d" % int(p["size"]) if World.intel_level(p) >= 2 else World.rough_count(p)
+	var text := Lang.t("Smoke over %s: %s lizards are falling on the village! The villagers have barred themselves in with what they've got: spears, hunting bows, a few old soldiers.") % [st["name"], n_e]
+	text += Lang.t("\n\nMarch to its defence and fight them among the houses, the villagers beside you. Save it and %s will remember it; leave it, and it burns.") % Lore.FACTIONS.get(fac, {"short": "?"})["short"]
+	if not Company.contract.is_empty() and String(Company.contract["duty"]) in ["protect", "warbands"] and String(Company.contract["faction"]) == fac:
+		text += Lang.t("\n[color=#c9a14a]It's what %s pays you for.[/color]") % Company.contract["lord_name"]
+	var buttons: Array = [[Lang.t("DEFEND THE VILLAGE!"), func():
+			_popup_close()
+			_set_battle(p, false)
+			Company.next_battle["map"] = "town"
+			Company.next_battle["defend"] = int(st["id"])
+			var militia := randi_range(6, 11)
+			var bows := militia / 3
+			Company.next_battle["allies"] = {"faction": fac, "comp": {"pike": militia - bows, "longbow": bows}, "party": -1,
+				"size": militia, "lord": -1}
+			_go(BATTLE)],
+		[Lang.t("LEAVE THEM TO IT"), func():
+			_popup_close()
+			World.finish_raid(p)]]
+	_scene("burned")
+	_popup_open(Lang.t("%s is attacked!") % st["name"], text, buttons)
+	if _test:
+		print("  MAPTEST: lizards on the village %s (left them)" % st["name"])
+		_popup_close()
+		World.finish_raid(p)
+
+
 ## Lizards falling on people on the road near you: go to their aid (a
 ## battle against the lizards, the caravan's guards on your side), or not.
 func _civilians_attacked(friend: Dictionary, foe: Dictionary) -> void:
@@ -3235,6 +3266,21 @@ func _apply_battle_result() -> void:
 				_push_toast(Lang.t("%s will remember you stood with him.") % World.lord_short(al_lord))
 			else:
 				_push_toast(Lang.t("%s will remember you stood with them.") % Lore.FACTIONS[al["faction"]]["name"])
+	# A village you marched to defend.
+	var dsid := int(nb.get("defend", -1))
+	if dsid >= 0:
+		var dst := World.settlement(dsid)
+		var dfac := String(dst.get("faction", ""))
+		if bool(r.get("won", false)):
+			Company.change_standing(dfac, 12)
+			var gift := mini(Company.room_for("rations"), 24)
+			Company.stores["rations"] = int(Company.stores["rations"]) + gift
+			var cp4 := Company.contract_progress("protect", dfac)
+			if cp4 != "":
+				_push_toast(cp4)
+			_push_toast(Lang.t("%s is saved! The villagers bring out what they have: %d rations, and their thanks.") % [dst.get("name", "?"), gift])
+		elif not p.is_empty():
+			World.finish_raid(p)
 	var helped: Dictionary = nb.get("helped", {})
 	if not helped.is_empty() and bool(r.get("won", false)):
 		var hf := String(helped["faction"])

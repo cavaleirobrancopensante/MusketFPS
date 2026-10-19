@@ -127,7 +127,7 @@ func _mesh(item: String) -> Node3D:
 		"crossbow", "dwarf_crossbow":
 			Props._box(n, Vector3(0.1, 0.08, 0.8), wood, Vector3(0, 0.05, 0))
 			Props._box(n, Vector3(0.7, 0.04, 0.05), iron, Vector3(0, 0.08, -0.35))
-		"saber", "cutlass", "arming_sword", "cleaver":
+		"saber", "cutlass", "arming_sword", "cleaver", "dwarf_axe":
 			Props._box(n, Vector3(0.05, 0.02, 0.85), iron.lightened(0.2), Vector3(0, 0.03, 0))
 			Props._box(n, Vector3(0.2, 0.04, 0.05), Color(0.6, 0.5, 0.2), Vector3(0, 0.04, 0.38))
 		"pistol":

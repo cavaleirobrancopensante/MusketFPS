@@ -83,7 +83,7 @@ static func gear_for(f, kind: String, s: int) -> Dictionary:
 ## The dwarves' fighting men: mail and kettle hats, shields and axes in the
 ## front rank, their own crossbows behind.
 const DWARF_GEAR := {
-	"sword": {"head": "dwarf_helm", "torso": "mail", "primary": "arming_sword", "secondary": "heater_shield"},
+	"sword": {"head": "dwarf_helm", "torso": "mail", "primary": "dwarf_axe", "secondary": "heater_shield"},
 	"xbow": {"head": "dwarf_helm", "torso": "mail", "primary": "dwarf_crossbow", "secondary": "hatchet"},
 	"pike": {"head": "dwarf_helm", "torso": "mail", "primary": "pike", "secondary": ""},
 	"musket": {"head": "dwarf_helm", "torso": "mail", "primary": "musket", "secondary": "bayonet"},

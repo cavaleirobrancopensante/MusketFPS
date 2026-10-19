@@ -393,6 +393,16 @@ func _ready() -> void:
 			if "--allied" in args:
 				# ...with a lord's army camped beside you.
 				Company.next_battle["allies"] = {"faction": "aurest", "comp": World.party_comp({"kind": "army", "size": 40}), "party": -1, "size": 40}
+		elif "--defend" in args:
+			# A village under attack: -- --autotest --defend
+			Company.new_campaign(_test_start())
+			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+			for m in Company.roster:
+				m["wounded_days"] = 0
+			var wb2 := {"kind": "warband", "faction": "lizards", "size": 32, "id": 1}
+			Company.next_battle = {"enemy": 32, "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "lizards",
+				"faction": "lizards", "comp": World.party_comp(wb2), "map": "town", "party_name": Lang.t("Test warband"), "defend": 0,
+				"allies": {"faction": "vell", "comp": {"pike": 6, "longbow": 3}, "party": -1, "size": 9, "lord": -1}}
 		elif "--patrol" in args:
 			# A nation's patrol: -- --autotest --patrol [--vell]
 			Company.new_campaign(_test_start())

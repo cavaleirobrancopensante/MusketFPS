@@ -6,6 +6,9 @@ extends "res://scripts/lizardman.gd"
 ##              only fights hand to hand when caught
 ##   brute      half again as big, slow, hard to kill; his blows knock men
 ##              flat and send them reeling
+##   shaman     painted, feathered, a staff for a weapon: walks at the back
+##              of a warrior mob and chants, steadying every lizard near him;
+##              kill him and they waver (one with a big warband: World.party_comp)
 ##
 ## Out of reach of a fight he keeps his place in the mob (regiment.gd); in
 ## reach, or when his regiment charges, he fights like any lizardman.
@@ -24,6 +27,7 @@ static func make(b, f, v: String):
 	me.battle = b
 	me.field = f
 	me.variant = v
+	me.rig_shaman = v == "shaman"
 	me.frames = b.lizard_frames
 	return me
 
@@ -45,6 +49,10 @@ func _ready() -> void:
 			hit_height = 2.9
 			rig.scale = Vector3.ONE * 1.12 * 1.45
 			_sprite_h = float(get_meta("sprite_cell", 1.95 * 1.45))
+		"shaman":
+			hp = 130.0
+			dmg_mult = 0.6 # (a staff, not a cleaver)
+			_chant_t = randf_range(2.0, 5.0)
 		_:
 			hp = 160.0
 	speed *= field.pace
@@ -63,6 +71,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _field_brain(delta: float) -> void:
+	if variant == "shaman":
+		_chant(delta)
 	if reg.state in ["routing", "shattered"]:
 		var close: Node3D = field.nearest_foe(self, 1.8)
 		if close == null or stagger_time > 0.0:
@@ -73,7 +83,7 @@ func _field_brain(delta: float) -> void:
 	# In a fight, or charging: the old lizard brain (it picks the nearest man).
 	var foe: Node3D = null
 	if reg.foes_close:
-		foe = field.nearest_foe(self, 7.0 if variant != "skirm" else 4.0)
+		foe = field.nearest_foe(self, {"skirm": 4.0, "shaman": 2.2}.get(variant, 7.0))
 	if foe != null or reg.charging or stagger_time > 0.0 or windup >= 0.0 or shield_up > 0.0:
 		if reg.charging and foe == null:
 			var cf: Node3D = reg.charge_foe(self)
@@ -183,4 +193,46 @@ func _on_died() -> void:
 	if last_hit_by != null and is_instance_valid(last_hit_by) and "kills" in last_hit_by:
 		last_hit_by.kills += 1
 	battle.play_sound("death", global_position + Vector3.UP * 1.4, -6.0)
+	if variant == "shaman":
+		_shaman_falls()
 	field.unit_died(self)
+
+
+# ---------------------------------------------------------------- the shaman
+
+const CHANT_EVERY := 6.0
+const CHANT_REACH := 26.0
+const CHANT_MORALE := 7.0
+const FALL_REACH := 34.0
+const FALL_SHOCK := 28.0
+var _chant_t := 0.0
+
+
+## Every few seconds he raises the staff and howls: every lizard regiment
+## near him takes heart.
+func _chant(delta: float) -> void:
+	_chant_t -= delta
+	if _chant_t > 0.0:
+		return
+	_chant_t = CHANT_EVERY * randf_range(0.85, 1.2)
+	var heard := false
+	for r in field.regs:
+		if r.side != side or r.gone() or not String(r.kind).begins_with("liz_"):
+			continue
+		if r.centroid.distance_to(global_position) < CHANT_REACH:
+			r.morale = minf(r.max_morale, r.morale + CHANT_MORALE)
+			heard = true
+	if heard:
+		play_oneshot("strike", 0.5) # (the staff thrust up)
+		battle.play_sound("roar", global_position + Vector3.UP * 1.6, -2.0)
+
+
+## A shaman down: the lizards round him lose heart.
+func _shaman_falls() -> void:
+	for r in field.regs:
+		if r.side != side or r.gone() or not String(r.kind).begins_with("liz_"):
+			continue
+		if r.centroid.distance_to(global_position) < FALL_REACH:
+			r.shock("shaman_%d" % get_instance_id(), FALL_SHOCK)
+	if battle.hud != null:
+		battle.hud.show_message(Lang.t("Their shaman is down! The lizards around him waver."), 2.5)

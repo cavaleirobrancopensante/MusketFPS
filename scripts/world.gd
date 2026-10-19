@@ -35,6 +35,7 @@ const T := Gen.T
 signal day_passed(notes: PackedStringArray)
 signal news(text: String)
 signal encounter(party: Dictionary) # a hostile party has caught you
+signal village_raid(party: Dictionary, settlement: Dictionary) # lizards falling on a village near you
 signal fight_near(friend: Dictionary, foe: Dictionary) # a nation's men about to fight near you: join them?
 signal arrived(target: Dictionary) # {"kind": "settlement"/"party"/"cell", ...}
 signal dusk # 18:00 on the march: make camp, or march on in the dark?
@@ -1390,10 +1391,10 @@ const KINDS := {
 # ---------------------------------------------------------------- what you can tell about a party
 
 const COMP_NAMES := {"liz_warrior": ["warrior", "warriors"], "liz_skirm": ["javelin thrower", "javelin throwers"],
-	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"],
+	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"], "liz_shaman": ["shaman", "shamans"],
 	"pike": ["spearman", "spearmen"], "musket": ["musketeer", "musketeers"], "bow": ["archer", "archers"], "xbow": ["crossbowman", "crossbowmen"], "cav": ["horseman", "horsemen"],
 	"sword": ["man-at-arms", "men-at-arms"], "longbow": ["longbowman", "longbowmen"], "knight": ["knight", "knights"], "catapult": ["catapult", "catapults"]}
-const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "sword", "pike", "musket", "xbow", "longbow", "bow", "knight", "cav", "catapult"]
+const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "liz_shaman", "sword", "pike", "musket", "xbow", "longbow", "bow", "knight", "cav", "catapult"]
 
 
 ## What a lizard party is made of (field.gd kinds -> numbers), worked out
@@ -1411,8 +1412,10 @@ static func party_comp(p: Dictionary) -> Dictionary:
 		var brutes := n / 14
 		var raptors := maxi(0, (n - 12) / 6)
 		var jav := int(round(n * 0.25))
-		var war := maxi(0, n - brutes - raptors - jav)
-		out = {"liz_warrior": war, "liz_skirm": jav, "liz_brute": brutes, "liz_raptor": raptors}
+		# A shaman with a big warband (two with a horde), chanting at the back.
+		var shamans := (1 if n >= 30 else 0) + (1 if n >= 70 else 0)
+		var war := maxi(0, n - brutes - raptors - jav - shamans)
+		out = {"liz_warrior": war, "liz_skirm": jav, "liz_brute": brutes, "liz_raptor": raptors, "liz_shaman": shamans}
 	elif p["kind"] == "patrol":
 		# A nation's soldiers (nobody here has gunpowder: they fight as men
 		# did centuries before you): men-at-arms with sword and shield,
@@ -1755,6 +1758,32 @@ func _hostile(a: Dictionary, b: Dictionary) -> bool:
 	return a["kind"] in ["patrol", "army"] and b["kind"] in ["patrol", "army"] and a["faction"] != b["faction"]
 
 
+## How close you must be to a village to go to its aid when it's raided.
+const DEFEND_REACH := 10.0
+
+
+## A warband sacks a village: burned for four days, its stores carried off
+## to the nest.
+func _raid_village(p: Dictionary, tgt: Dictionary) -> void:
+	p.erase("sacking")
+	if tgt.is_empty():
+		return
+	places[int(tgt["id"])]["raided"] = hours + 96.0
+	p["wait"] = 6.0
+	Econ.plunder(p, int(tgt["id"]))
+	_tell(Lang.t("%s is raided by lizards!") % tgt["name"], tgt)
+	var home := settlement(int(p["home"])) if int(p["home"]) >= 0 else {}
+	if not home.is_empty():
+		p["target"] = int(home["id"])
+		p["path"] = _route(Vector2(p["x"], p["y"]), Vector2(home["x"], home["y"]))
+
+
+## You left them to it, or lost: the sack goes on.
+func finish_raid(p: Dictionary) -> void:
+	if p.has("sacking") and p in parties:
+		_raid_village(p, settlement(int(p["sacking"])))
+
+
 ## Pick where to go next (and wait a while on arrival).
 func _next_errand(p: Dictionary, me: Vector2) -> void:
 	if p["kind"] == "labourers":
@@ -1772,6 +1801,10 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 		p["wait"] = 4.0
 		return
 	var home := settlement(int(p["home"])) if int(p["home"]) >= 0 else {}
+	if p.has("sacking"):
+		# (nobody came to the village's aid: they finish what they started)
+		_raid_village(p, settlement(int(p["sacking"])))
+		return
 	if p["target"] >= 0 and me.distance_to(Vector2(settlement(int(p["target"]))["x"], settlement(int(p["target"]))["y"])) < 2.0:
 		var tgt := settlement(int(p["target"]))
 		p["target"] = -1
@@ -1779,14 +1812,14 @@ func _next_errand(p: Dictionary, me: Vector2) -> void:
 			_army_arrives(p, tgt)
 			return
 		if p["kind"] == "warband" and tgt["kind"] == "village":
-			places[int(tgt["id"])]["raided"] = hours + 96.0
-			p["wait"] = 6.0
-			Econ.plunder(p, int(tgt["id"]))
-			_tell(Lang.t("%s is raided by lizards!") % tgt["name"], tgt)
-			# Home to the nest with what they took.
-			if not home.is_empty():
-				p["target"] = int(home["id"])
-				p["path"] = _route(me, Vector2(home["x"], home["y"]))
+			# You're close by: they're at it now, and you can go to the
+			# village's defence (map.gd) before it's sacked.
+			if Company.active and not camping and me.distance_to(pos) < DEFEND_REACH and can_see(p):
+				p["sacking"] = int(tgt["id"])
+				p["wait"] = 2.0
+				village_raid.emit(p, tgt)
+				return
+			_raid_village(p, tgt)
 			return
 		if p["kind"] in ["warband", "hunters"] and tgt["id"] == p["home"]:
 			Econ.unload(int(tgt["id"]), p)

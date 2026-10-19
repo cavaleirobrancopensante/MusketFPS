@@ -632,6 +632,21 @@ Now and then something else happens (a child, a dog, a guard, a drink).
 Win enough trust, or help with what they need, and they **join you**: a real
 recruit with the weapon they brought from home (see below).
 
+### Lizard shamans, and villages to defend
+
+A warband of thirty or more brings a **shaman** (two with seventy):
+painted, feathered, a horned skull on his staff, walking at the back of a
+mob of warriors. He has no magic. Every few seconds he raises the staff
+and howls, and every lizard regiment near him takes heart (its morale
+recovers); kill him and the lizards round him waver ("Their shaman is
+down!"). He's the man to shoot first.
+
+When a warband falls on a **village** within a few leagues of you, you
+hear of it in time: DEFEND THE VILLAGE! fights it out among the houses,
+the village's spearmen and bowmen beside you. Save it and its nation
+remembers it (and the villagers bring out food); leave it, or lose, and it
+burns.
+
 ### The dwarves of the Greyspine
 
 The dwarves keep their holds in the feet of the mountains to the north and
