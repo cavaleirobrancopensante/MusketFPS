@@ -217,8 +217,16 @@ with every seed.
   costs extra water. On the 3D map: storm clouds riding the wind, rain
   falling from them, lightning (and thunder after it), fog lying in the
   hollows, a greyer light in the rain and a yellow one in the heat. The
-  HUD's bottom line names the weather. (Next: rivers rising after rain,
-  damp powder and slack bowstrings in battle; see the roadmap.)
+  HUD's bottom line names the weather. **Rivers rise after rain**: what
+  falls on a river's course runs off into it (faster off steep high ground)
+  and travels downstream, so a storm in the hills is a flood at the ford
+  further down hours later. A swollen river shuts its fords (nobody
+  crosses: parties wait at the bank) and, well over, floods the low ground
+  beside it (wading, a third of the pace); the map draws the brown water
+  over them, so the river grows wider. March into a shut ford and you
+  choose: WAIT FOR IT TO FALL, CROSS NOW (rations and powder spoiled, a man
+  may drown; worse the higher it runs) or FIND ANOTHER WAY (a bridge or
+  another ford). (Next: damp powder and slack bowstrings in battle.)
 - **Tracks** (`World.tracks`, as in Mount & Blade): every party on the
   move leaves a trail of arrows on the map, pointing the way it went, that
   fades over two days. You only see tracks near you (5 cells, +2 a level of

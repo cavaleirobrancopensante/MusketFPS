@@ -88,6 +88,9 @@ var _prev_vis: Array = []
 var _player: Node3D
 var _path_mesh: ImmediateMesh
 var _tracks_mm: MultiMesh # the tracks you've seen (World.tracks)
+var _flood_mm: MultiMesh # brown water over swollen rivers and flooded banks
+var _flood_v := -1
+var _flood_t := 0.0
 var _sky := {} # storm id -> Node3D: its clouds and its rain (weather.gd)
 var _bolt: Array = [] # the lightning's segments
 var _bolt_t := 0.0
@@ -697,10 +700,61 @@ func _build_bolt() -> void:
 	add_child(_flash)
 
 
+## Rivers in spate (weather.gd): brown water over the swollen river, the
+## shut fords and the flooded banks, so the river is drawn wider.
+func _update_floods(delta: float) -> void:
+	var wx = World.weather
+	if _flood_mm == null:
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(CELL * 1.12, CELL * 1.12)
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.vertex_color_use_as_albedo = true
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		pm.material = mat
+		_flood_mm = MultiMesh.new()
+		_flood_mm.transform_format = MultiMesh.TRANSFORM_3D
+		_flood_mm.use_colors = true
+		_flood_mm.mesh = pm
+		var inst := MultiMeshInstance3D.new()
+		inst.multimesh = _flood_mm
+		add_child(inst)
+	_flood_t -= delta
+	if _flood_v == wx.flood_version and _flood_t > 0.0:
+		return
+	_flood_v = wx.flood_version
+	_flood_t = 1.0
+	var g = World.gen
+	var cells: Array = []
+	var cols: Array = []
+	for c in wx.water:
+		var lv: float = wx.level(c)
+		if lv < 0.3 or World.explored[c] != 1:
+			continue
+		cells.append(c)
+		var col := Color(0.42, 0.36, 0.24, clampf(0.35 + lv * 0.5, 0.0, 0.85))
+		if wx.closed.has(c):
+			col = Color(0.36, 0.28, 0.18, 0.92)
+		cols.append(col)
+	for c in wx.flooded:
+		if World.explored[c] != 1:
+			continue
+		cells.append(c)
+		cols.append(Color(0.45, 0.4, 0.3, 0.8))
+	_flood_mm.instance_count = cells.size()
+	for i in cells.size():
+		var c: int = cells[i]
+		var at := _world_pos(Vector2(c % Gen.SIZE, c / Gen.SIZE) + Vector2(0.5, 0.5))
+		var y := maxf(g.height[c], Gen.SEA_LEVEL) * HS + 0.35
+		_flood_mm.set_instance_transform(i, Transform3D(Basis(), Vector3(at.x, y, at.z)))
+		_flood_mm.set_instance_color(i, cols[i])
+
+
 func _update_weather(delta: float) -> void:
 	var wx = World.weather
 	if wx == null:
 		return
+	_update_floods(delta)
 	if _bolt.is_empty():
 		_build_bolt()
 	var fade := clampf((_dist - 25.0) / 70.0, 0.0, 1.0) # (zoomed right in, you're under the cloud)

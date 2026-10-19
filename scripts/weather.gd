@@ -35,6 +35,23 @@ var heat_hours := 0.0 # today, marching in the heat
 var last_rain_h := -99.0 # when it last rained where you are
 var state := "" # "storm", "rain", "fog", "heat" or "" where you are now
 var _seed := 0
+# Rivers (stage 2): water that has run off into each river cell, flowing
+# downstream; how high that puts it; which fords are under and which banks
+# are flooded (mirrored in gen.wet, for speed_at and the map).
+var water := {} # river cell index -> water in it (only where there's some)
+var closed := {} # ford cell index -> true while it's under water
+var flooded := {} # bank cell index -> true while it's under water
+var flood_version := 0 # bumps whenever closed/flooded change (the map redraws)
+var _buckets := {} # Vector2i(bx, by) -> Array of river cell indices
+var _flood_t := 0.0
+const BUCKET := 16
+const RUNOFF := 1.0 # water per hour a river cell takes from a downpour over it
+const FLOW := 2.6 # cells an hour the flood moves downstream
+const DRAIN := 0.02 # share an hour soaking away
+const CAP := 11.0 # water at which a river is bank-full
+const FORD_SHUT := 0.55 # level that closes a ford
+const FORD_OPEN := 0.4 # ...and that opens it again
+const BANKS := 0.75 # level that floods the banks
 
 
 func _init(world) -> void:
@@ -68,11 +85,20 @@ func setup() -> void:
 		wind = (land / nl - sea / ns).normalized()
 	if _coast.is_empty():
 		_coast.append([Gen.SIZE / 2, Gen.SIZE / 2])
+	_buckets.clear()
+	for c in g.flow_cells:
+		var k := Vector2i((c % Gen.SIZE) / BUCKET, (c / Gen.SIZE) / BUCKET)
+		if not _buckets.has(k):
+			_buckets[k] = []
+		(_buckets[k] as Array).append(c)
 
 
 func to_dict() -> Dictionary:
+	var wl := {}
+	for c in water:
+		wl[str(c)] = snappedf(float(water[c]), 0.01)
 	return {"storms": storms, "next_id": next_id, "rain_hours": rain_hours, "heat_hours": heat_hours,
-		"last_rain_h": last_rain_h, "state": state}
+		"last_rain_h": last_rain_h, "state": state, "water": wl}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -82,10 +108,18 @@ func from_dict(d: Dictionary) -> void:
 	heat_hours = float(d.get("heat_hours", 0.0))
 	last_rain_h = float(d.get("last_rain_h", -99.0))
 	state = String(d.get("state", ""))
+	water.clear()
+	var wl: Dictionary = d.get("water", {})
+	for k in wl:
+		water[int(k)] = float(wl[k])
+	_flood_status(true)
 
 
 func clear() -> void:
 	storms.clear()
+	water.clear()
+	closed.clear()
+	flooded.clear()
 	rain_hours = 0.0
 	heat_hours = 0.0
 	last_rain_h = -99.0
@@ -133,6 +167,7 @@ func tick(dh: float) -> void:
 		if float(s["s"]) < 0.06 or x < -30 or y < -30 or x > Gen.SIZE + 30 or y > Gen.SIZE + 30:
 			storms.erase(s)
 	_wash_tracks(dh)
+	_rivers_tick(dh)
 	_here(dh)
 
 
@@ -265,6 +300,145 @@ func heat_at(c: Vector2i) -> float:
 	if rain_at(Vector2(c) + Vector2(0.5, 0.5)) > 0.1:
 		return 0.0
 	return clampf(time * ground * (0.7 + 0.3 * (1.0 - _day_roll(43))), 0.0, 1.0)
+
+
+# ---------------------------------------------------------------- rivers
+
+## Rain that falls into the rivers runs downhill along them: a storm in the
+## hills is a flood at the ford a day later, further down.
+func _rivers_tick(dh: float) -> void:
+	var g = w.gen
+	# The rain under each storm into the river cells beneath it (more off
+	# steep high ground: it runs off rather than soaking in).
+	for s in storms:
+		var cx := float(s["x"])
+		var cy := float(s["y"])
+		var r := float(s["r"])
+		for by in range(int((cy - r) / BUCKET), int((cy + r) / BUCKET) + 1):
+			for bx in range(int((cx - r) / BUCKET), int((cx + r) / BUCKET) + 1):
+				var list = _buckets.get(Vector2i(bx, by), null)
+				if list == null:
+					continue
+				for c in list:
+					var p := Vector2(float(c % Gen.SIZE) + 0.5, float(c / Gen.SIZE) + 0.5)
+					if p.distance_to(Vector2(cx, cy)) >= r:
+						continue
+					var rn := rain_at(p)
+					if rn > 0.05:
+						var steep := 1.0 + clampf((g.height[c] - 0.4) * 4.0, 0.0, 1.5)
+						water[c] = float(water.get(c, 0.0)) + rn * RUNOFF * steep * dh
+	# Downstream: each cell passes on a share of what it holds (into the
+	# sea at the mouth), and some soaks away.
+	if not water.is_empty():
+		var move := clampf(FLOW * dh, 0.0, 0.9)
+		var keep := 1.0 - DRAIN * dh
+		var nw := {}
+		for c in water:
+			var v: float = float(water[c]) * keep
+			var nx: int = g.flow_next[c]
+			nw[c] = float(nw.get(c, 0.0)) + v * (1.0 - move)
+			if nx >= 0:
+				nw[nx] = float(nw.get(nx, 0.0)) + v * move
+		water = {}
+		for c in nw:
+			if float(nw[c]) > 0.02:
+				water[c] = nw[c]
+	_flood_t -= dh
+	if _flood_t <= 0.0:
+		_flood_t = 1.0
+		_flood_status(false)
+
+
+## How high a river cell is running: 0 normal, 1 bank-full, more in flood.
+func level(c: int) -> float:
+	return float(water.get(c, 0.0)) / CAP
+
+
+## Which fords are under and which banks are flooded, from the levels.
+func _flood_status(quiet: bool) -> void:
+	var g = w.gen
+	var now_closed := {}
+	var now_flooded := {}
+	for c in water:
+		var lv := level(c)
+		if g.river[c] == 2 and (lv >= FORD_SHUT or (closed.has(c) and lv >= FORD_OPEN)):
+			now_closed[c] = true
+		if lv >= BANKS and g.river[c] != 0:
+			# The river spills over its banks: the low ground beside it, and
+			# further when it's well over.
+			var reach := 1 if lv < 1.2 else 2
+			var cx: int = c % Gen.SIZE
+			var cy: int = c / Gen.SIZE
+			for dy in range(-reach, reach + 1):
+				for dx in range(-reach, reach + 1):
+					var x := cx + dx
+					var y := cy + dy
+					if not g.inside(x, y):
+						continue
+					var i: int = Gen.idx(x, y)
+					if g.river[i] != 0 or g.terrain[i] in [T.SEA, T.LAKE, T.MOUNTAIN, T.HILLS]:
+						continue
+					if g.height[i] > g.height[c] + 0.025 * reach:
+						continue # (higher ground stays dry)
+					now_flooded[i] = true
+	if now_closed == closed and now_flooded == flooded:
+		return
+	var shut: Array = []
+	var opened: Array = []
+	for c in now_closed:
+		if not closed.has(c):
+			shut.append(c)
+	for c in closed:
+		if not now_closed.has(c):
+			opened.append(c)
+	var spilled := 0
+	for c in now_flooded:
+		if not flooded.has(c):
+			spilled += 1
+	for c in flooded:
+		if not now_flooded.has(c):
+			g.wet[c] = 0
+			w.flood_cell_changed(c)
+	for c in opened:
+		g.wet[c] = 0
+		w.flood_cell_changed(c)
+	for c in now_flooded:
+		if g.wet[c] != 1:
+			g.wet[c] = 1
+			w.flood_cell_changed(c)
+	for c in now_closed:
+		if g.wet[c] != 2:
+			g.wet[c] = 2
+			w.flood_cell_changed(c)
+	closed = now_closed
+	flooded = now_flooded
+	flood_version += 1
+	if quiet:
+		return
+	# News of what you can see.
+	for c in shut:
+		var at := {"x": c % Gen.SIZE, "y": c / Gen.SIZE}
+		w._tell(Lang.t("The river is up: the ford is under brown water. Nobody crosses there until it falls."), at)
+	for c in opened:
+		var at2 := {"x": c % Gen.SIZE, "y": c / Gen.SIZE}
+		w._tell(Lang.t("The river has gone down: the ford can be crossed again."), at2)
+	if spilled > 6:
+		var any: int = now_flooded.keys()[0]
+		var near := -1
+		var best := 9999.0
+		for c in now_flooded:
+			var d: float = w.pos.distance_to(Vector2(c % Gen.SIZE, c / Gen.SIZE))
+			if d < best:
+				best = d
+				near = c
+		if near < 0:
+			near = any
+		w._tell(Lang.t("The river has burst its banks: the low ground beside it is under water."), {"x": near % Gen.SIZE, "y": near / Gen.SIZE})
+
+
+## Is this ford under water?
+func ford_closed(c: Vector2i) -> bool:
+	return closed.has(Gen.idx(c.x, c.y))
 
 
 # ---------------------------------------------------------------- effects

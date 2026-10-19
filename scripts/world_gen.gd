@@ -33,6 +33,9 @@ var terrain := PackedByteArray()
 var moist := PackedFloat32Array()
 var river := PackedByteArray()
 var road := PackedByteArray()
+var flow_next := PackedInt32Array() # each river (and lake-chain) cell's next cell downstream, or -1
+var flow_cells := PackedInt32Array() # every cell on a river's course, source to mouth
+var wet := PackedByteArray() # weather.gd: 0 as drawn, 1 a flooded bank, 2 a ford under water
 var region := PackedByteArray() # 0 none, 1 aurest, 2 vell, 3 dwarves, 4 lizards
 var settlements: Array = [] # {id, name, kind, faction, x, y}
 var start := Vector2i.ZERO # where the castaways come up from the beach
@@ -121,6 +124,11 @@ func speed_at(x: int, y: int) -> float:
 	var i := idx(x, y)
 	var rd := road[i]
 	var rv := river[i]
+	if wet.size() > i and wet[i] != 0:
+		if wet[i] == 2:
+			return 0.0 # a ford under brown water
+		if rv == 0:
+			return SPEED[terrain[i]] * 0.3 # a flooded bank: wading
 	if rv == 3:
 		return ROAD_SPEED[maxi(rd, 2)]
 	if rv == 2:
@@ -234,6 +242,11 @@ func _heights() -> void:
 ## climbing, and where it must fill a hollow first, that hollow is a lake.
 func _rivers() -> void:
 	var n := SIZE * SIZE
+	flow_next.resize(n)
+	flow_next.fill(-1)
+	flow_cells.resize(0)
+	wet.resize(n)
+	wet.fill(0)
 	var filled := height.duplicate()
 	var down := PackedInt32Array()
 	down.resize(n)
@@ -292,6 +305,10 @@ func _rivers() -> void:
 		if path.size() < 45:
 			continue
 		rivers += 1
+		for k in path.size():
+			flow_cells.append(path[k])
+			if k + 1 < path.size():
+				flow_next[path[k]] = path[k + 1]
 		var since_lake := 999
 		for p in path:
 			since_lake += 1

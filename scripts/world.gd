@@ -461,6 +461,21 @@ func go_to(target: Vector2i, what := {}) -> bool:
 	return true
 
 
+## A cell flooded or dried out (weather.gd): the way through it changes.
+func flood_cell_changed(i: int) -> void:
+	var c := Vector2i(i % Gen.SIZE, i / Gen.SIZE)
+	var sp: float = gen.speed_at(c.x, c.y)
+	if sp <= 0.0:
+		grid.set_point_solid(c, true)
+	else:
+		grid.set_point_solid(c, false)
+		grid.set_point_weight_scale(c, 1.0 / sp)
+
+
+## The ford in front of you is under water: what will you do? (events.gd "flood")
+var ford_block := Vector2i(-1, -1)
+
+
 func stop() -> void:
 	path.clear()
 	goal = {}
@@ -595,6 +610,10 @@ func advance(dh: float) -> void:
 				_wake()
 		else:
 			_walk(step)
+			if ford_block.x >= 0:
+				var fe: Dictionary = events.flood_event(self)
+				event.emit(fe)
+				return
 		_note_water()
 		_scouts_tick()
 		if moving() and not camping:
@@ -638,6 +657,9 @@ func _walk(dh: float) -> void:
 	var left: float = BASE_SPEED * party_pace() * dh * (NIGHT_PACE if is_night() else 1.0) * weather.pace_mult()
 	while left > 0.0 and not path.is_empty():
 		var nxt: Vector2i = path[0]
+		if weather.ford_closed(nxt):
+			ford_block = nxt # (advance asks what to do: events.gd "flood")
+			break
 		var target := Vector2(nxt) + Vector2(0.5, 0.5)
 		var sp: float = maxf(gen.speed_at(nxt.x, nxt.y), 0.1)
 		var d := pos.distance_to(target)
@@ -1762,6 +1784,8 @@ func _move_party_on(p: Dictionary, dh: float) -> void:
 	var me := Vector2(float(p["x"]), float(p["y"]))
 	while left > 0.0 and not path_p.is_empty():
 		var nxt: Vector2i = path_p[0]
+		if gen.wet[Gen.idx(nxt.x, nxt.y)] == 2:
+			break # (waiting for the ford to fall)
 		var target := Vector2(nxt) + Vector2(0.5, 0.5)
 		var sp: float = gen.speed_at(nxt.x, nxt.y)
 		if p["faction"] == "lizards" and gen.t(nxt.x, nxt.y) in [T.SWAMP, T.FOREST]:

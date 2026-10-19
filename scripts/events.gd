@@ -63,7 +63,7 @@ const TABLE := {
 		[["FISH (3 h)", "fish"], ["MARCH ON", "leave"]]],
 	"flood": ["The river has risen",
 		"Rain upstream: the ford is a brown torrent.",
-		[["WAIT (6 h)", "wait"], ["CROSS NOW", "cross"]]],
+		[["WAIT FOR IT TO FALL", "wait"], ["CROSS NOW", "cross"], ["FIND ANOTHER WAY", "around"]]],
 	"camp": ["An abandoned camp",
 		"Cold ashes, a torn tent, bootprints going nowhere in particular.",
 		[["SEARCH", "search"], ["LEAVE", "leave"]]],
@@ -78,6 +78,16 @@ var _last := {} # event id -> hours when it last happened
 
 ## Choose an event for where the company is now, or {} for none.
 var _spoor := {} # the trail the "Lizard tracks" event found
+const FORD_RISK := 0.5
+
+
+## The ford ahead is under water (World._walk stopped at it).
+func flood_event(w) -> Dictionary:
+	var row: Array = TABLE["flood"]
+	var lv: float = w.weather.level(Gen.idx(w.ford_block.x, w.ford_block.y))
+	var text := Lang.t(row[1])
+	text += "\n\n" + (Lang.t("It's running fast and deep: men have drowned in less.") if lv > 1.0 else Lang.t("Waist-deep and rising, by the look of the banks."))
+	return {"id": "flood", "title": Lang.t(row[0]), "text": text, "options": (row[2] as Array).map(func(o): return [Lang.t(o[0]), o[1]])}
 
 
 func pick(w) -> Dictionary:
@@ -168,7 +178,7 @@ func _weight(id: String, x: Dictionary) -> float:
 		"fishing":
 			return 1.2 if x["river"] else 0.0
 		"flood":
-			return 1.5 if x["ford"] else 0.0
+			return 0.0 # (it comes when a real flood shuts the ford in front of you: flood_event)
 		"camp":
 			return 0.6
 		"prospectors":
@@ -327,16 +337,41 @@ func resolve(w, id: String, key: String) -> Dictionary:
 				st["rations"] = int(st["rations"]) + fish
 				return _done(Lang.t("%d rations of fish, cleaned and smoked.") % fish)
 		"flood":
+			var ford: Vector2i = w.ford_block
+			w.ford_block = Vector2i(-1, -1)
 			if key == "wait":
-				w.pass_hours(6.0)
-				return _done(Lang.t("By evening the water drops enough to cross."))
-			st["rations"] = maxi(0, int(st["rations"]) - 6)
-			if randf() < 0.15:
+				var waited := 0
+				while w.weather.ford_closed(ford) and waited < 24:
+					w.pass_hours(1.0)
+					waited += 1
+				if w.weather.ford_closed(ford):
+					return _done(Lang.t("A day and a night, and it's still a torrent. You'll have to find another way, or wait longer."))
+				return _done(Lang.t("%d hours of watching brown water. At last it falls enough to cross.") % waited)
+			if key == "around":
+				if w.path.is_empty():
+					return _done(Lang.t("You turn back from the river."))
+				var to: Vector2i = w.path.back()
+				var g: Dictionary = w.goal.duplicate()
+				if w.go_to(to, g) and not (ford in w.path):
+					return _done(Lang.t("You turn along the bank and look for another way over."))
+				w.stop()
+				return _done(Lang.t("There's no other way over: the river is up everywhere you could cross."))
+			# Across it now: the deeper it runs, the worse.
+			var lv: float = w.weather.level(Gen.idx(ford.x, ford.y))
+			var lost := randi_range(4, 8) + int(lv * 6.0)
+			st["rations"] = maxi(0, int(st["rations"]) - lost)
+			if int(st.get("powder", 0)) > 0:
+				st["powder"] = maxi(0, int(st["powder"]) - randi_range(1, 4))
+			# Over to the far side, on along the way.
+			w.pos = Vector2(ford) + Vector2(0.5, 0.5)
+			if not w.path.is_empty() and w.path[0] == ford:
+				w.path.pop_front()
+			if randf() < 0.1 + 0.25 * clampf(lv - FORD_RISK, 0.0, 1.0):
 				var m3 := _random_man()
 				if not m3.is_empty():
 					_lose(m3, Lang.t("drowned at a ford"))
 					return _done(Lang.t("You get across, but %s is swept away, and some of the food with him.") % Company.title(m3))
-			return _done(Lang.t("A wet, cold crossing. Some of the food is ruined."))
+			return _done(Lang.t("Chest-deep and pulling at your legs, but you get across. %d rations and some powder are spoiled.") % lost)
 		"camp":
 			if key == "search":
 				var r2 := randf()
