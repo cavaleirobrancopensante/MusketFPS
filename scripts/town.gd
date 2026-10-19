@@ -1262,7 +1262,32 @@ func _fill_hall() -> void:
 			_show_toast(Lang.t("You serve %s until day %d.") % [World.lord_short(th), int(terms["until"])])
 			_fill_hall())
 		_menu_box.add_child(ab)
+	if Company.teach_refusal("dwarves", int(th["relation"])) == "":
+		_menu_box.add_child(_label(Lang.t("He has turned your musket over in his hands more than once. Your powder blasts cleaner than theirs, and they've never thought to put it in a tube."), 15, DIM))
+		var tb := _button(Lang.t("TEACH THEM GUNPOWDER  (+%d crowns)") % int(Company.TEACH_PAY["dwarves"]), _fill_teach)
+		_menu_box.add_child(tb)
+	elif Company.taught.has("dwarves"):
+		_menu_box.add_child(_label(Lang.t("Their smiths have the secret now: dwarf musketeers, and muskets at half price at the forge."), 15, DIM))
 	_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
+
+
+## The bargain with a thane: how to corn powder and bore a musket.
+func _fill_teach() -> void:
+	_clear_menu()
+	var th := World.thane_of(sid)
+	_menu_box.add_child(_label(Lang.t("THE SECRET OF GUNPOWDER"), 20, GOLD))
+	_menu_box.add_child(_label(Lang.t("%s offers %d crowns, and his smiths will make your muskets at half price for ever after.\n\nWithin weeks the dwarves will field musketeers of their own, and their markets will sell muskets. Aurest and Vell will not like dwarf guns. And once they have their own, they'll need you less: their goodwill will drain away, week by week.") % [
+		World.lord_full(th), int(Company.TEACH_PAY["dwarves"])], 15, DIM))
+	_menu_box.add_child(_button(Lang.t("STRIKE THE BARGAIN"), func():
+		var pay := Company.teach("dwarves")
+		for lo in World.lords:
+			if String(lo["faction"]) == "dwarves":
+				World.change_relation(lo, 10)
+		World.change_relation(th, 10)
+		Company.save()
+		_show_toast(Lang.t("%d crowns. The smiths carry your powder horn off like a holy relic.") % pay)
+		_fill_hall()))
+	_menu_box.add_child(_button(Lang.t("KEEP THE SECRET"), _fill_hall))
 
 
 func _fill_forge() -> void:
@@ -1303,7 +1328,7 @@ func _fill_forge() -> void:
 	elif st_d < Company.FORGE_MUSKETS_AT:
 		_menu_box.add_child(_label(Lang.t("\"Guns? For a stranger?\" The master smith shakes his head. Win the dwarves' friendship first: trade at their holds, save their traders on the road, serve a thane."), 15, DIM))
 	else:
-		var each := Company.price(Company.FORGE_MUSKET_PRICE)
+		var each := Company.forge_musket_price()
 		var note := Lang.t("%d crowns each, ready in %d days; come back here for them.") % [each, Company.FORGE_MUSKET_DAYS]
 		if not bool(Company.forge.get("taught", false)):
 			note += Lang.t(" The first time they keep one of your spare muskets, to copy. (Once they can make muskets, who else will they make them for?)")

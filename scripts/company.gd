@@ -450,6 +450,7 @@ func new_campaign(start: Dictionary = {}) -> void:
 	light_gun = 1 if String(officer["branch"]) == "artillery" else 0
 	standing = {"aurest": 0, "vell": 0, "dwarves": 0}
 	forge = {"orders": [], "taught": false, "trade": 0}
+	taught = {}
 	contract = {}
 	next_battle = {}
 	march_note = ""
@@ -1294,6 +1295,12 @@ static func market_offers(kind: String, fac: String, sid := -1) -> Array:
 	if kind == "hold" or fac == "dwarves":
 		out.append(["powder", 1, 24, Lang.t("1 lb of blasting powder")])
 		out.append(["dwarf_crossbow", 1, 70, Lang.t("a dwarf crossbow")])
+		if Company.gunpowder("dwarves") >= 1.0:
+			out.append(["musket", 1, 60, Lang.t("a dwarf-made musket")])
+	elif kind in ["town", "city"] and Company.gunpowder(fac) >= 1.0:
+		# A nation you taught: its own powder mills and gunsmiths now.
+		out.append(["powder", 1, 30, Lang.t("1 lb of gunpowder")])
+		out.append(["musket", 1, 90, Lang.t("a musket of their own making")])
 	elif kind in ["town", "city"]:
 		out.append(["crossbow", 1, 34, Lang.t("a crossbow")])
 		out.append(["jack", 1, 10, Lang.t("a padded jack")])
@@ -2148,6 +2155,7 @@ func pass_day(water: String) -> PackedStringArray:
 		notes.append_array(_pay_day())
 	notes.append_array(_feast_day())
 	notes.append_array(_contract_day())
+	notes.append_array(_gunpowder_day())
 	notes.append_array(_workers_day())
 	notes.append_array(_posts_day())
 	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult() * discipline())
@@ -2398,7 +2406,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract, "forge": forge,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract, "forge": forge, "taught": taught,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 		"workers": workers, "posts": posts,
 		"arrears": arrears, "chaplain": chaplain, "stash_clues": stash_clues, "civilized": civilized, "pay_plea_pending": pay_plea_pending, "pay_plea_done": pay_plea_done,
@@ -2441,6 +2449,7 @@ func load_campaign() -> bool:
 	if not standing.has("dwarves"):
 		standing["dwarves"] = 0 # (a save from before the dwarves counted)
 	forge = data.get("forge", {"orders": [], "taught": false, "trade": 0})
+	taught = data.get("taught", {})
 	contract = data.get("contract", {})
 	next_battle = data.get("next_battle", {})
 	tags = data.get("tags", DEFAULT_TAGS.duplicate())
@@ -2655,7 +2664,7 @@ func order_muskets(sid: int, hold_name: String, n: int) -> String:
 			return Lang.t("They need a musket to copy: bring a spare one in the wagon.")
 		add_item("musket", -1)
 		forge["taught"] = true
-	var cr := price(FORGE_MUSKET_PRICE) * n
+	var cr := forge_musket_price() * n
 	if money < cr:
 		return Lang.t("Not enough crowns.")
 	money -= cr
@@ -2682,3 +2691,84 @@ func collect_muskets(sid: int) -> int:
 	forge["orders"].erase(o)
 	save()
 	return int(o["n"])
+
+
+# ---------------------------------------------------------------- teaching gunpowder
+# A friendly lord or thane will pay well to learn how to make powder and
+# muskets. A nation you teach fields musketeers of its own (more of them
+# every day for TEACH_RAMP_DAYS), wins its fights and its sieges more often,
+# and sells powder and muskets in its towns. Its enemy never forgives you.
+# And once it has its own musketeers it needs you less: its goodwill drains
+# away a little every week (unless you serve it) - far enough, and it will
+# turn its new guns on you.
+
+## Faction -> the day you taught it.
+var taught := {}
+const TEACH_RAMP_DAYS := 20
+const TEACH_PAY := {"aurest": 500, "vell": 500, "dwarves": 300}
+const TEACH_STANDING := 20 # (friendly, at least)
+const TEACH_RELATION := {"aurest": 30, "vell": 30, "dwarves": 15}
+const TEACH_DRIFT := 4 # goodwill lost each week once they have their musketeers
+const TEACH_DRIFT_FLOOR := -30
+
+
+## How far along a faction's gunpowder is: 0 (none) to 1 (its own
+## musketeers, mills and gunsmiths).
+func gunpowder(faction: String) -> float:
+	if not taught.has(faction):
+		return 0.0
+	return clampf(float(day - int(taught[faction])) / TEACH_RAMP_DAYS, 0.1, 1.0)
+
+
+## Why this lord (relation `rel`) won't be taught now, or "".
+func teach_refusal(faction: String, rel: int) -> String:
+	if taught.has(faction):
+		return Lang.t("They already know the secret.")
+	if int(standing.get(faction, 0)) < TEACH_STANDING or rel < int(TEACH_RELATION.get(faction, 30)):
+		return Lang.t("He doesn't trust you enough to strike that bargain.")
+	if faction != "dwarves" or not bool(forge.get("taught", false)):
+		if item_count("musket") <= 0:
+			return Lang.t("You'd need a spare musket in the wagon to leave with them.")
+	return ""
+
+
+## Strike the bargain. Returns the crowns paid.
+func teach(faction: String) -> int:
+	taught[faction] = day
+	if faction != "dwarves" or not bool(forge.get("taught", false)):
+		add_item("musket", -1) # (the pattern they copy)
+	var pay: int = int(TEACH_PAY.get(faction, 400))
+	money += pay
+	change_standing(faction, 15)
+	if faction == "dwarves":
+		forge["taught"] = true
+		for f in ["aurest", "vell"]:
+			change_standing(f, -15) # (dwarf guns: the kingdoms don't like it)
+	else:
+		change_standing(String(AT_WAR.get(faction, "")), -40)
+	save()
+	return pay
+
+
+## Dwarf-made muskets: half price once the dwarves have the whole secret.
+func forge_musket_price() -> int:
+	return price(int(FORGE_MUSKET_PRICE * (0.5 if gunpowder("dwarves") > 0.0 else 1.0)))
+
+
+func _gunpowder_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	for f in taught:
+		var since := day - int(taught[f])
+		var nm: String = Lang.t(Lore.FACTIONS[f]["name"]) if Lore.FACTIONS.has(f) else f
+		if since == TEACH_RAMP_DAYS:
+			notes.append(Lang.t("%s fields its own musketeers now, and its towns sell powder.") % nm)
+		if since > TEACH_RAMP_DAYS and since % 7 == 0:
+			var serving: bool = not contract.is_empty() and String(contract["faction"]) == f
+			if not serving and int(standing.get(f, 0)) > TEACH_DRIFT_FLOOR:
+				var was := is_enemy(f)
+				standing[f] = maxi(TEACH_DRIFT_FLOOR, int(standing[f]) - TEACH_DRIFT)
+				if is_enemy(f) and not was:
+					notes.append(Lang.t("%s has its own guns now, and no more use for you. Its musketeers will hunt you.") % nm)
+				elif since <= TEACH_RAMP_DAYS + 7:
+					notes.append(Lang.t("%s has its own musketeers now. It needs you less, and it shows.") % nm)
+	return notes

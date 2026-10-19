@@ -65,7 +65,7 @@ static func make(b, f, kind: String, s: int):
 const NATION_GEAR := {
 	"sword": {"head": "nasal_helm", "torso": "mail", "primary": "arming_sword", "secondary": "heater_shield"},
 	"longbow": {"head": "hood", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
-	"musket": {"head": "kettle_hat", "torso": "coat", "primary": "pike", "secondary": ""},
+	"musket": {"head": "kettle_hat", "torso": "coat", "primary": "musket", "secondary": "bayonet"}, # (a nation you taught gunpowder)
 	"pike": {"head": "kettle_hat", "torso": "mail", "primary": "pike", "secondary": ""},
 	"bow": {"head": "hood", "torso": "coat", "primary": "war_bow", "secondary": "long_knife"},
 	"xbow": {"head": "kettle_hat", "torso": "coat", "primary": "crossbow", "secondary": "hatchet"},
@@ -86,6 +86,7 @@ const DWARF_GEAR := {
 	"sword": {"head": "dwarf_helm", "torso": "mail", "primary": "arming_sword", "secondary": "heater_shield"},
 	"xbow": {"head": "dwarf_helm", "torso": "mail", "primary": "dwarf_crossbow", "secondary": "hatchet"},
 	"pike": {"head": "dwarf_helm", "torso": "mail", "primary": "pike", "secondary": ""},
+	"musket": {"head": "dwarf_helm", "torso": "mail", "primary": "musket", "secondary": "bayonet"},
 }
 
 

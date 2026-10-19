@@ -638,6 +638,29 @@ warbands, or guard the dwarf traders on the roads.
 Dwarf traders fight beside you when you save them: crossbowmen with their
 own heavy crossbows and shieldmen in mail, short, broad and bearded, in round steel helms with a nose guard.
 
+### Teaching gunpowder
+
+Nobody in this land but you has muskets, and the dwarves only blast their
+mines with powder. A lord who's a friend (meet his army on the road: TEACH
+THEM GUNPOWDER), or a thane (in his hall), will pay handsomely for the
+secret: 500 crowns from a lord; 300 from a thane, and muskets at half price
+at the forge for ever after. You leave them a spare musket to copy.
+
+What follows:
+
+- over three weeks, their patrols, armies and traders field musketeers of
+  their own (a third of their foot, in place of bowmen, crossbowmen and
+  then spearmen), win more of their fights on the map and take towns
+  faster;
+- their towns sell gunpowder and muskets of their own making;
+- their enemy never forgives you (teach the dwarves, and both kingdoms
+  resent it);
+- and once they have their own guns they need you less: every week you're
+  not in their service, their goodwill drains a little. Far enough, and
+  their new musketeers will hunt you.
+
+The nations panel shows whom you taught, and how far along they are.
+
 ### The kingdoms' armies (medieval) and your horse
 
 Aurest and Vell are centuries behind you: no gunpowder. Their armies

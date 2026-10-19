@@ -1312,9 +1312,9 @@ const KINDS := {
 
 const COMP_NAMES := {"liz_warrior": ["warrior", "warriors"], "liz_skirm": ["javelin thrower", "javelin throwers"],
 	"liz_brute": ["brute", "brutes"], "liz_raptor": ["raptor rider", "raptor riders"],
-	"pike": ["spearman", "spearmen"], "bow": ["archer", "archers"], "xbow": ["crossbowman", "crossbowmen"], "cav": ["horseman", "horsemen"],
+	"pike": ["spearman", "spearmen"], "musket": ["musketeer", "musketeers"], "bow": ["archer", "archers"], "xbow": ["crossbowman", "crossbowmen"], "cav": ["horseman", "horsemen"],
 	"sword": ["man-at-arms", "men-at-arms"], "longbow": ["longbowman", "longbowmen"], "knight": ["knight", "knights"], "catapult": ["catapult", "catapults"]}
-const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "sword", "pike", "xbow", "longbow", "bow", "knight", "cav", "catapult"]
+const COMP_ORDER := ["liz_warrior", "liz_skirm", "liz_brute", "liz_raptor", "sword", "pike", "musket", "xbow", "longbow", "bow", "knight", "cav", "catapult"]
 
 
 ## What a lizard party is made of (field.gd kinds -> numbers), worked out
@@ -1367,6 +1367,19 @@ static func party_comp(p: Dictionary) -> Dictionary:
 		out = {"sword": n - xd, "xbow": xd}
 	else:
 		return {}
+	# A people you taught gunpowder: musketeers in place of its bowmen and
+	# crossbowmen, then some of its spearmen (Company.gunpowder ramps up).
+	var gp: float = Company.gunpowder(String(p.get("faction", "")))
+	if gp > 0.0:
+		var want := int(round(n * 0.35 * gp))
+		var got := 0
+		for k in ["longbow", "xbow", "pike", "sword"]:
+			var take := mini(want - got, int(out.get(k, 0)))
+			if take > 0:
+				out[k] = int(out[k]) - take
+				got += take
+		if got > 0:
+			out["musket"] = got
 	for k in out.keys():
 		if int(out[k]) <= 0:
 			out.erase(k)
@@ -1836,8 +1849,8 @@ func _fights() -> bool:
 				continue
 			if _offer_join(a, b):
 				return true
-			var sa := float(a["size"]) * (1.2 if a["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4)
-			var sb := float(b["size"]) * (1.2 if b["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4)
+			var sa := float(a["size"]) * (1.2 if a["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4) * (1.0 + 0.5 * Company.gunpowder(String(a["faction"])))
+			var sb := float(b["size"]) * (1.2 if b["kind"] in ["patrol", "army"] else 1.0) * randf_range(0.6, 1.4) * (1.0 + 0.5 * Company.gunpowder(String(b["faction"])))
 			var win: Dictionary = a if sa >= sb else b
 			var lose: Dictionary = b if win == a else a
 			if win["faction"] == "lizards" and not (lose.get("cargo", {}) as Dictionary).is_empty():
@@ -2137,7 +2150,7 @@ func _begin_siege(p: Dictionary, tgt: Dictionary) -> void:
 	var pl: Dictionary = places[int(tgt["id"])]
 	pl["siege_army"] = int(p["id"])
 	pl["siege_days"] = 0
-	pl["siege_need"] = maxi(2, int(SIEGE_DAYS[tgt["kind"]]) - (1 if int(p["size"]) >= 70 else 0))
+	pl["siege_need"] = maxi(2, int(SIEGE_DAYS[tgt["kind"]]) - (1 if int(p["size"]) >= 70 else 0) - (1 if Company.gunpowder(String(p["faction"])) >= 0.5 else 0)) # (powder brings walls down)
 	p["wait"] = 9999.0 # (it stays until the siege ends)
 	p["path"] = []
 	var l := lord_of(p)

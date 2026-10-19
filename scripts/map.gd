@@ -2475,6 +2475,8 @@ func _meet(p: Dictionary) -> void:
 				Lang.t("their patrols will hunt you") if Company.standing.get(f, 0) - _ATTACK_COST[kind] <= Company.HOSTILE_AT else Lang.t("they'll trust you less")]
 		if kind == "army" and _may_hire(p):
 			buttons.append([Lang.t("OFFER YOUR SERVICE"), _offer_service.bind(p)])
+		if kind == "army" and not World.lord_of(p).is_empty() and Company.teach_refusal(String(p["faction"]), int(World.lord_of(p)["relation"])) == "":
+			buttons.append([Lang.t("TEACH THEM GUNPOWDER"), _offer_gunpowder.bind(p)])
 		if kind == "army" and _may_march_with(p):
 			buttons.append([Lang.t("MARCH WITH US"), func():
 				_popup_close()
@@ -2538,6 +2540,30 @@ func _offer_service(p: Dictionary) -> void:
 			Company.save()
 			_push_toast(Lang.t("You serve %s until day %d.") % [World.lord_short(l), int(terms["until"])])],
 		[Lang.t("DECLINE"), _popup_close]])
+
+
+## The great bargain: the secret of powder and the musket, for a lord.
+func _offer_gunpowder(p: Dictionary) -> void:
+	_popup_close()
+	var l := World.lord_of(p)
+	var f := String(p["faction"])
+	var enemy := String(Company.AT_WAR.get(f, ""))
+	var text := Lang.t("You walk with %s away from his men, and tell him what you could teach his smiths: saltpetre, charcoal and sulphur, how to corn the powder, how to bore a barrel.\n\nHe stops walking. \"%d crowns,\" he says. \"And my friendship, for whatever that's worth to you.\"") % [
+		World.lord_full(l), int(Company.TEACH_PAY.get(f, 500))]
+	text += Lang.t("\n\n[color=#f08060]Think on it. Within weeks %s will field musketeers of its own and win more of its battles and sieges, and %s will never forgive you. And once it has its own guns, it will need you less and less: its goodwill will drain away, and one day it may turn those guns on you.[/color]") % [
+		Lore.FACTIONS[f]["name"], Lore.FACTIONS[enemy]["name"] if Lore.FACTIONS.has(enemy) else "?"]
+	text += Lang.t("\n\n[color=#9aa3b8]You leave him a spare musket to copy.[/color]")
+	_scene("patrol", {"faction": f})
+	_popup_open(Lang.t("The secret of gunpowder"), text, [[Lang.t("STRIKE THE BARGAIN"), func():
+			_popup_close()
+			var pay := Company.teach(f)
+			for lo in World.lords:
+				if String(lo["faction"]) == f:
+					World.change_relation(lo, 10)
+			World.change_relation(l, 20)
+			Company.save()
+			_push_toast(Lang.t("%d crowns. His smiths will have your musket apart by nightfall.") % pay)],
+		[Lang.t("KEEP THE SECRET"), _popup_close]])
 
 
 func _attack_party(p: Dictionary) -> void:
@@ -2841,6 +2867,9 @@ func _show_lords() -> void:
 	var t := ""
 	for f in ["aurest", "vell", "dwarves"]:
 		t += Lang.t("[b]%s[/b]: %s to you.\n") % [Lore.FACTIONS[f]["name"], Lang.t(Company.standing_word(f))]
+		if Company.taught.has(f):
+			t += Lang.t("   [color=#c9a14a]You taught them gunpowder on day %d: %s.[/color]\n") % [int(Company.taught[f]),
+				Lang.t("their own musketeers march with them") if Company.gunpowder(f) >= 1.0 else Lang.t("their smiths are learning")]
 		for l in World.lords:
 			if l["faction"] != f:
 				continue

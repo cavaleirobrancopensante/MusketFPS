@@ -133,6 +133,39 @@ func _ready() -> void:
 			print("SIEGE (day 40) LORD ", World.lord_full(l), " army ", int(l["army"]), " home ", World.settlement(int(l["home"]))["name"])
 		get_tree().quit()
 		return
+	if "--gunpowdertest" in args:
+		# Headless check of teaching gunpowder: the bargain, the musketeers,
+		# the markets, the goodwill draining away.
+		Company.new_campaign(_test_start())
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		World.new_world(4321)
+		print("GP refusal (strangers): ", Company.teach_refusal("aurest", 0))
+		Company.standing["aurest"] = 40
+		print("GP refusal (friends, lord cold): ", Company.teach_refusal("aurest", 10))
+		print("GP refusal (friends): '", Company.teach_refusal("aurest", 40), "' spare muskets ", Company.item_count("musket"))
+		var m0 := Company.money
+		print("GP paid ", Company.teach("aurest"), " money ", m0, " -> ", Company.money, " standing ", Company.standing, " muskets ", Company.item_count("musket"))
+		print("GP again: ", Company.teach_refusal("aurest", 40))
+		for d in 60:
+			for n in Company.pass_day("clean"):
+				if n.find("musket") >= 0 or n.find("guns") >= 0 or n.find("powder") >= 0:
+					print("GP day ", Company.day, ": ", n)
+			if d in [0, 9, 19, 30]:
+				print("GP day ", Company.day, " gp ", Company.gunpowder("aurest"), " patrol ", World.party_comp({"kind": "patrol", "faction": "aurest", "size": 20}),
+					" army ", World.comp_text(World.party_comp({"kind": "army", "faction": "aurest", "size": 60})), " vell ", World.party_comp({"kind": "patrol", "faction": "vell", "size": 20}))
+		print("GP after 60 days: standing ", Company.standing, " enemy ", Company.is_enemy("aurest"))
+		var offers: Array = Company.market_offers("town", "aurest").map(func(o): return o[3])
+		print("GP aurest town sells ", offers)
+		Company.standing["dwarves"] = 30
+		Company.forge["taught"] = true
+		print("GP dwarves: '", Company.teach_refusal("dwarves", 20), "' musket price ", Company.forge_musket_price())
+		Company.teach("dwarves")
+		print("GP dwarves taught: price ", Company.forge_musket_price(), " standing ", Company.standing, " traders ", World.party_comp({"kind": "traders", "faction": "dwarves", "size": 12}))
+		Company.save()
+		Company.load_campaign()
+		print("GP reload taught ", Company.taught)
+		get_tree().quit()
+		return
 	if "--dwarftest" in args:
 		# Headless check of the dwarves: thanes, standing, the forge.
 		Company.new_campaign(_test_start())
@@ -275,6 +308,8 @@ func _ready() -> void:
 			for m in Company.roster:
 				m["wounded_days"] = 0
 			var fac := "vell" if "--vell" in args else ("dwarves" if "--dwarves" in args else "aurest")
+			if "--taught" in args:
+				Company.taught[fac] = Company.day - 30 # (-- --patrol --taught: they have muskets of their own)
 			var pp := {"kind": "army" if "--army" in args else "patrol", "faction": fac, "size": 60 if "--army" in args else 20, "id": 0}
 			if fac == "dwarves":
 				pp = {"kind": "traders", "faction": fac, "size": 12, "id": 0} # (-- --patrol --dwarves [--allied])

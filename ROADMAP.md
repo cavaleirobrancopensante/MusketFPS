@@ -146,11 +146,17 @@ The plan was:
   towns that change hands (the war front moves), which you can break or
   help; the square against horse; towns that shut their gates or raise
   their prices by how their nation sees you; truces; a friendly lord's
-  army marching and fighting with you; the dwarves. Next: teaching
-  gunpowder.
-- **Teaching gunpowder:** a deal with real consequences. A faction you teach
-  fields musketeers of its own, and may later turn them on you. (The dwarf
-  smiths already keep a musket of yours to copy: the start of it.)
+  army marching and fighting with you; the dwarves; teaching gunpowder.
+- **Teaching gunpowder** ✅ (1.78): a friendly lord (on the road, with his
+  army) or thane (in his hall) pays well for the secret, and keeps a spare
+  musket to copy. Over three weeks his people field musketeers of their own
+  (in place of bowmen, crossbowmen, then spearmen), win more of their fights
+  and bring walls down faster, and their towns sell powder and muskets (the
+  dwarves: muskets at half price at the forge). The enemy nation never
+  forgives you (the kingdoms resent dwarf guns), and once the taught people
+  have their own guns their goodwill drains away every week you're not in
+  their service: far enough, and their musketeers hunt you. Later: a lizard
+  nest that captures powder, and teaching the natives.
 
 ### M6: Production
 

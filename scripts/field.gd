@@ -450,8 +450,8 @@ func spawn_campaign() -> void:
 	# until you give them an order.
 	var al: Dictionary = nb.get("allies", {})
 	if ally_nation != "":
-		var acap := {"sword": 24, "pike": 24, "xbow": 14, "longbow": 14, "bow": 14, "knight": 8, "cav": 10, "catapult": 2}
-		for k in ["sword", "pike", "xbow", "longbow", "bow", "knight", "cav", "catapult"]:
+		var acap := {"sword": 24, "pike": 24, "musket": 20, "xbow": 14, "longbow": 14, "bow": 14, "knight": 8, "cav": 10, "catapult": 2}
+		for k in ["sword", "pike", "musket", "xbow", "longbow", "bow", "knight", "cav", "catapult"]:
 			var n := int(al.get("comp", {}).get(k, 0))
 			while n > 0:
 				var take := mini(n, int(acap[k]))
@@ -473,7 +473,7 @@ func spawn_campaign() -> void:
 				scaled[k] = maxi(1 if int(comp[k]) > 0 else 0, int(round(int(comp[k]) * more)))
 			comp = scaled
 	var theirs: Array = []
-	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "xbow": 14, "bow": 14, "cav": 10,
+	var cap := {"liz_warrior": 24, "liz_skirm": 14, "liz_brute": 6, "liz_raptor": 10, "pike": 24, "musket": 20, "xbow": 14, "bow": 14, "cav": 10,
 		"sword": 24, "longbow": 14, "knight": 8, "catapult": 2}
 	for k in World.COMP_ORDER:
 		var n := int(comp.get(k, 0))
@@ -805,9 +805,9 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	var same := regs.filter(func(x): return x.side == side and x.kind == kind).size()
 	r.title = Lang.t("Your company") if yours else "%s %s" % [Lang.t(ORDINAL[mini(same, ORDINAL.size() - 1)]), Lang.t(r.info["name"])]
 	if allied:
-		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], Lang.t({"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse"}.get(kind, String(r.info["name"]).to_lower()))]
+		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], Lang.t({"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse", "musket": "musketeers"}.get(kind, String(r.info["name"]).to_lower()))]
 		if ally_nation == "dwarves":
-			r.title = Lang.t({"xbow": "Dwarf crossbows", "sword": "Dwarf shieldmen"}.get(kind, "Dwarves"))
+			r.title = Lang.t({"xbow": "Dwarf crossbows", "sword": "Dwarf shieldmen", "musket": "Dwarf musketeers"}.get(kind, "Dwarves"))
 	_making_allied = allied
 	regs.append(r)
 	_deaths[r] = 0
