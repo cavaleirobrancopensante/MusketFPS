@@ -54,6 +54,7 @@ var rig_gear := {} # his kit and pack, for the 3D model (see rig3d.gd)
 var rig_pack := {}
 var invulnerable := false # story characters until their moment comes
 var rig_coat = null # another army's coat (field battles)
+var rig_dwarf := false # a dwarf: short, broad and bearded
 var sprite_kind := "" # the far stand-in's sprite kind, if not rig_kind
 ## Thinking is time-sliced: a unit decides every `think_every` physics frames
 ## (with the time that passed), each on its own beat so the work spreads out
@@ -94,6 +95,9 @@ func _setup_body(layer: int, radius: float, height: float, sprite_height_m: floa
 	rig.gear = rig_gear
 	rig.pack = rig_pack
 	rig.coat_override = rig_coat
+	rig.dwarf = rig_dwarf
+	if rig_dwarf:
+		rig.scale = Vector3(1.12, 0.8, 1.12) # (short and broad)
 	add_child(rig)
 	visual = rig
 	_visual_scale = visual.scale

@@ -22,7 +22,7 @@ const FACTIONS := {
 	"vell": {"name": "Vellish Marches", "short": "Vell", "color": Color(0.2, 0.42, 0.78), "coat": Color(0.24, 0.32, 0.2),
 		"syll": ["Hal", "Dro", "Wen", "Ost", "Kel", "Bra", "Ul", "Rad", "Gest", "Hel", "Sto", "Fen"],
 		"end": ["burg", "stad", "wick", "holm", "dorf", "mark", "by", "feld", "haven", "rode"]},
-	"dwarves": {"name": "Dwarves of the Greyspine", "short": "Dwarves", "color": Color(0.85, 0.65, 0.2),
+	"dwarves": {"name": "Dwarves of the Greyspine", "short": "Dwarves", "color": Color(0.85, 0.65, 0.2), "coat": Color(0.3, 0.3, 0.34),
 		"syll": ["Kaz", "Dur", "Bar", "Thor", "Gar", "Mor", "Khel", "Dun", "Grim", "Bal"],
 		"end": ["-dun", "-grat", "zul", "agar", "-khaz", "dum", "ok", "-baraz"]},
 	"lizards": {"name": "The Horde", "short": "Lizards", "color": Color(0.35, 0.6, 0.2),
@@ -34,5 +34,6 @@ const FACTIONS := {
 ## before the family seat ("de Montval", "von Ostburg").
 const LORDS := {
 	"aurest": {"rank": "Count", "particle": "de", "given": ["Aldric", "Gaspard", "Armand", "Thibault", "Renaud", "Baudouin", "Hugues", "Amaury", "Enguerrand"]},
+	"dwarves": {"rank": "Thane", "particle": "of", "given": ["Bardin", "Thorgrim", "Durek", "Gimra", "Khazrik", "Balin", "Grundi", "Mordak", "Hrolli"]},
 	"vell": {"rank": "Margrave", "particle": "von", "given": ["Konrad", "Ulrich", "Dietmar", "Gerold", "Wendel", "Ottokar", "Brandt", "Reinhold", "Eckhart"]},
 }

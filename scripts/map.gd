@@ -2231,10 +2231,13 @@ func _visit(st: Dictionary) -> void:
 	if kind == "nest":
 		_visit_nest(st)
 		return
-	elif kind in ["village", "town", "city"] and Company.is_enemy(String(st["faction"])):
+	elif kind in ["village", "town", "city", "hold"] and Company.is_enemy(String(st["faction"])):
 		# You're the enemy here.
-		text = (Lang.t("The gates are shut against you, and there are crossbows on the walls. %s has no welcome for you.") if kind != "village" \
-			else Lang.t("The villagers see your red coats coming and bar their doors; someone runs for the soldiers of %s.")) % fac["name"]
+		if kind == "hold":
+			text = Lang.t("The great doors of the hold are shut and barred, and crossbows look down from the slits in the rock. The dwarves of the Greyspine have no welcome for you.")
+		else:
+			text = (Lang.t("The gates are shut against you, and there are crossbows on the walls. %s has no welcome for you.") if kind != "village" \
+				else Lang.t("The villagers see your red coats coming and bar their doors; someone runs for the soldiers of %s.")) % fac["name"]
 		buttons.append([Lang.t("LEAVE"), _popup_close])
 		_scene("patrol", {"faction": st["faction"]})
 	elif not World.siege_of(id).is_empty() and kind in ["town", "city"]:
@@ -2436,6 +2439,8 @@ func _meet(p: Dictionary) -> void:
 				Lang.t(String(World.RESOURCES.get(String(site.get("kind", "")), {}).get("name", "fields"))).to_lower()]
 		"traders":
 			text = Lang.t("Dwarf traders with pack ponies loaded with iron. They ask, very politely, how your guns work.")
+			if Company.standing_word("dwarves") == "friendly":
+				text += Lang.t(" They know your name in the holds, and greet you like an old friend.")
 		"army":
 			var l := World.lord_of(p)
 			if not l.is_empty():
@@ -2457,7 +2462,7 @@ func _meet(p: Dictionary) -> void:
 		buttons.append([Lang.t("TRADE"), func(): _popup_close(); _open_party_trade(p)])
 	if kind == "deserters":
 		text = Lang.t("Ragged men in odd bits of %s kit, who ran from the war and live off the road now. Nobody would miss them.") % Lore.FACTIONS[p["faction"]]["short"]
-	if kind in ["patrol", "caravan", "deserters", "army"]:
+	if kind in ["patrol", "caravan", "deserters", "army", "traders"]:
 		var lvl := World.intel_level(p, 0.0)
 		text += Lang.t("\n\n%s of them") % ("%d" % int(p["size"]) if lvl >= 2 else World.rough_count(p))
 		if lvl >= 3:
@@ -2484,7 +2489,7 @@ func _meet(p: Dictionary) -> void:
 
 ## What attacking a nation's men costs you with it (and what its enemy
 ## thinks of that).
-const _ATTACK_COST := {"patrol": 40, "caravan": 30, "deserters": 0, "army": 50}
+const _ATTACK_COST := {"patrol": 40, "caravan": 30, "deserters": 0, "army": 50, "traders": 40}
 
 
 ## Will this lord march with you? A friend, or your employer, with nobody
@@ -2551,6 +2556,10 @@ func _attack_party(p: Dictionary) -> void:
 		Company.change_standing(String(Company.AT_WAR.get(f, "")), 10)
 		if Company.is_enemy(f) and not was:
 			note = Lang.t("%s will not forget this: its patrols will hunt you now.") % Lore.FACTIONS[f]["name"]
+	if kind == "traders":
+		for th in World.lords:
+			if String(th["faction"]) == "dwarves":
+				World.change_relation(th, -20) # (word travels fast under the mountain)
 	if kind == "army":
 		var l := World.lord_of(p)
 		World.change_relation(l, -60)
@@ -2830,10 +2839,13 @@ func _relieve_town(st: Dictionary, army: Dictionary) -> void:
 ## know of their armies.
 func _show_lords() -> void:
 	var t := ""
-	for f in ["aurest", "vell"]:
+	for f in ["aurest", "vell", "dwarves"]:
 		t += Lang.t("[b]%s[/b]: %s to you.\n") % [Lore.FACTIONS[f]["name"], Lang.t(Company.standing_word(f))]
 		for l in World.lords:
 			if l["faction"] != f:
+				continue
+			if f == "dwarves":
+				t += "   %s: %s; %s.\n" % [World.lord_full(l), World.relation_word(int(l["relation"])), Lang.t("in his hall")]
 				continue
 			var state := ""
 			var p := World.party_by_id(int(l["army"]))
@@ -2857,6 +2869,7 @@ func _show_lords() -> void:
 	else:
 		t += Lang.t("[color=#9aa3b8]Meet a lord's army and you can offer him your service.[/color]\n")
 	t += Lang.t("[color=#9aa3b8]Aurest and Vell are at war. Help a nation's men and it warms to you; attack them and it turns on you, and its patrols and armies hunt you.[/color]")
+	t += Lang.t("\n[color=#9aa3b8]The dwarves fight nobody but the lizards. Trade at their holds, save their traders on the road and serve their thanes, and their smiths will work for you.[/color]")
 	_scene("patrol", {"faction": "aurest"})
 	_popup_open(Lang.t("The lords of the land"), t, [[Lang.t("CLOSE"), _popup_close]], false)
 
@@ -2906,7 +2919,7 @@ func _civilians_attacked(friend: Dictionary, foe: Dictionary) -> void:
 	else:
 		var ff := String(friend["faction"])
 		text += Lang.t("\n\nGo to their aid and %s will remember it.") % Lore.FACTIONS.get(ff, {"short": "?"})["short"]
-		if not Company.contract.is_empty() and String(Company.contract["duty"]) == "protect" and String(Company.contract["faction"]) == ff:
+		if not Company.contract.is_empty() and String(Company.contract["duty"]) in ["protect", "traders"] and String(Company.contract["faction"]) == ff:
 			text += Lang.t("\n[color=#c9a14a]It's what %s pays you for.[/color]") % Company.contract["lord_name"]
 	var buttons: Array = [[Lang.t("TO THEIR AID!"), func():
 			_popup_close()

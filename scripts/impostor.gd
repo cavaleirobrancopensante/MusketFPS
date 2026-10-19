@@ -13,6 +13,7 @@ extends Node
 ## Without a renderer (headless tests) it returns nothing and the units keep
 ## the hand-drawn soldier and lizard sprites.
 
+const DWARF_SCALE := Vector3(1.12, 0.8, 1.12) # (short and broad)
 const Rig3D := preload("res://scripts/rig3d.gd")
 const BatcherScript := preload("res://scripts/batcher.gd")
 
@@ -156,7 +157,10 @@ static func _make_rig(spec: Dictionary):
 		r.gear = spec.get("gear", {})
 		r.pack = spec.get("pack", {"rations": 2, "water": 1, "ammo": 20})
 		r.coat_override = spec.get("coat", null)
+		r.dwarf = bool(spec.get("dwarf", false))
 	r.scale = Vector3.ONE * float(spec.get("scale", 1.0))
+	if bool(spec.get("dwarf", false)):
+		r.scale = DWARF_SCALE
 	return r
 
 

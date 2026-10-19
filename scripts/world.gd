@@ -295,6 +295,8 @@ func load_world() -> bool:
 			l[k] = int(l[k])
 	if lords.is_empty():
 		_make_lords() # (a save from before the lords)
+	elif lords.filter(func(l): return String(l["faction"]) == "dwarves").is_empty():
+		_make_thanes() # (a save from before the thanes)
 	_event_cd = float(data.get("event_cd", 4.0))
 	harvest = data.get("harvest", {})
 	econ = data.get("econ", {})
@@ -1358,6 +1360,11 @@ static func party_comp(p: Dictionary) -> Dictionary:
 		var g := maxi(2, n / 2) # (the guards; the rest are drovers)
 		var xg := g / 3
 		out = {"pike": g - xg, "xbow": xg}
+	elif p["kind"] == "traders":
+		# Dwarf traders: every one of them armed. Crossbows, and shields and
+		# axes in front of them.
+		var xd := int(round(n * 0.5))
+		out = {"sword": n - xd, "xbow": xd}
 	else:
 		return {}
 	for k in out.keys():
@@ -1957,6 +1964,29 @@ func _make_lords() -> void:
 			var seat: Dictionary = seats[i]
 			lords.append({"id": lords.size(), "faction": f, "given": g, "seat": String(seat["name"]),
 				"home": int(seat["id"]), "army": -1, "back_at": 0.0, "relation": 0})
+	_make_thanes()
+
+
+## The dwarves' thanes: one in each hold (they raise no armies to march on
+## anyone; they keep their halls, and hire you against the lizards).
+func _make_thanes() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 991
+	var given: Array = (Lore.LORDS["dwarves"]["given"] as Array).duplicate()
+	for st in gen.settlements:
+		if st.get("faction", "") != "dwarves" or st["kind"] != "hold" or given.is_empty():
+			continue
+		var g: String = given.pop_at(rng.randi() % given.size())
+		lords.append({"id": lords.size(), "faction": "dwarves", "given": g, "seat": String(st["name"]),
+			"home": int(st["id"]), "army": -1, "back_at": 0.0, "relation": 0})
+
+
+## The thane of a hold ({} if none).
+func thane_of(sid: int) -> Dictionary:
+	for l in lords:
+		if String(l["faction"]) == "dwarves" and int(l["home"]) == sid:
+			return l
+	return {}
 
 
 func lord(id: int) -> Dictionary:
@@ -1996,6 +2026,8 @@ static func relation_word(r: int) -> String:
 ## Lords without an army raise one at their seat, when they're ready.
 func _raise_armies() -> void:
 	for l in lords:
+		if String(l["faction"]) == "dwarves":
+			continue # (the thanes keep their halls)
 		if int(l["army"]) >= 0 or hours < float(l["back_at"]):
 			continue
 		var seat := settlement(int(l["home"]))

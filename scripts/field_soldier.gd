@@ -52,9 +52,11 @@ static func make(b, f, kind: String, s: int):
 	me.record = rec
 	if s == 1:
 		me.rig_coat = f.foe_coat
+		me.rig_dwarf = String(f.nation) == "dwarves"
 	elif f._making_allied:
 		me.rig_coat = f.ally_coat
-		rec["gear"] = (NATION_GEAR[kind] as Dictionary).duplicate()
+		me.rig_dwarf = String(f.ally_nation) == "dwarves"
+		rec["gear"] = ((DWARF_GEAR if me.rig_dwarf and DWARF_GEAR.has(kind) else NATION_GEAR)[kind] as Dictionary).duplicate()
 	return me
 
 
@@ -73,7 +75,18 @@ const NATION_GEAR := {
 static func gear_for(f, kind: String, s: int) -> Dictionary:
 	if s == 0:
 		return GEAR[kind] if GEAR.has(kind) else NATION_GEAR[kind]
+	if String(f.nation) == "dwarves" and DWARF_GEAR.has(kind):
+		return DWARF_GEAR[kind]
 	return (NATION_GEAR if String(f.nation) != "" else ENEMY_GEAR)[kind]
+
+
+## The dwarves' fighting men: mail and kettle hats, shields and axes in the
+## front rank, their own crossbows behind.
+const DWARF_GEAR := {
+	"sword": {"head": "kettle_hat", "torso": "mail", "primary": "arming_sword", "secondary": "heater_shield"},
+	"xbow": {"head": "kettle_hat", "torso": "mail", "primary": "dwarf_crossbow", "secondary": "hatchet"},
+	"pike": {"head": "kettle_hat", "torso": "mail", "primary": "pike", "secondary": ""},
+}
 
 
 ## One of your own men (a campaign record: his kit, his cartridges, his

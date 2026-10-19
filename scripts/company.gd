@@ -291,7 +291,7 @@ var in_battle := false
 ## How the nations see you: below HOSTILE_AT their patrols hunt you. Attack
 ## a nation's men and it falls; the other side (they're at war) warms a
 ## little.
-var standing := {"aurest": 0, "vell": 0}
+var standing := {"aurest": 0, "vell": 0, "dwarves": 0}
 const HOSTILE_AT := -25
 const AT_WAR := {"aurest": "vell", "vell": "aurest"}
 
@@ -448,7 +448,8 @@ func new_campaign(start: Dictionary = {}) -> void:
 	stash = {}
 	guns = 0
 	light_gun = 1 if String(officer["branch"]) == "artillery" else 0
-	standing = {"aurest": 0, "vell": 0}
+	standing = {"aurest": 0, "vell": 0, "dwarves": 0}
+	forge = {"orders": [], "taught": false, "trade": 0}
 	contract = {}
 	next_battle = {}
 	march_note = ""
@@ -1329,6 +1330,8 @@ func buy_offer(offer: Array, sid := -1) -> String:
 	stow(id, n)
 	if sid >= 0:
 		Econ.bought(sid, id, n)
+	if market_faction == "dwarves":
+		dwarf_trade(cr)
 	save()
 	return ""
 
@@ -2395,7 +2398,7 @@ func save() -> void:
 		"victories": victories, "last_pay_day": last_pay_day, "next_id": next_id,
 		"roster": roster, "fallen": fallen, "officer": officer,
 		"last_result": last_result, "march_note": march_note,
-		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract,
+		"results_unseen": results_unseen, "stores": stores, "prologue": prologue, "stash": stash, "next_battle": next_battle, "guns": guns, "light_gun": light_gun, "difficulty": difficulty, "colours": colours, "in_battle": in_battle, "standing": standing, "contract": contract, "forge": forge,
 		"tags": tags, "wagon_plan": wagon_plan, "loot": loot, "tongues": tongues, "towns": towns, "visiting": visiting,
 		"workers": workers, "posts": posts,
 		"arrears": arrears, "chaplain": chaplain, "stash_clues": stash_clues, "civilized": civilized, "pay_plea_pending": pay_plea_pending, "pay_plea_done": pay_plea_done,
@@ -2435,6 +2438,9 @@ func load_campaign() -> bool:
 	colours = data.get("colours", {})
 	in_battle = bool(data.get("in_battle", false))
 	standing = data.get("standing", {"aurest": 0, "vell": 0})
+	if not standing.has("dwarves"):
+		standing["dwarves"] = 0 # (a save from before the dwarves counted)
+	forge = data.get("forge", {"orders": [], "taught": false, "trade": 0})
 	contract = data.get("contract", {})
 	next_battle = data.get("next_battle", {})
 	tags = data.get("tags", DEFAULT_TAGS.duplicate())
@@ -2507,13 +2513,14 @@ const DUTIES := {
 	"warbands": ["Hunt down the lizard warbands that raid his lands", 2, "lizard bands destroyed"],
 	"enemy": ["Beat the enemy's men in the field (a patrol or an army)", 1, "enemy forces beaten"],
 	"protect": ["Protect his people on the roads: save caravans and labourers from the lizards", 2, "of his people saved"],
+	"traders": ["Guard the dwarf traders on the roads: save them from the lizards", 2, "traders saved"],
 }
 
 
 ## What a lord would offer you (the terms; nothing is signed yet).
 func contract_terms(lord_id: int, faction: String, lord_name: String) -> Dictionary:
 	var pay := 20 + 3 * fit_men().size() + 10 * guns
-	var duty: String = ["warbands", "enemy", "protect"].pick_random()
+	var duty: String = (["warbands", "traders"] if faction == "dwarves" else ["warbands", "enemy", "protect"]).pick_random()
 	return {"lord": lord_id, "faction": faction, "lord_name": lord_name, "from": day, "until": day + CONTRACT_DAYS,
 		"pay": pay, "duty": duty, "need": int(DUTIES[duty][1]), "done": 0, "paid_day": day}
 
@@ -2534,7 +2541,7 @@ func contract_progress(kind: String, faction: String) -> String:
 			counts = faction == "lizards" and kind in ["warband", "hunters", "nest"]
 		"enemy":
 			counts = faction == String(AT_WAR.get(String(contract["faction"]), "")) and kind in ["patrol", "army"]
-		"protect":
+		"protect", "traders":
 			counts = kind == "protect" and faction == String(contract["faction"])
 	if not counts or int(contract["done"]) >= int(contract["need"]):
 		return ""
@@ -2576,3 +2583,102 @@ func _contract_day() -> PackedStringArray:
 
 ## The contract that just ended (the map settles the lord's opinion).
 var last_contract := {}
+
+
+# ---------------------------------------------------------------- the dwarves
+# The dwarves of the Greyspine are at war with nobody but the lizards. They
+# warm to you slowly: trade at their holds, save their traders on the road,
+# serve a thane. Their smiths, the best in the land, will work on your own
+# kit (FORGE_WORK) and, once they trust you and have one of your muskets to
+# copy, make muskets for the company (forge orders, ready in a few days).
+
+## The dwarves' account of the company besides standing: {"orders": [{"hold"
+## (settlement id), "hold_name", "n", "ready" (day)}], "taught" (they have a
+## musket to copy), "trade" (crowns spent at their holds, toward goodwill)}.
+var forge := {"orders": [], "taught": false, "trade": 0}
+
+## Work on your own kit: [name, what it does, crowns, standing needed].
+const FORGE_WORK := {
+	"bore": ["Bore and true your musket's barrel", "your shots fly straighter", 60, 0],
+	"temper": ["Temper your bayonet and blade", "your blows land harder", 50, 0],
+	"lock": ["Fit a dwarf-made lock", "it hardly ever misfires, even in the wet", 90, 20],
+}
+const FORGE_MUSKET_PRICE := 45
+const FORGE_MUSKET_DAYS := 6
+const FORGE_MUSKETS_MAX := 10
+const FORGE_MUSKETS_AT := 20 # (friendly: they won't make guns for strangers)
+const DWARF_TRADE_STEP := 60 # crowns spent at a hold for each point of goodwill
+const DWARF_TRADE_CAP := 25 # (trade alone takes you only so far)
+
+
+func dwarf_trade(cr: int) -> void:
+	forge["trade"] = int(forge.get("trade", 0)) + cr
+	while int(forge["trade"]) >= DWARF_TRADE_STEP:
+		forge["trade"] = int(forge["trade"]) - DWARF_TRADE_STEP
+		if int(standing.get("dwarves", 0)) < DWARF_TRADE_CAP:
+			change_standing("dwarves", 1)
+
+
+func has_forge_work(k: String) -> bool:
+	return bool(officer.get("forge", {}).get(k, false))
+
+
+## Have the smiths work on your kit. Returns why not, or "".
+func buy_forge_work(k: String) -> String:
+	var w: Array = FORGE_WORK[k]
+	var cr := price(int(w[2]))
+	if has_forge_work(k):
+		return Lang.t("It's already been done.")
+	if int(standing.get("dwarves", 0)) < int(w[3]):
+		return Lang.t("The smiths don't know you well enough for that.")
+	if money < cr:
+		return Lang.t("Not enough crowns.")
+	money -= cr
+	var fw: Dictionary = officer.get("forge", {})
+	fw[k] = true
+	officer["forge"] = fw
+	dwarf_trade(cr)
+	save()
+	return ""
+
+
+## Order muskets from a hold's smiths. The first order costs a musket of
+## yours: they keep it to copy. Returns why not, or "".
+func order_muskets(sid: int, hold_name: String, n: int) -> String:
+	if int(standing.get("dwarves", 0)) < FORGE_MUSKETS_AT:
+		return Lang.t("They won't make guns for strangers.")
+	for o in forge["orders"]:
+		if int(o["hold"]) == sid:
+			return Lang.t("They're still at work on your last order.")
+	if not bool(forge.get("taught", false)):
+		if item_count("musket") <= 0:
+			return Lang.t("They need a musket to copy: bring a spare one in the wagon.")
+		add_item("musket", -1)
+		forge["taught"] = true
+	var cr := price(FORGE_MUSKET_PRICE) * n
+	if money < cr:
+		return Lang.t("Not enough crowns.")
+	money -= cr
+	forge["orders"].append({"hold": sid, "hold_name": hold_name, "n": n, "ready": day + FORGE_MUSKET_DAYS})
+	dwarf_trade(cr)
+	save()
+	return ""
+
+
+## Your order at this hold: {} or the order.
+func forge_order(sid: int) -> Dictionary:
+	for o in forge["orders"]:
+		if int(o["hold"]) == sid:
+			return o
+	return {}
+
+
+## Take what's ready at this hold into the wagon. Returns how many.
+func collect_muskets(sid: int) -> int:
+	var o := forge_order(sid)
+	if o.is_empty() or day < int(o["ready"]):
+		return 0
+	add_item("musket", int(o["n"]))
+	forge["orders"].erase(o)
+	save()
+	return int(o["n"])

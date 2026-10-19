@@ -292,12 +292,15 @@ func _sprite_spec(kind: String, side: int) -> Dictionary:
 			return {"rig": "lizard", "scale": 1.45, "cell_m": 3.6, "anims": Impostor.LIZARD_ANIMS}
 	if side == 2:
 		var g2: Dictionary = FieldSoldier.NATION_GEAR.get(kind, FieldSoldier.NATION_GEAR["pike"])
+		if ally_nation == "dwarves":
+			g2 = FieldSoldier.DWARF_GEAR.get(kind, g2)
 		if kind == "cav":
 			return {"mount": "horse", "gear": {"head": "kettle_hat", "torso": "coat", "primary": "none", "secondary": "", "sword": "saber"},
 				"coat": ally_coat, "saddle": ally_coat, "cell_m": 3.4, "anims": Impostor.RIDER_ANIMS}
-		return {"rig": "soldier", "gear": g2, "coat": ally_coat, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS}
+		return {"rig": "soldier", "gear": g2, "coat": ally_coat, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS, "dwarf": ally_nation == "dwarves"}
 	var gear: Dictionary = FieldSoldier.gear_for(self, kind, side)
-	return {"rig": "soldier", "gear": gear, "coat": red if side == 1 else null, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS}
+	return {"rig": "soldier", "gear": gear, "coat": red if side == 1 else null, "cell_m": 3.6 if kind == "pike" else 2.4, "anims": Impostor.FOOT_ANIMS,
+		"dwarf": side == 1 and nation == "dwarves"}
 
 
 ## Give a unit its rendered stand-in (if there is one).
@@ -803,6 +806,8 @@ func _make_reg(side: int, kind: String, n: int, at: Vector3, fwd: Vector3, yours
 	r.title = Lang.t("Your company") if yours else "%s %s" % [Lang.t(ORDINAL[mini(same, ORDINAL.size() - 1)]), Lang.t(r.info["name"])]
 	if allied:
 		r.title = "%s %s" % [Lore.FACTIONS[ally_nation]["short"], Lang.t({"pike": "spearmen", "bow": "archers", "xbow": "crossbowmen", "cav": "horse"}.get(kind, String(r.info["name"]).to_lower()))]
+		if ally_nation == "dwarves":
+			r.title = Lang.t({"xbow": "Dwarf crossbows", "sword": "Dwarf shieldmen"}.get(kind, "Dwarves"))
 	_making_allied = allied
 	regs.append(r)
 	_deaths[r] = 0

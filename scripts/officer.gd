@@ -203,7 +203,7 @@ static func max_hp() -> float:
 
 static func spread_mult() -> float:
 	var g := gear_stats()
-	return maxf(0.2, (1.0 - 0.03 * (attr("aim") - 5)) * (1.0 - 0.05 * skill("marksmanship")) * float(g["spread"]))
+	return maxf(0.2, (1.0 - 0.03 * (attr("aim") - 5)) * (1.0 - 0.05 * skill("marksmanship")) * float(g["spread"]) * (0.75 if forged("bore") else 1.0))
 
 
 static func reload_mult() -> float:
@@ -214,14 +214,14 @@ static func melee_mult() -> float:
 	var g := gear_stats()
 	# Your swings are balanced for a socket bayonet (34): a sword bayonet hits harder, a bare musket butt less.
 	var weapon := float(g["melee"]) / 34.0
-	return (1.0 + 0.04 * (attr("strength") - 5)) * (1.0 + 0.05 * skill("bladework")) * weapon
+	return (1.0 + 0.04 * (attr("strength") - 5)) * (1.0 + 0.05 * skill("bladework")) * weapon * (1.15 if forged("temper") else 1.0)
 
 
 ## Your sword: balanced like the bayonet swings (34), then your Strength and Bladework.
 static func saber_mult() -> float:
 	var id := String(o().get("gear", {}).get("sword", ""))
 	var base := float(Company.ITEMS.get(id, {}).get("melee", 34.0)) / 34.0
-	return (1.0 + 0.04 * (attr("strength") - 5)) * (1.0 + 0.05 * skill("bladework")) * base
+	return (1.0 + 0.04 * (attr("strength") - 5)) * (1.0 + 0.05 * skill("bladework")) * base * (1.15 if forged("temper") else 1.0)
 
 
 static func block_arc() -> float:
@@ -237,7 +237,12 @@ static func armour() -> float:
 
 
 static func misfire() -> float:
-	return float(gear_stats()["misfire"])
+	return float(gear_stats()["misfire"]) * (0.35 if forged("lock") else 1.0)
+
+
+## Work the dwarf smiths have done on your kit (Company.FORGE_WORK).
+static func forged(k: String) -> bool:
+	return bool(o().get("forge", {}).get(k, false))
 
 
 # ---------------------------------------------------------------- the company and the march

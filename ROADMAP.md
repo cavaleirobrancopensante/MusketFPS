@@ -128,7 +128,14 @@ The plan was:
 
 - **Two human nations** at war (names to come), each with towns, lords,
   armies and a war front that moves.
-- **Dwarves:** holds in the mountains; the best smiths in the land.
+- **Dwarves** ✅ (1.76): holds in the mountains, each with its thane; their
+  own standing with you (trade at their holds, save their traders, serve a
+  thane; attack their traders and the holds shut their doors); thanes who
+  hire you against the lizards; the forge: the best smiths in the land work
+  on your own kit (a true-bored barrel, tempered blades, a dwarf lock) and,
+  once they're your friends and have a musket to copy, make muskets for the
+  company; dwarf crossbows and shieldmen in battle, short, broad and
+  bearded. Later: dwarf patrols on the mountain roads, their axes.
 - Relations and reputation; contracts; joining a side, or playing both.
   Started: standing with each nation (attack their men and they turn on
   you; their patrols hunt you), human parties as field battles, and joining
@@ -139,10 +146,11 @@ The plan was:
   towns that change hands (the war front moves), which you can break or
   help; the square against horse; towns that shut their gates or raise
   their prices by how their nation sees you; truces; a friendly lord's
-  army marching and fighting with you. Next: the dwarves (their holds,
-  trade and smiths), and teaching gunpowder.
+  army marching and fighting with you; the dwarves. Next: teaching
+  gunpowder.
 - **Teaching gunpowder:** a deal with real consequences. A faction you teach
-  fields musketeers of its own, and may later turn them on you.
+  fields musketeers of its own, and may later turn them on you. (The dwarf
+  smiths already keep a musket of yours to copy: the start of it.)
 
 ### M6: Production
 

@@ -1342,7 +1342,7 @@ func _fire() -> void:
 		return
 	if not loaded or _reprime > 0.0:
 		return
-	if randf() < misfire_chance + battle.wx_misfire:
+	if randf() < misfire_chance + battle.wx_misfire * (0.4 if Company.Officer.forged("lock") else 1.0):
 		# A flash in the pan: prime it again.
 		_reprime = 1.2
 		battle.play_sound_ui("crack", -10.0)

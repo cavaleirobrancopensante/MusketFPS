@@ -426,6 +426,12 @@ func _refresh() -> void:
 	t += Lang.t("Blade [b]×%.2f[/b] (%s)   ·   Parry [b]±%d°[/b]\n") % [Officer.melee_mult(),
 		Company.item_name(String(gear.get("secondary", ""))) if String(gear.get("secondary", "")) != "" else Lang.t("musket butt"),
 		int(Officer.block_arc())]
+	var fw: Array = []
+	for k in Company.FORGE_WORK:
+		if Officer.forged(k):
+			fw.append({"bore": Lang.t("barrel bored true"), "temper": Lang.t("blades tempered"), "lock": Lang.t("a dwarf lock")}[k])
+	if not fw.is_empty():
+		t += Lang.t("[color=#d4ad55]Dwarf work: %s.[/color]\n") % ", ".join(fw)
 	t += Lang.t("[color=#%s]Your men: steadiness +%d, reaction ×%.2f, xp ×%.2f. Wagon %d kg, %.0f space.[/color]") % [
 		DIM.to_html(false), int(Officer.men_steady() * 100), Officer.reaction_mult(), Officer.xp_mult(),
 		int(Company.wagon_kg()), Company.wagon_space()]

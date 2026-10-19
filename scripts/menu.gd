@@ -31,7 +31,7 @@ func _ready() -> void:
 	#   -- --autotest --campaign          a new campaign, battle after battle
 	#   -- --autotest --camp [--spotted]  attacked in the night camp
 	#   -- --autotest --assault [--walls=W]  storming a nest
-	#   -- --autotest --patrol [--vell] [--army] [--allied]  against a nation's patrol or a lord's army (or beside it)
+	#   -- --autotest --patrol [--vell|--dwarves] [--army] [--allied]  against a nation's patrol or a lord's army (or beside it)
 	#   -- --contracttest, -- --siegetest  headless checks of contracts and town sieges
 	var args := OS.get_cmdline_user_args()
 	for a in ["--intro", "--intro-render", "--retreat-render", "--maptest", "--company", "--autotest", "--shots", "--plantest", "--loottest", "--officer", "--towntest"]:
@@ -133,6 +133,48 @@ func _ready() -> void:
 			print("SIEGE (day 40) LORD ", World.lord_full(l), " army ", int(l["army"]), " home ", World.settlement(int(l["home"]))["name"])
 		get_tree().quit()
 		return
+	if "--dwarftest" in args:
+		# Headless check of the dwarves: thanes, standing, the forge.
+		Company.new_campaign(_test_start())
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		World.new_world(4321)
+		var holds: Array = World.gen.settlements.filter(func(s2): return s2["kind"] == "hold")
+		print("DWARF holds ", holds.map(func(h): return h["name"]))
+		for l in World.lords:
+			if l["faction"] == "dwarves":
+				print("DWARF thane ", World.lord_full(l), " home ", World.settlement(int(l["home"]))["name"], " thane_of ", World.thane_of(int(l["home"])).get("given", "?"))
+		var sid := int(holds[0]["id"])
+		Company.money = 2000
+		Company.market_faction = "dwarves"
+		print("DWARF standing ", Company.standing, " spread ", Company.Officer.spread_mult(), " misfire ", Company.Officer.misfire(), " melee ", Company.Officer.melee_mult())
+		print("DWARF bore: '", Company.buy_forge_work("bore"), "' lock: '", Company.buy_forge_work("lock"), "' temper: '", Company.buy_forge_work("temper"), "'")
+		print("DWARF after: spread ", Company.Officer.spread_mult(), " misfire ", Company.Officer.misfire(), " melee ", Company.Officer.melee_mult(), " standing ", Company.standing["dwarves"], " trade ", Company.forge["trade"])
+		print("DWARF order as stranger: ", Company.order_muskets(sid, "X", 5))
+		Company.standing["dwarves"] = 30
+		print("DWARF lock now: '", Company.buy_forge_work("lock"), "' misfire ", Company.Officer.misfire())
+		var spare := Company.item_count("musket")
+		print("DWARF spare muskets ", spare)
+		if spare == 0:
+			print("DWARF order with no spare: ", Company.order_muskets(sid, "X", 5))
+			Company.add_item("musket", 1)
+		var m0 := Company.money
+		print("DWARF order 5: '", Company.order_muskets(sid, "X", 5), "' money ", m0, " -> ", Company.money, " taught ", Company.forge["taught"], " muskets ", Company.item_count("musket"))
+		print("DWARF again: ", Company.order_muskets(sid, "X", 2))
+		print("DWARF collect early: ", Company.collect_muskets(sid))
+		for d in 6:
+			Company.pass_day("clean")
+		print("DWARF collect day ", Company.day, ": ", Company.collect_muskets(sid), " muskets ", Company.item_count("musket"))
+		var th := World.thane_of(sid)
+		var terms := Company.contract_terms(int(th["id"]), "dwarves", World.lord_short(th))
+		print("DWARF terms ", terms)
+		Company.sign_contract(terms)
+		print("DWARF progress ", Company.contract_progress("protect", "dwarves"), " | ", Company.contract_progress("warband", "lizards"))
+		print("DWARF traders comp ", World.party_comp({"kind": "traders", "size": 8}))
+		Company.save()
+		Company.load_campaign()
+		print("DWARF reload standing ", Company.standing, " forge ", Company.forge)
+		get_tree().quit()
+		return
 	if "--contracttest" in args:
 		# Headless check of a contract: signing, pay, progress, the end.
 		Company.new_campaign(_test_start())
@@ -232,8 +274,10 @@ func _ready() -> void:
 			Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
 			for m in Company.roster:
 				m["wounded_days"] = 0
-			var fac := "vell" if "--vell" in args else "aurest"
+			var fac := "vell" if "--vell" in args else ("dwarves" if "--dwarves" in args else "aurest")
 			var pp := {"kind": "army" if "--army" in args else "patrol", "faction": fac, "size": 60 if "--army" in args else 20, "id": 0}
+			if fac == "dwarves":
+				pp = {"kind": "traders", "faction": fac, "size": 12, "id": 0} # (-- --patrol --dwarves [--allied])
 			Company.next_battle = {"enemy": int(pp["size"]), "terrain": 2, "party": -1, "ambush": false, "enemy_kind": "humans",
 				"faction": fac, "comp": World.party_comp(pp), "map": "flat", "party_name": Lang.t("Test patrol")}
 			if "--allied" in args:

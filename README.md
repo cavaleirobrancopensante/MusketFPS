@@ -612,6 +612,32 @@ Now and then something else happens (a child, a dog, a guard, a drink).
 Win enough trust, or help with what they need, and they **join you**: a real
 recruit with the weapon they brought from home (see below).
 
+### The dwarves of the Greyspine
+
+The dwarves keep their holds in the feet of the mountains to the north and
+fight nobody but the lizards. They have their own account of you (the
+nations panel shows it), which warms slowly: every 60 crowns you spend at a
+hold, every band of their traders you save from the lizards on the road,
+every duty done for a thane. Attack their traders and every thane hears of
+it; turn them hostile and the great doors of the holds are shut against you.
+
+Each hold has a **thane** in his hall (THE THANE'S HALL in the hold's menu).
+He'll hire the company for three weeks against the lizards: destroy the
+warbands, or guard the dwarf traders on the roads.
+
+**The forge** is where the best smiths in the land work:
+
+- on your own kit: bore your musket's barrel true (your shots fly
+  straighter), temper your bayonet and sword (your blows land harder), and,
+  once they count you a friend, fit a dwarf-made lock (it hardly ever
+  misfires, even in the rain). The YOU sheet shows what's been done;
+- muskets for the company, once they count you a friend: 2, 5 or 10 at a
+  time, ready in six days at that hold. The first order costs you a spare
+  musket, which they keep to copy (and once they can make muskets...).
+
+Dwarf traders fight beside you when you save them: crossbowmen with their
+own heavy crossbows and shieldmen in mail, short, broad and bearded.
+
 ### The kingdoms' armies (medieval) and your horse
 
 Aurest and Vell are centuries behind you: no gunpowder. Their armies

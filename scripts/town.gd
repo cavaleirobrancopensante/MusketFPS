@@ -1172,6 +1172,18 @@ func _fill_menu(people := false, market := false, labour := false) -> void:
 	var sells := Lang.t("food, arrows, spears") if kind == "village" else (Lang.t("powder, lead, bolts, crossbows") if kind == "hold" else Lang.t("food, rum, lead, bolts, bows, crossbows"))
 	_menu_box.add_child(_button(Lang.t("MARKET  (%s)") % sells, func(): _fill_menu(false, true)))
 	_menu_box.add_child(_button(Lang.t("HIRE LABOURERS  (%d here)") % Folk.labour_left(sid, kind), func(): _fill_menu(false, false, true)))
+	if kind == "hold":
+		var th := World.thane_of(sid)
+		if not th.is_empty():
+			_menu_box.add_child(_button(Lang.t("THE THANE'S HALL  (%s)") % World.lord_short(th), _fill_hall))
+		var fo := Company.forge_order(sid)
+		var fl := Lang.t("THE FORGE")
+		if not fo.is_empty() and Company.day >= int(fo["ready"]):
+			fl = Lang.t("THE FORGE  (your muskets are ready!)")
+		var fb := _button(fl, _fill_forge)
+		if not fo.is_empty() and Company.day >= int(fo["ready"]):
+			fb.add_theme_color_override("font_color", GOLD)
+		_menu_box.add_child(fb)
 	if kind in ["town", "city"] and fac in ["aurest", "vell"] and Company.chaplain.is_empty():
 		# The church: its priest may spare a curate to go with the company.
 		var cc := Company.price(Company.CHAPLAIN_COST)
@@ -1210,6 +1222,100 @@ func _fill_menu(people := false, market := false, labour := false) -> void:
 		World.pending_rest = 24.0
 		_on_leave()))
 	_menu_box.add_child(_button(Lang.t("LEAVE"), _on_leave))
+
+
+# ---------------------------------------------------------------- the dwarves
+# A hold has a thane in his hall (he hires you against the lizards) and a
+# forge (its smiths work on your kit, and make muskets once they trust you).
+
+func _clear_menu() -> void:
+	for c in _menu_box.get_children():
+		c.queue_free()
+
+
+func _fill_hall() -> void:
+	_clear_menu()
+	var th := World.thane_of(sid)
+	_menu_box.add_child(_label(Lang.t("THE THANE'S HALL"), 20, GOLD))
+	var t := Lang.t("%s sits under the carved roof-beams of his hall, a great axe across his knees. He is %s to you; the dwarves of the Greyspine are %s.") % [
+		World.lord_full(th), World.relation_word(int(th["relation"])), Lang.t(Company.standing_word("dwarves"))]
+	var c: Dictionary = Company.contract
+	if not c.is_empty() and int(c["lord"]) == int(th["id"]):
+		t += Lang.t("\n\nYou serve him until day %d: %s (%d of %d). %d crowns a week.") % [
+			int(c["until"]), Lang.t(Company.DUTIES[c["duty"]][0]), int(c["done"]), int(c["need"]), int(c["pay"])]
+		_menu_box.add_child(_label(t, 16, DIM))
+	elif not c.is_empty():
+		t += Lang.t("\n\n\"You're %s's men for now. Come back when you're free.\"") % c["lord_name"]
+		_menu_box.add_child(_label(t, 16, DIM))
+	elif int(th["relation"]) < 0 or Company.standing_word("dwarves") in ["wary", "hostile"]:
+		t += Lang.t("\n\n\"I've no work for you.\" He doesn't look up again.")
+		_menu_box.add_child(_label(t, 16, DIM))
+	else:
+		var terms := Company.contract_terms(int(th["id"]), "dwarves", World.lord_short(th))
+		t += Lang.t("\n\n\"The lizards come up out of the lowlands every spring and every year there are more of them. Three weeks, %d crowns a week, paid every seventh day. %s, and there's a bonus in it.\"") % [
+			int(terms["pay"]), Lang.t(Company.DUTIES[terms["duty"]][0])]
+		_menu_box.add_child(_label(t, 16, DIM))
+		var ab := _button(Lang.t("ACCEPT HIS TERMS"), func():
+			Company.sign_contract(terms)
+			World.change_relation(th, 5)
+			Company.save()
+			_show_toast(Lang.t("You serve %s until day %d.") % [World.lord_short(th), int(terms["until"])])
+			_fill_hall())
+		_menu_box.add_child(ab)
+	_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
+
+
+func _fill_forge() -> void:
+	_clear_menu()
+	_menu_box.add_child(_label(Lang.t("THE FORGE  ·  %d crowns") % Company.money, 20, GOLD))
+	_menu_box.add_child(_label(Lang.t("The best smiths in the land, working in the heat of the mountain's own fires. They turn your musket over in their hands for a long time."), 15, DIM))
+	var st_d := int(Company.standing.get("dwarves", 0))
+	# Your own kit.
+	_menu_box.add_child(_label(Lang.t("YOUR KIT"), 18, GOLD))
+	for k in Company.FORGE_WORK:
+		var w: Array = Company.FORGE_WORK[k]
+		var done := Company.has_forge_work(k)
+		var cr := Company.price(int(w[2]))
+		var txt := Lang.t("%s: %s  ·  %d cr") % [Lang.t(w[0]), Lang.t(w[1]), cr]
+		if done:
+			txt = Lang.t("%s: done") % Lang.t(w[0])
+		elif st_d < int(w[3]):
+			txt += Lang.t("  (they must know you better)")
+		var b := _button(txt, func():
+			var why := Company.buy_forge_work(k)
+			_show_toast(why if why != "" else Lang.t("The smiths take it away. By evening it's back, and better than it ever was."))
+			_fill_forge())
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.disabled = done or st_d < int(w[3]) or Company.money < cr
+		_menu_box.add_child(b)
+	# Muskets for the company.
+	_menu_box.add_child(_label(Lang.t("MUSKETS FOR THE COMPANY"), 18, GOLD))
+	var o := Company.forge_order(sid)
+	if not o.is_empty():
+		if Company.day >= int(o["ready"]):
+			_menu_box.add_child(_button(Lang.t("COLLECT %d MUSKETS") % int(o["n"]), func():
+				var n := Company.collect_muskets(sid)
+				_show_toast(Lang.t("%d muskets, dwarf-made, go into the wagon. Arm your men with them on the COMPANY screen.") % n)
+				_fill_forge()))
+		else:
+			_menu_box.add_child(_label(Lang.t("They're making you %d muskets: ready on day %d.") % [int(o["n"]), int(o["ready"])], 16, DIM))
+	elif st_d < Company.FORGE_MUSKETS_AT:
+		_menu_box.add_child(_label(Lang.t("\"Guns? For a stranger?\" The master smith shakes his head. Win the dwarves' friendship first: trade at their holds, save their traders on the road, serve a thane."), 15, DIM))
+	else:
+		var each := Company.price(Company.FORGE_MUSKET_PRICE)
+		var note := Lang.t("%d crowns each, ready in %d days; come back here for them.") % [each, Company.FORGE_MUSKET_DAYS]
+		if not bool(Company.forge.get("taught", false)):
+			note += Lang.t(" The first time they keep one of your spare muskets, to copy. (Once they can make muskets, who else will they make them for?)")
+		_menu_box.add_child(_label(note, 15, DIM))
+		for n in [2, 5, Company.FORGE_MUSKETS_MAX]:
+			var b := _button(Lang.t("ORDER %d MUSKETS  ·  %d cr") % [n, each * n], func():
+				var why := Company.order_muskets(sid, String(st["name"]), n)
+				_show_toast(why if why != "" else Lang.t("The master smith spits on his palm and shakes your hand on it."))
+				_fill_forge())
+			b.disabled = Company.money < each * n
+			_menu_box.add_child(b)
+	_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
 
 
 func _label(text: String, size: int, col: Color) -> Label:
@@ -1578,6 +1684,13 @@ func _shots() -> void:
 	_set_mode("menu")
 	await get_tree().create_timer(1.5).timeout
 	await _shot("menu")
+	if kind == "hold":
+		_fill_hall()
+		await _shot("hall")
+		Company.standing["dwarves"] = 25
+		Company.money = 900
+		_fill_forge()
+		await _shot("forge")
 	_fill_menu(true)
 	await _shot("people")
 	_talk_from_menu(_folk[1])

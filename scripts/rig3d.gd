@@ -414,7 +414,7 @@ func _build_soldier() -> void:
 	_part(head, _box_mesh(Vector3(0.02, 0.07, 0.05)), HAIR, Vector3(-0.105, 0.08, -0.01), Vector3.ZERO, true)
 	if civ and female:
 		_part(head, _box_mesh(Vector3(0.22, 0.3, 0.1)), HAIR, Vector3(0, 0.02, 0.08)) # long hair
-	if civ and dwarf:
+	if dwarf:
 		_part(head, _box_mesh(Vector3(0.2, 0.26, 0.1)), HAIR.lightened(0.15), Vector3(0, -0.04, -0.1)) # beard
 	if String(g["head"]) == "bicorne":
 		# Bicorne worn side to side: a crescent, tallest in the middle.
