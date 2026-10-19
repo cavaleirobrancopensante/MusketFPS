@@ -201,6 +201,19 @@ const RECIPES := {
 		"text": "A new shaft and two rivets."},
 	"mend_rod": {"name": "Mend a fishing rod", "needs": {"fishing_rod_broken": 1, "wood": 1}, "makes": {"fishing_rod": 1}, "hours": 1, "mend": true,
 		"text": "A new top joint spliced and whipped on."},
+	# A smith's work (one travels with the wagon: hire one in a town, or a
+	# dwarf in a hold). Only a dwarf, or a smith of a people you taught
+	# gunpowder, can make a musket.
+	"smith_musket": {"name": "Make a musket", "needs": {"ore": 6, "charcoal": 6, "wood": 2}, "makes": {"musket": 1}, "hours": 16, "smith": "gun",
+		"text": "Iron drawn into a skelp, wrapped round a mandrel and welded, bored true, a lock filed out piece by piece, an ash stock. Two days' work for a master."},
+	"smith_bayonet": {"name": "Forge a bayonet", "needs": {"ore": 2, "charcoal": 2}, "makes": {"bayonet": 1}, "hours": 4, "smith": "any",
+		"text": "A triangular blade on a socket that fits over the muzzle."},
+	"smith_sabre": {"name": "Forge a sabre", "needs": {"ore": 3, "charcoal": 3, "wood": 1}, "makes": {"saber": 1}, "hours": 6, "smith": "any",
+		"text": "A curved blade, hardened and tempered, a brass-less hilt of iron and wood."},
+	"smith_pike": {"name": "Make a pike", "needs": {"wood": 4, "ore": 1, "charcoal": 1}, "makes": {"pike": 1}, "hours": 3, "smith": "any",
+		"text": "Sixteen feet of ash, a leaf-shaped head and long iron cheeks to stop it being hacked off."},
+	"smith_powder": {"name": "Mill powder (smith)", "needs": {"saltpetre": 16, "charcoal": 4, "sulphur": 2}, "makes": {"powder": 20}, "hours": 6, "smith": "any",
+		"text": "A smith's stamp mill and sieves: twice the powder in the same hours, finer grained."},
 	"fishing_rod": {"name": "Make a fishing rod", "needs": {"wood": 3}, "makes": {"fishing_rod": 1}, "hours": 2,
 		"text": "A straight length of ash, cut, dried and tapered, a line plaited from horsehair, and a hook filed from a nail."},
 }
@@ -632,8 +645,11 @@ func weekly_wages() -> int:
 	for k in posts:
 		for m in posts[k]["men"]:
 			total += WAGES[int(m["rank"])]
-		total += posts[k]["workers"].size() * LABOURER_WAGE
-	return total + workers.size() * LABOURER_WAGE + (3 if not chaplain.is_empty() else 0)
+		for w in posts[k]["workers"]:
+			total += worker_wage(w)
+	for w in workers:
+		total += worker_wage(w)
+	return total + (3 if not chaplain.is_empty() else 0)
 
 
 ## The warband you'll face next: grows as the company makes a name for itself.
@@ -695,6 +711,7 @@ func apply_battle(result: Dictionary) -> void:
 			continue
 		m["battles"] = int(m["battles"]) + 1
 		m["kills"] = int(m["kills"]) + int(r["kills"])
+		drill_battle(m)
 		var pack: Dictionary = m["pack"]
 		pack["ammo"] = maxi(0, int(pack["ammo"]) - int(r.get("ammo_used", 0)))
 		if r["status"] == "killed" and won and not was_prologue and randf() < Officer.save_chance():
@@ -1394,9 +1411,39 @@ func _ammo_total() -> int:
 	return total + int(officer.get("pack", {}).get("ammo", 0))
 
 
+## The smith with the wagon who can do this recipe's work ({} if none):
+## a dwarf before anyone else.
+func smith_for(id: String) -> Dictionary:
+	var need := String(RECIPES[id].get("smith", ""))
+	if need == "":
+		return {}
+	var best := {}
+	for w in workers:
+		if String(w.get("trade", "")) != "smith" or w.get("away", false):
+			continue
+		var f := String(w.get("native", ""))
+		if need == "gun" and f != "dwarves" and gunpowder(f) < 1.0:
+			continue # (he's never seen how it's done)
+		if best.is_empty() or f == "dwarves":
+			best = w
+	return best
+
+
+## Why this recipe can't be made now for want of a smith, or "".
+func smith_missing(id: String) -> String:
+	var need := String(RECIPES[id].get("smith", ""))
+	if need == "" or not smith_for(id).is_empty():
+		return ""
+	if need == "gun":
+		return Lang.t("Needs a smith who knows guns: a dwarf, or a smith of a people you taught gunpowder.")
+	return Lang.t("Needs a smith with the wagon (hire one in a town or a hold).")
+
+
 ## Making things (RECIPES): how many batches the stores allow.
 func craft_count(id: String) -> int:
 	var r: Dictionary = RECIPES[id]
+	if smith_missing(id) != "":
+		return 0
 	var n := 999
 	for k in r["needs"]:
 		var have := item_count(k) if ITEMS.has(k) else int(stores.get(k, 0))
@@ -1406,7 +1453,11 @@ func craft_count(id: String) -> int:
 
 ## Hours one batch takes (your Logistics: -5% a level).
 func craft_hours(id: String) -> float:
-	return float(RECIPES[id]["hours"]) * maxf(0.5, 1.0 - 0.05 * Officer.skill("logistics"))
+	var h := float(RECIPES[id]["hours"]) * maxf(0.5, 1.0 - 0.05 * Officer.skill("logistics"))
+	var sm := smith_for(id) if RECIPES[id].has("smith") else {}
+	if String(sm.get("native", "")) == "dwarves":
+		h *= 0.6 # (the best smiths in the land)
+	return h
 
 
 ## Make `n` batches (as many as the stores allow). Returns how many were made.
@@ -1472,8 +1523,12 @@ const BARE_HANDS := 0.0 # (no axe, no wood: hands alone fell nothing)
 const TRADE_BONUS := 1.5
 ## A labourer's trade, and the sites (RESOURCES kinds) he's best at.
 const TRADES := {"woodcutter": ["charcoal"], "miner": ["lead", "sulphur", "saltpetre"], "hunter": ["game"],
-	"fisher": ["fish"], "farmer": ["farm"]}
-const TRADE_NAMES := {"woodcutter": "Woodcutter", "miner": "Miner", "hunter": "Hunter", "fisher": "Fisher", "farmer": "Farmhand"}
+	"fisher": ["fish"], "farmer": ["farm"], "smith": []}
+const TRADE_NAMES := {"woodcutter": "Woodcutter", "miner": "Miner", "hunter": "Hunter", "fisher": "Fisher", "farmer": "Farmhand", "smith": "Smith"}
+## A smith costs more to hire and to keep (a dwarf most of all), and works
+## the camp forge (the RECIPES marked "smith").
+const SMITH_COST := {"human": 40, "dwarves": 90}
+const SMITH_WAGE := {"human": 3, "dwarves": 5}
 const LABOURER_COST := 12
 const LABOURER_WAGE := 1 # a week
 const MAX_WORKERS := 24
@@ -1534,14 +1589,26 @@ static func ranked(people: Array, task: String) -> Array:
 	return out
 
 
-func can_hire_labourer() -> bool:
-	return money >= price(LABOURER_COST) and workers.size() < MAX_WORKERS
+func can_hire_labourer(trade := "", fac := "") -> bool:
+	return money >= hire_cost(trade, fac) and workers.size() < MAX_WORKERS
+
+
+func hire_cost(trade: String, fac: String) -> int:
+	if trade == "smith":
+		return price(int(SMITH_COST["dwarves" if fac == "dwarves" else "human"]))
+	return price(LABOURER_COST)
+
+
+static func worker_wage(w: Dictionary) -> int:
+	if String(w.get("trade", "")) == "smith":
+		return int(SMITH_WAGE["dwarves" if String(w.get("native", "")) == "dwarves" else "human"])
+	return LABOURER_WAGE
 
 
 func hire_labourer(trade: String, nm := "", fac := "") -> Dictionary:
-	if not can_hire_labourer():
+	if not can_hire_labourer(trade, fac):
 		return {}
-	money -= price(LABOURER_COST)
+	money -= hire_cost(trade, fac)
 	var w := make_worker(trade, nm, fac)
 	workers.append(w)
 	save()
@@ -2156,6 +2223,7 @@ func pass_day(water: String) -> PackedStringArray:
 	notes.append_array(_feast_day())
 	notes.append_array(_contract_day())
 	notes.append_array(_gunpowder_day())
+	notes.append_array(_drill_day())
 	notes.append_array(_workers_day())
 	notes.append_array(_posts_day())
 	var gone: Array = roster.filter(func(m): return int(m["morale"]) < 12 and randf() < 0.12 * Officer.desert_mult() * discipline())
@@ -2772,3 +2840,42 @@ func _gunpowder_day() -> PackedStringArray:
 				elif since <= TEACH_RAMP_DAYS + 7:
 					notes.append(Lang.t("%s has its own musketeers now. It needs you less, and it shows.") % nm)
 	return notes
+
+
+# ---------------------------------------------------------------- musket drill
+# Your own men learned the musket on the parade ground at home. A native
+# recruit handed one has never fired a gun: he loads slowly, shoots wild,
+# fumbles the priming and flinches at the noise. Every day with the company
+# he drills (faster with your Training), and every battle he fights with it
+# teaches him more; at 100% he's as good as any of yours.
+
+const DRILL_DAY := 0.04 # a day's drill, before your Training
+const DRILL_BATTLE := 0.08
+
+
+## A man who has to learn the musket: a native recruit carrying one.
+static func needs_drill(m: Dictionary) -> bool:
+	return String(m.get("native", "")) != "" and role_of(m) in ["musket", "dragoon"]
+
+
+static func drill_of(m: Dictionary) -> float:
+	return float(m.get("drill", 0.0)) if needs_drill(m) else 1.0
+
+
+## A day's drill for every native with a musket. Returns notes.
+func _drill_day() -> PackedStringArray:
+	var notes: PackedStringArray = []
+	var gain := DRILL_DAY * (1.0 + 0.15 * Officer.skill("training"))
+	for m in roster:
+		if not needs_drill(m) or float(m.get("drill", 0.0)) >= 1.0 or int(m["wounded_days"]) > 0:
+			continue
+		m["drill"] = minf(1.0, float(m.get("drill", 0.0)) + gain)
+		if float(m["drill"]) >= 1.0:
+			notes.append(Lang.t("%s has the musket drill by heart now: as good a shot as any of your own.") % surname_title(m))
+	return notes
+
+
+## After a battle: a native who fought with a musket learned more.
+func drill_battle(m: Dictionary) -> void:
+	if needs_drill(m):
+		m["drill"] = minf(1.0, float(m.get("drill", 0.0)) + DRILL_BATTLE * (1.0 + 0.15 * Officer.skill("training")))

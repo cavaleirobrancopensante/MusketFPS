@@ -823,6 +823,31 @@ of meat, a fish 3-6. END THE HUNT puts it in the wagon
 (four hours pass). With these a company
 can keep itself in powder, shot, food and water without a market.
 
+
+### Smiths and the camp forge
+
+Hire a smith in a town or a city (40 crowns, 3 a week) or a dwarf smith in
+a hold (90 crowns, 5 a week) from HIRE LABOURERS. He follows the wagon, and
+CRAFT on the map gets a smith's work:
+
+- **Forge a bayonet** (2 ore, 2 charcoal), **forge a sabre**, **make a pike**;
+- **Mill powder**: his stamp mill and sieves make twice the powder from the
+  same hours (16 saltpetre, 4 charcoal, 2 sulphur → 20 lb);
+- **Make a musket** (6 ore, 6 charcoal, 2 wood, sixteen hours): only a
+  smith who knows guns, a dwarf or a smith of a people you taught gunpowder.
+
+A dwarf smith does everything in six-tenths of the time.
+
+### Training natives into musketeers
+
+Your own men learned the musket on the parade ground at home. A native
+recruit handed one (on the COMPANY screen) has never fired a gun: at first
+he loads almost twice as slowly, shoots wild, fumbles the priming and
+flinches at the noise. He drills every day with the company (about four
+weeks, less with your Training skill) and learns more in every fight; his
+sheet shows his musket drill, and the day he has it by heart he's as good
+a shot as any of yours. Natives with their own bows, crossbows and spears
+need no drill.
 ### The land's economy
 
 Every village has its own sites near it (fields, and a wood, a pit, a

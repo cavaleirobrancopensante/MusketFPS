@@ -285,6 +285,8 @@ func _fill_stats(m: Dictionary) -> void:
 		int(clampf(float(m["steadiness"]) + 0.1 * rank + float(st["steady"]), 0.0, 1.0) * 100)]
 	t += Lang.t("Spread [b]×%.2f[/b]  Bayonet [b]%d[/b]  Pace [b]%d%%[/b]\n") % [float(st["spread"]),
 		int(float(st["melee"]) + 5.0 * rank), int(float(m["pace"]) * (1.0 + float(st["pace"])) * 100)]
+	if Company.needs_drill(m) and Company.drill_of(m) < 1.0:
+		t += Lang.t("[color=#d4ad55]Musket drill [b]%d%%[/b]: still learning it (slow to load, shoots wild). He drills every day, and learns more in every fight.[/color]\n") % int(Company.drill_of(m) * 100.0)
 	var cond := Men.conditions(m)
 	if pen > 0:
 		cond.append(Lang.t("-%d to all attributes") % pen)
@@ -680,8 +682,8 @@ func _fill_list() -> void:
 				for k in Men.ATTRS:
 					bits.append("%s %d" % [Lang.t(Men.ATTR_NAMES[k]), Men.attr(w, k)])
 				var info := _label("  ·  ".join(bits) + "\n" + Lang.t("Best at: %s. Scouting ★%d. Doesn't fight; eats a ration and drinks a day's water; paid %d crown a week.") % [
-					", ".join(Company.TRADES.get(String(w["trade"]), []).map(func(k2): return Lang.t(String(World.RESOURCES[k2]["name"])).to_lower())) if not Company.TRADES.get(String(w["trade"]), []).is_empty() else Lang.t("any work"),
-					int(round(Company.aptitude(w, "scout"))), Company.LABOURER_WAGE], 14, DIM)
+					", ".join(Company.TRADES.get(String(w["trade"]), []).map(func(k2): return Lang.t(String(World.RESOURCES[k2]["name"])).to_lower())) if not Company.TRADES.get(String(w["trade"]), []).is_empty() else (Lang.t("the camp forge (CRAFT on the map)") if String(w["trade"]) == "smith" else Lang.t("any work")),
+					int(round(Company.aptitude(w, "scout"))), Company.worker_wage(w)], 14, DIM)
 				info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				_list.add_child(info)
 				var db := _button(Lang.t("LET %s GO HOME") % String(w["name"]).split(" ")[0].to_upper(), 15, func():

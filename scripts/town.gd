@@ -1100,13 +1100,24 @@ func _fill_menu(people := false, market := false, labour := false) -> void:
 		var cost := Company.price(Company.LABOURER_COST)
 		_menu_box.add_child(_label(Lang.t("HANDS FOR HIRE  ·  %d crowns") % Company.money, 20, GOLD))
 		_menu_box.add_child(_label(Lang.t("Labourers don't fight. They follow the wagon, eat its rations, earn %d crown a week, and work the caves, woods and waters on the map: best at their own trade. %d will come this week. You have %d.") % [Company.LABOURER_WAGE, left, Company.workers.size()], 15, DIM))
-		for tr in Folk.labour_trades(kind, fac, sur):
-			var b := _button(Lang.t("Hire a %s  ·  %d cr") % [Company.trade_name(String(tr)).to_lower(), cost], func():
+		var trades: Array = Folk.labour_trades(kind, fac, sur)
+		if kind in ["town", "city", "hold"]:
+			trades.append("smith")
+		for tr in trades:
+			cost = Company.hire_cost(String(tr), fac)
+			var label := Lang.t("Hire a %s  ·  %d cr") % [Company.trade_name(String(tr)).to_lower(), cost]
+			if tr == "smith":
+				label = (Lang.t("Hire a dwarf smith (muskets, blades, powder)  ·  %d cr, %d a week") if fac == "dwarves" \
+					else (Lang.t("Hire a gunsmith (muskets, blades, powder)  ·  %d cr, %d a week") if Company.gunpowder(fac) >= 1.0 \
+					else Lang.t("Hire a smith (blades, pikes, powder)  ·  %d cr, %d a week"))) % [
+					cost, int(Company.SMITH_WAGE["dwarves" if fac == "dwarves" else "human"])]
+			var b := _button(label, func():
 				var w := Folk.hire_labourer(sid, kind, fac, String(tr))
 				_show_toast(Lang.t("%s, %s, will work for you.") % [w["name"], Company.trade_name(String(w["trade"])).to_lower()] if not w.is_empty() else Lang.t("Nobody else will come."))
 				_fill_menu(false, false, true))
 			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			b.disabled = left <= 0 or not Company.can_hire_labourer()
+			b.disabled = left <= 0 or not Company.can_hire_labourer(String(tr), fac)
+			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			_menu_box.add_child(b)
 		_menu_box.add_child(_button(Lang.t("BACK"), func(): _fill_menu()))
 		return

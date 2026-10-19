@@ -158,11 +158,19 @@ The plan was:
   their service: far enough, and their musketeers hunt you. Later: a lizard
   nest that captures powder, and teaching the natives.
 
-### M6: Production
+### M6: Production ✅ (1.79)
 
-- Hire smiths (dwarves are the best) to make muskets, bayonets and powder.
-- Saltpetre, sulphur and charcoal as resources found on the map.
-- Training natives into musketeers.
+- Hire smiths (dwarves are the best) to make muskets, bayonets and powder:
+  a smith travels with the wagon (hired in a town or a hold) and works the
+  camp forge in CRAFT: bayonets, sabres, pikes, milled powder (twice the
+  yield) and, if he knows guns (a dwarf, or a smith of a people you taught
+  gunpowder), muskets. A dwarf works faster and costs more.
+- Saltpetre, sulphur and charcoal as resources found on the map (done
+  earlier, with the labourers and CRAFT).
+- Training natives into musketeers: a native recruit handed a musket starts
+  with no drill (slow to load, shoots wild, misfires, flinches) and drills
+  every day with the company and in every fight, faster with your Training.
+- Later: a forge cart, iron as its own ore, smiths' quality.
 
 ### M7: Backgrounds and the officer
 

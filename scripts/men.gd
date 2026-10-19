@@ -109,6 +109,13 @@ static func combat_stats(m: Dictionary) -> Dictionary:
 	st["steady"] = float(st["steady"]) + (int(m["morale"]) - 50) / 250.0
 	st["max_hp"] = max_hp(m)
 	st["hp"] = max_hp(m) * clampf(float(m["health"]) / 100.0, 0.2, 1.0)
+	# A native still learning the musket (Company.drill_of): slow, wild, jumpy.
+	var raw := 1.0 - Company.drill_of(m)
+	if raw > 0.0:
+		st["reload"] = float(st["reload"]) * (1.0 + 0.9 * raw)
+		st["spread"] = float(st["spread"]) * (1.0 + 0.7 * raw)
+		st["misfire"] = float(st["misfire"]) + 0.08 * raw
+		st["steady"] = float(st["steady"]) - 0.25 * raw
 	return st
 
 
@@ -142,5 +149,7 @@ static func migrate(m: Dictionary) -> void:
 	m["hunger"] = int(m.get("hunger", m.get("hungry", 0)))
 	m["sick"] = int(m.get("sick", 0))
 	m.erase("hungry")
+	if String(m.get("native", "")) != "" and not m.has("drill"):
+		m["drill"] = 1.0 # (a save from before the musket drill: he's learned it)
 	if not m.has("tag"):
 		m["tag"] = "Pikes" if String(m.get("gear", {}).get("primary", "")) in ["pike", "spear"] else "Musketeers"

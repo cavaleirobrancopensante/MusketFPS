@@ -2172,6 +2172,13 @@ func _fill_craft() -> void:
 		var d := _label(Lang.t(String(r["text"])), 14, Color(0.7, 0.75, 0.85))
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tv.add_child(d)
+		if r.has("smith"):
+			var why := Company.smith_missing(id)
+			var sm := Company.smith_for(id)
+			var sl := _label(why if why != "" else Lang.t("At the forge: %s%s.") % [sm["name"], Lang.t(" (a dwarf: quicker)") if String(sm.get("native", "")) == "dwarves" else ""],
+				14, Color(0.95, 0.5, 0.4) if why != "" else Color(0.95, 0.8, 0.45))
+			sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			tv.add_child(sl)
 		var n := Company.craft_count(id)
 		for want in [1, n]:
 			if want == n and (n <= 1):

@@ -861,6 +861,7 @@ static func recruit(p: Dictionary) -> Dictionary:
 	m["gear"] = kit["gear"]
 	m["pack"] = {"water": 1, "rations": 2, "ammo": int(kit["ammo"])}
 	m["native"] = p["faction"]
+	m["drill"] = 0.0 # (he's never held a musket: see Company.drill_of)
 	m["tongue"] = p["lang"]
 	m["morale"] = 60
 	var tag := String(kit["tag"])

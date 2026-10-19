@@ -133,6 +133,49 @@ func _ready() -> void:
 			print("SIEGE (day 40) LORD ", World.lord_full(l), " army ", int(l["army"]), " home ", World.settlement(int(l["home"]))["name"])
 		get_tree().quit()
 		return
+	if "--productiontest" in args:
+		# Headless check of production: smiths at the camp forge, musket drill.
+		Company.new_campaign(_test_start())
+		Company.apply_battle({"won": true, "slain": 40, "officer_kills": 2, "men": {}, "prologue": true})
+		Company.money = 1000
+		for k in ["ore", "charcoal", "wood", "saltpetre", "sulphur"]:
+			Company.stores[k] = 40
+		print("PROD no smith: ", Company.smith_missing("smith_bayonet"), " | count ", Company.craft_count("smith_bayonet"))
+		var hs := Company.hire_labourer("smith", "Jean Forgeron", "aurest")
+		print("PROD hired ", hs.get("name"), " money ", Company.money, " wages ", Company.weekly_wages())
+		print("PROD human smith: bayonet ", Company.craft_count("smith_bayonet"), " ", Company.craft_hours("smith_bayonet"), "h; musket: ", Company.smith_missing("smith_musket"))
+		var bay0 := Company.item_count("bayonet")
+		print("PROD made bayonets ", Company.craft("smith_bayonet", 2), " now ", Company.item_count("bayonet") - bay0)
+		Company.hire_labourer("smith", "Durin Stonehand", "dwarves")
+		print("PROD dwarf smith: musket ", Company.craft_count("smith_musket"), " ", Company.craft_hours("smith_musket"), "h by ", Company.smith_for("smith_musket").get("name"), "; bayonet ", Company.craft_hours("smith_bayonet"), "h; wages ", Company.weekly_wages())
+		var mk0 := Company.item_count("musket")
+		print("PROD made muskets ", Company.craft("smith_musket", 1), " +", Company.item_count("musket") - mk0, " powder: ", Company.craft("smith_powder", 1), " -> ", Company.stores["powder"])
+		# A native recruit given a musket.
+		var m: Dictionary = Company.make_recruit()
+		m["native"] = "vell"
+		m["drill"] = 0.0
+		m["gear"]["primary"] = "war_bow"
+		Company.roster.append(m)
+		var sb := Company.Men.combat_stats(m)
+		print("PROD native with a bow: needs drill ", Company.needs_drill(m), " reload ", sb["reload"])
+		m["gear"]["primary"] = "musket"
+		var s0 := Company.Men.combat_stats(m)
+		var vet: Dictionary = Company.roster[0]
+		var sv := Company.Men.combat_stats(vet)
+		print("PROD native with a musket: drill ", Company.drill_of(m), " reload ", s0["reload"], " spread ", s0["spread"], " misfire ", s0["misfire"], " | a veteran: reload ", sv["reload"], " spread ", sv["spread"], " misfire ", sv["misfire"])
+		for d in 30:
+			Company.stores["rations"] = 400
+			Company.stores["water"] = Company.WATER_CART
+			Company.money = 1000
+			for n in Company.pass_day("clean"):
+				if n.find("drill") >= 0:
+					print("PROD day ", Company.day, ": ", n)
+			if d in [6, 13]:
+				print("PROD day ", Company.day, " drill ", Company.drill_of(m))
+		var s1 := Company.Men.combat_stats(m)
+		print("PROD drilled: reload ", s1["reload"], " spread ", s1["spread"], " in roster ", m in Company.roster, " wounded ", m["wounded_days"], " drill ", m.get("drill"))
+		get_tree().quit()
+		return
 	if "--gunpowdertest" in args:
 		# Headless check of teaching gunpowder: the bargain, the musketeers,
 		# the markets, the goodwill draining away.
