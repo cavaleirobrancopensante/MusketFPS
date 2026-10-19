@@ -1066,8 +1066,9 @@ A man drinks a day's water a day from the wagon's barrels. They fill:
   button says NO WATER SOURCE NEARBY;
 - **by themselves** at midnight, from the best water you passed that day;
 - **from the rain**, if COLLECT RAIN WATER is on (in the wagon): sailcloth
-  spread to catch it, clean water into the barrels, but the rain gets at
-  the powder too.
+  spread to catch it, clean water into the barrels. Careful: on the march
+  the sheets drip onto the black powder stores in the wagon, and damp powder
+  misfires and loads slowly (in camp they're rigged clear of it).
 
 Fresh meat and fish go off on the march, but whenever you make camp the
 men smoke them over the fires into rations that keep.

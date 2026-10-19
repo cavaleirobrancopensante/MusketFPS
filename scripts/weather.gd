@@ -513,7 +513,8 @@ func _here(dh: float) -> void:
 		# rain gets at the powder too.
 		var catch: bool = Company.active and bool(Company.stores.get("rain_catch", true))
 		if catch:
-			shelter *= 1.4
+			if not w.camping:
+				shelter *= 1.4 # (on the march the sheets drip onto the powder; in camp they're rigged clear of the wagon)
 			var room := float(Company.WATER_CART - int(Company.stores.get("water", 0)))
 			var got := minf(room, r * dh * 8.0)
 			if got > 0.0:

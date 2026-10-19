@@ -404,11 +404,16 @@ func _water_buttons(box: VBoxContainer) -> void:
 		_fill_detail())
 	rb.custom_minimum_size = Vector2(320, 54)
 	box.add_child(rb)
-	var note := _label(Lang.t("When it rains, sailcloth is spread to fill the barrels with clean water; but the rain gets at the powder in the wagon too.") if on \
-		else Lang.t("The cover stays shut in the rain: the powder keeps drier, but no rain-water goes into the barrels."), 14, DIM)
+	var note := _label(Lang.t("When it rains, sailcloth is spread to fill the barrels with clean water.") if on \
+		else Lang.t("The cover stays shut in the rain: no rain-water goes into the barrels."), 14, DIM)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size = Vector2(320, 0)
 	box.add_child(note)
+	# The warning: on the march, the sheets drip onto the powder.
+	var warn := _label(Lang.t("CAREFUL: on the march, the rain caught in the sailcloth drips onto the black powder stores in the wagon: damp powder and cartridges misfire and load slowly. In camp the sheets are rigged clear of the wagon."), 14, RED)
+	warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	warn.custom_minimum_size = Vector2(320, 0)
+	box.add_child(warn)
 
 
 ## Lighten the wagon: leave things by the road.
