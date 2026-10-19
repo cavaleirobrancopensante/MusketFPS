@@ -260,6 +260,14 @@ stakes and whose gate the guns batter. Next:
 ### Boats and ships (future)
 
 - River and sea travel: boats on the rivers, ships along the coast.
+- A fifth kind of officer on the new-campaign screen: the **Naval
+  officer** (his second unit a boat crew or marines, his own boat or
+  ship to start with, his first battle on the beach fought from the
+  ship's boats).
+- A **Navigation** skill (under Wits): faster and safer passages,
+  reading the weather and the currents, fewer wrecks and groundings,
+  landing parties put ashore where you want them. The Midshipman youth
+  would give it instead of Pathfinding once it exists.
 
 ### M9: Polish and release
 
