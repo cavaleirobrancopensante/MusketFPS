@@ -200,7 +200,7 @@ func _ready() -> void:
 	rig.kind = "officer"
 	if Company.active:
 		_apply_sheet()
-		rig.gear = Company.officer.get("gear", {})
+		rig.gear = _gear()
 	if Settings.playground:
 		# The weapon range: everything, and shot to spare.
 		has_bow = true
@@ -214,6 +214,19 @@ func _ready() -> void:
 	ctrl.rig = rig
 	add_child(ctrl)
 	_update_camera()
+
+
+## The retreat's bayonet charge (field_rearguard.gd): every officer, of
+## whatever kind, goes in on foot with a musket and bayonet.
+var bayonet_drill := false
+
+
+func _gear() -> Dictionary:
+	var g: Dictionary = Company.officer.get("gear", {}).duplicate()
+	if bayonet_drill:
+		g["primary"] = "musket"
+		g["secondary"] = "bayonet"
+	return g
 
 
 ## Your attributes, skills and kit (see officer.gd and the YOU screen).
@@ -231,7 +244,7 @@ func _apply_sheet() -> void:
 	misfire_chance = O.misfire() * 0.5 # you look after your own lock
 	ammo = int(Company.officer.get("pack", {}).get("ammo", 30))
 	loaded = ammo > 0
-	var g: Dictionary = Company.officer.get("gear", {})
+	var g: Dictionary = _gear()
 	has_pistol = String(g.get("pistol", "")) != ""
 	has_saber = String(g.get("sword", "")) != ""
 	has_pike = String(g.get("primary", "")) in ["pike", "spear", "war_spear"]

@@ -149,6 +149,7 @@ func _ready() -> void:
 
 	player = PlayerScript.new()
 	player.battle = self
+	player.bayonet_drill = field != null and field.rearguard
 	player.position = Vector3(0, 0.1, 8)
 	add_child(player)
 	player.died.connect(_on_player_died)
@@ -362,7 +363,7 @@ func _bring_horse() -> void:
 		if not Settings.field.get("horse", false):
 			return
 	var hd: Dictionary = Company.officer.get("horse", {}) if Company.active else {"hp": 220.0, "max": 220.0}
-	if hd.is_empty() or field == null:
+	if hd.is_empty() or field == null or field.rearguard:
 		return
 	var at: Vector3 = player.position
 	if camp:
@@ -379,7 +380,7 @@ func _bring_horse() -> void:
 
 ## The artillery officer's galloper: its own little battery (field.gd).
 func _bring_light_gun() -> void:
-	if field == null or not Company.active or Company.light_gun <= 0 or field.prologue:
+	if field == null or not Company.active or Company.light_gun <= 0 or field.prologue or field.rearguard:
 		return # (the beach places its own: field_prologue.gd)
 	var pr = field.player_reg
 	var fwd: Vector3 = pr.forward if pr != null else Vector3.FORWARD

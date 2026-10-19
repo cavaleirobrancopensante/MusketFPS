@@ -110,6 +110,7 @@ func fire(kind: String, from: Vector3, velocity: Vector3, shooter: Node3D, only:
 			if is_instance_valid(u) and (u as Node3D).global_position.distance_to(from) < 7.0:
 				spare.append(u)
 		p["spare"] = spare
+		p["spare_at"] = from # (and any of ours by the gun: the guns themselves, the next gun along)
 	if kind == "javelin" or kind == "roundshot" or kind == "stone":
 		var mj := MeshInstance3D.new()
 		mj.mesh = _javelin_mesh if kind == "javelin" else _shot_mesh
@@ -193,7 +194,7 @@ func _step(p: Dictionary, delta: float) -> bool:
 		_spent(p, false)
 		return false
 	var done: Array = p.get("hit_list", [])
-	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done + p.get("spare", []))
+	var hit := _sweep_only(prev, pos, p["only"]) if p.has("only") else _sweep(prev, pos, p["shooter"], 0.0, done + p.get("spare", []), p.get("spare_at", null))
 	if not hit.is_empty() and k.has("crush"):
 		var cat := prev.lerp(pos, float(hit["t"]))
 		_impact_unit(p, k, hit["unit"], cat)
@@ -300,13 +301,15 @@ func _step_grenade(p: Dictionary, k: Dictionary, prev: Vector3, pos: Vector3, ve
 ## The first unit (or the player) whose body the segment a->b passes through.
 ## Bodies are upright cylinders. `extra` widens them (for line-of-fire checks).
 ## Returns {} or {"unit": Node3D, "t": 0..1 along the segment}.
-func _sweep(a: Vector3, b: Vector3, shooter: Node3D, extra: float, exclude: Array = []) -> Dictionary:
+func _sweep(a: Vector3, b: Vector3, shooter: Node3D, extra: float, exclude: Array = [], spare_at = null) -> Dictionary:
 	var best_t := 2.0
 	var best: Node3D = null
 	for entry in battle.units_near_segment(a, b):
 		var u: Node3D = entry[0]
 		if u == shooter or not u.alive or u in exclude:
 			continue
+		if spare_at != null and not u.is_in_group("enemies") and (u.global_position.distance_to(spare_at) < 9.0):
+			continue # (our own guns and gunners, flat behind the gun when it fires)
 		if shooter != null and is_instance_valid(shooter) and shooter.get("rig_kind") == "lizard" and u.get("rig_kind") == "lizard":
 			continue # (their javelins fly over their own)
 		var t := _cylinder_hit(a, b, entry[1], float(u.hit_radius) + extra, float(u.hit_height))

@@ -765,7 +765,7 @@ func _duel(du: Dictionary, t: float, delta: float) -> void:
 			_play("hiss", -8.0, 1.1)
 		else:
 			_fall(m)
-			_play("grunt", -6.0, 0.85)
+			_play("thud", -8.0, 0.8)
 	if bool(du["wins"]) and not sr._dead:
 		# Free of it: off after the others.
 		_turn_rig(sr, Vector3.RIGHT, 9.0, delta)
@@ -791,7 +791,7 @@ func _shot_rout(t: float, delta: float) -> void:
 		if float(u[5]) > 0.0 and t >= float(u[5]):
 			# The javelin finds him: down, and left behind.
 			_fall(u)
-			_play("grunt", -6.0, 0.9)
+			_play("thud", -8.0, 0.85)
 			continue
 		if fire_at > 0.0 and t >= fire_at and t < fire_at + 1.25:
 			# Stop, turn round to face them, fire, then run on.

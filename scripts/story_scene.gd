@@ -135,8 +135,9 @@ func _ready() -> void:
 			[9.8, 14.0, Lang.t("\"Hold them on the works while you can. When it breaks, and it will, take them up the cliff path. Keep them alive.\"")],
 			[14.2, 16.8, Lang.t("%s is dead. You command the regiment.") % Lore.COMMANDER_SHORT],
 		]
-		_voices = [[0.35, "shout", 1.05, -2.0], [1.4, "talk1", 1.0, -6.0], [5.9, "talk3", 0.8, -4.0], [7.6, "talk3", 0.78, -6.0],
-			[9.9, "talk3", 0.8, -5.0], [11.8, "talk2", 0.78, -7.0], [14.3, "drum", 1.0, -10.0]]
+		# (the sergeant's gravel, the Major's smooth voice, weak: quieter as he goes)
+		_voices = [[0.35, "shout", 1.0, -2.0], [1.4, "talk2", 1.0, -6.0], [5.9, "talk3", 0.95, -5.0], [7.6, "talk3", 0.93, -7.0],
+			[9.9, "talk3", 0.94, -7.0], [11.8, "talk3", 0.92, -9.0], [14.3, "drum", 1.0, -10.0]]
 	else:
 		_len = 13.0
 		# The battle goes on under the camera; you stand aside from it.

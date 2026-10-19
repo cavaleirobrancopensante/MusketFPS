@@ -149,7 +149,8 @@ turning round to fire, stragglers caught by the lizards fighting it out
 with the bayonet, a volley at the foot of the path; then more of them come
 on, the line fixes bayonets (you see each man draw and fix his) and the
 sergeant calls the charge. **The charge is yours to play**, in first
-person (`field_rearguard.gd`, the bayonet lesson: fix bayonets, strike
+person, whatever kind of officer you are: on foot, musket and bayonet, no
+horse or gun (`field_rearguard.gd`, the bayonet lesson: fix bayonets, strike
 from a side, block when one rears up glowing, finish them; nothing counts
 on the books). Then the cutscene carries on: the charge throws them back,
 the beach through the Major's glass (the lizards stripping the dead, and
@@ -158,7 +159,10 @@ the works and breaking up the boats, and the column turning inland.
 Everyone who speaks in the cutscenes and in battle has a voice: a run of
 short voice blips while the line is up, the way Robot Fighting's
 characters talk (`SoundFactory.talk`: clean, gravel, smooth or nasal, each
-speaker at his own pitch).
+speaker at his own pitch). Shouted orders are a quick hard burst of the same
+blips (the old sung "HAA-ah" came out as a moan), and a man going down
+gives a short dry grunt. A gun's shot never strikes our own men or guns
+within 9 m of its muzzle: the crew lie flat when it fires.
 
 You start the campaign as castaways: low morale, a few days' food, and the
 ship's stores (muskets, powder, two guns, rum) in the lizards' hands.

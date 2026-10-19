@@ -264,35 +264,20 @@ static func drum() -> AudioStreamWAV:
 	return _to_wav(b)
 
 
-## An officer's shouted order: a hoarse open "HAA-ah!", a voice through
-## three vocal formants with a falling pitch and a breathy edge.
+## A shouted order or a cry: a quick hard run of voice blips (the gravel
+## voice of talk(), louder, faster, higher), like a word or two barked out.
+## (It used to be a long sung "HAA-ah" through formants, which came out as a
+## moan.)
 static func shout() -> AudioStreamWAV:
-	var b := _buf(0.75)
-	var ph := 0.0
-	var formants := [[750.0, 90.0, 1.0], [1150.0, 110.0, 0.55], [2500.0, 160.0, 0.22]]
-	var st: Array = []
-	for f in formants:
-		st.append([0.0, 0.0])
-	for i in b.size():
-		var t := float(i) / RATE
-		var f0 := lerpf(175.0, 120.0, clampf(t / 0.6, 0.0, 1.0)) * (1.0 + 0.02 * sin(t * 37.0))
-		ph += f0 / RATE
-		ph -= floorf(ph)
-		var src := (ph * 2.0 - 1.0) * 0.6 + _noise() * 0.25 # buzz and breath
-		var y := 0.0
-		for k in formants.size():
-			var fr: float = formants[k][0] * (1.0 - 0.12 * clampf(t / 0.5, 0.0, 1.0))
-			var bw: float = formants[k][1]
-			var r := exp(-PI * bw / RATE)
-			var a1 := 2.0 * r * cos(TAU * fr / RATE)
-			var a2 := -r * r
-			var s: Array = st[k]
-			var out := src + a1 * float(s[0]) + a2 * float(s[1])
-			s[1] = s[0]
-			s[0] = out
-			y += out * float(formants[k][2])
-		var env := smoothstep(0.0, 0.04, t) * (1.0 - smoothstep(0.35, 0.72, t)) * (1.0 + 0.4 * exp(-t / 0.12))
-		b[i] = y * env
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var b := _buf(0.42)
+	var t0 := 0.01
+	var k := 0
+	while t0 < 0.34:
+		_blip(b, int(t0 * RATE), 2, 400.0 * (1.06 if k == 0 else rng.randf_range(0.95, 1.02)), rng)
+		t0 += 0.062 if k != 1 else 0.11 # (a beat between the words)
+		k += 1
 	return _to_wav(b)
 
 
@@ -499,13 +484,14 @@ static func _growl(seconds: float, f0: float, slide: float) -> AudioStreamWAV:
 
 ## A man taking a hit.
 static func grunt() -> AudioStreamWAV:
-	var b := _buf(0.35)
+	# (short and dry: a long falling one came out as a moan)
+	var b := _buf(0.16)
 	var phase := 0.0
 	var lp := 0.0
 	for i in b.size():
 		var t := float(i) / RATE
-		var u := t / 0.35
-		phase += (150.0 - 50.0 * u) / RATE
+		var u := t / 0.16
+		phase += (200.0 - 30.0 * u) / RATE
 		var saw := 2.0 * (phase - floorf(phase)) - 1.0
 		lp += 0.12 * (saw - lp)
 		b[i] = lp * sin(PI * minf(u * 2.5, 1.0)) * (1.0 - u)
