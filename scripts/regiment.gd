@@ -47,6 +47,7 @@ var volley_now := false
 var _volley_t := 0.0
 var charging := false
 var braced := false # pikes: levelled and standing to receive horse
+var make_ready := false # told to make ready (ATTACK in first person: hud.gd): muskets presented, pikes levelled
 var moving := false
 
 var morale := 70.0

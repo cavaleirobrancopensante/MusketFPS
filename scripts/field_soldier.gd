@@ -258,7 +258,9 @@ func _field_brain(delta: float) -> void:
 	else:
 		face_toward(reg.slot_facing(slot_index))
 		if pike:
-			set_base_anim("guard" if reg.braced else "idle")
+			set_base_anim("guard" if reg.braced or reg.make_ready else "idle")
+		elif reg.make_ready and loaded:
+			set_base_anim("aim") # (made ready: muskets presented, waiting for the word)
 		else:
 			set_base_anim("idle" if loaded else "reload")
 

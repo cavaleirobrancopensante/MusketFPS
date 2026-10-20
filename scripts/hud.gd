@@ -274,9 +274,12 @@ func _army_buttons(list: Array, fui, mode_label: String) -> void:
 	var row: Array = []
 	if fui.selected.is_empty():
 		row = [["follow", Lang.t("FOLLOW")], ["hold", Lang.t("HOLD")], ["charge", Lang.t("CHARGE")], ["mode", mode_label]]
+	elif target_mode:
+		# Picking the target: aim at an enemy regiment and give the word.
+		row = [["o_attack_go", Lang.t("ATTACK!") if aim_foe != null else Lang.t("AIM AT THEM")], ["o_attack_x", Lang.t("CANCEL")]]
 	else:
 		var r0 = fui.selected[0]
-		row = [["o_halt", Lang.t("HALT")], ["o_charge", Lang.t("CHARGE")]]
+		row = [["o_attack", Lang.t("ATTACK")], ["o_halt", Lang.t("HALT")], ["o_charge", Lang.t("CHARGE")]]
 		if fui.selected.any(func(r): return r.is_ranged()):
 			row.append(["o_fire", Lang.t("FIRE: AT WILL") if r0.fire_at_will else Lang.t("FIRE: HOLD")])
 			row.append(["o_volley", Lang.t("VOLLEY")])
@@ -402,6 +405,20 @@ func _press(id: String, idx: int, p: Vector2) -> void:
 			battle.play_sound_ui("drum", -10.0)
 		"o_none":
 			_field_ui().selected = []
+			end_target_mode()
+		"o_attack":
+			# Make ready, and pick the target with the crosshair.
+			target_mode = true
+			for r in _field_ui().selected:
+				r.make_ready = true
+			show_message(Lang.t("Make ready!"), 1.5)
+			show_hint(Lang.t("Aim at the enemy regiment you want them on, then press ATTACK!"), 5.0)
+			battle.play_sound_ui("shout", -4.0)
+		"o_attack_go":
+			if aim_foe != null and not aim_foe.gone():
+				_field_ui().fp_attack(aim_foe)
+		"o_attack_x":
+			end_target_mode()
 		"pg_still1":
 			battle.playground_spawn(1, true)
 		"pg_still5":
@@ -476,6 +493,10 @@ func _process(delta: float) -> void:
 	pressed_time -= delta
 	hurt_flash = move_toward(hurt_flash, 0.0, delta * 2.5)
 	hit_marker = move_toward(hit_marker, 0.0, delta)
+	_aim_t -= delta
+	if _aim_t <= 0.0:
+		_aim_t = 0.12
+		_update_aim()
 	block_flash = move_toward(block_flash, 0.0, delta)
 	shield_flash = move_toward(shield_flash, 0.0, delta)
 	queue_redraw()
@@ -511,6 +532,7 @@ func _draw() -> void:
 		draw_line(c + Vector2(-14, 14), c + Vector2(-6, 6), col, 3)
 		draw_line(c + Vector2(14, 14), c + Vector2(6, 6), col, 3)
 	_draw_swing_indicator(c)
+	_draw_aim(c)
 	if player.gun != null:
 		_draw_gun_sight()
 		var gc = player.gun.crew
@@ -899,6 +921,10 @@ func _draw_unit_card(b: Dictionary) -> void:
 	if r.broken():
 		bg = Color(0.3, 0.08, 0.06, 0.7)
 	draw_style_box(_rbox(bg, UI.BRASS if sel else Color(UI.PIPECLAY, 0.4), 5, 2 if sel else 1), rect)
+	if r == aim_reg:
+		# The one your crosshair is on: a pulsing light blue edge.
+		var pulse := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 160.0)
+		draw_style_box(_rbox(Color(0, 0, 0, 0), Color(0.55, 0.85, 1.0, pulse), 6, 3), rect.grow(3))
 	var lab := Lang.t(String(r.info["short"])) + ("★" if r.player_led else "")
 	_text_center(lab, rect.get_center() + Vector2(0, -12), 15 if rect.size.x > 80 else 13, UI.BRASS.lightened(0.2) if sel else Color(UI.PIPECLAY, 0.95))
 	var st := "%d" % r.members.size()
@@ -979,3 +1005,57 @@ func _text_center(t: String, centre: Vector2, fsize: int, col: Color, f: Font = 
 	# Keep labels on screen even when a control sits near the edge.
 	var x := clampf(centre.x - w * 0.5, 6.0, size.x - w - 6.0)
 	draw_string(f, Vector2(x, centre.y + fsize * 0.35), t, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+# ---------------------------------------------------------------- pointing at regiments
+
+## What your crosshair is on (a field battle, on foot): one of your own
+## regiments (its card lights up, top right) or an enemy's (the target, in
+## target mode).
+var aim_reg = null
+var aim_foe = null
+## ATTACK pressed: the selection has made ready and waits for you to pick
+## an enemy regiment with the crosshair.
+var target_mode := false
+var _aim_t := 0.0
+
+
+func _update_aim() -> void:
+	var fui = _field_ui()
+	if fui == null or fui.active or not player.alive or player.camera == null:
+		aim_reg = null
+		aim_foe = null
+		return
+	if target_mode and fui.selected.is_empty():
+		end_target_mode()
+	var r = fui.pick_screen(size * 0.5, player.camera, false)
+	aim_reg = r if r != null and r.side == 0 and not r.gone() else null
+	aim_foe = r if r != null and r.side == 1 and not r.gone() else null
+
+
+func end_target_mode() -> void:
+	target_mode = false
+	if battle.field != null:
+		for r in battle.field.regs:
+			r.make_ready = false
+
+
+## The crosshair in target mode (red corners), and what it's on; out of it,
+## the name of the regiment of yours you're looking at.
+func _draw_aim(c: Vector2) -> void:
+	if target_mode:
+		var col := Color(1.0, 0.35, 0.28, 0.95) if aim_foe != null else Color(1.0, 0.75, 0.6, 0.7)
+		var r := 26.0 if aim_foe == null else 20.0
+		for k in [[-1, -1], [1, -1], [1, 1], [-1, 1]]:
+			var p := c + Vector2(k[0], k[1]) * r
+			draw_line(p, p - Vector2(k[0], 0) * 9.0, col, 3.0)
+			draw_line(p, p - Vector2(0, k[1]) * 9.0, col, 3.0)
+		draw_line(c + Vector2(-6, 0), c + Vector2(6, 0), col, 2.0)
+		draw_line(c + Vector2(0, -6), c + Vector2(0, 6), col, 2.0)
+		var t := (Lang.t("ATTACK: %s") % String(aim_foe.title)) if aim_foe != null else Lang.t("Aim at an enemy regiment")
+		_text_center(t, c + Vector2(0, 48), 20, col)
+		return
+	if aim_reg != null:
+		var fui = _field_ui()
+		var sel: bool = aim_reg in fui.selected
+		_text_center(String(aim_reg.title) + ("" if sel else Lang.t("  ·  tap its card to select")), c + Vector2(0, 44), 17, Color(0.6, 0.85, 1.0, 0.9))

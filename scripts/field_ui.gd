@@ -58,6 +58,10 @@ var yaw := 0.0
 var pitch := deg_to_rad(52.0)
 var dist := 120.0
 var alerts: Array = [] # [text, regiment, age]
+## The kill feed (Mount & Blade style): {"k", "v" (names), "w" (the
+## weapon's symbol), "ours" (green: our side did it), "wounded", "age"}.
+var feed: Array = []
+var bold: FontVariation
 
 var _touches := {} # index -> position
 var _press := {} # the one-finger press: idx, start, ground, moved, time
@@ -246,8 +250,12 @@ func _process(delta: float) -> void:
 		a[2] = float(a[2]) + real
 	while not alerts.is_empty() and float(alerts[alerts.size() - 1][2]) > 14.0:
 		alerts.pop_back()
+	for e in feed:
+		e["age"] = float(e["age"]) + real
+	while not feed.is_empty() and float(feed[feed.size() - 1]["age"]) > FEED_LIFE:
+		feed.pop_back()
 	if not active:
-		if not alerts.is_empty():
+		if not alerts.is_empty() or not feed.is_empty():
 			queue_redraw()
 		return
 	selected = selected.filter(func(r): return not r.gone())
@@ -802,10 +810,7 @@ func fp_tap(p: Vector2) -> bool:
 	var r = pick_screen(p, c, false)
 	var names := _names(selected)
 	if r != null and r.side == 1:
-		order_attack(r)
-		battle.player.point_at(r.centroid + Vector3.UP * 1.5)
-		battle.hud.show_message(Lang.t("%s — at %s!") % [names, r.title.to_lower() if r.title != Lang.t(ORDINAL1) + " " + Lang.t(r.info["name"]) else Lang.t("those ") + Lang.t(String(r.info["name"])).to_lower()], 2.0)
-		battle.play_sound_ui("shout", -2.0)
+		fp_attack(r)
 		return true
 	var g = _ground_at(p, c)
 	if g == null or (g as Vector3).distance_to(battle.player.global_position) > 320.0:
@@ -815,6 +820,20 @@ func fp_tap(p: Vector2) -> bool:
 	battle.hud.show_message(Lang.t("%s — forward, to there!") % names, 2.0)
 	battle.play_sound_ui("shout", -2.0)
 	return true
+
+
+## From first or third person: the selection goes at enemy regiment `r`
+## (the same order as tapping it from above; COMMAND shows it). You point,
+## and shout it.
+func fp_attack(r) -> void:
+	var names := _names(selected)
+	order_attack(r)
+	for s in selected:
+		s.make_ready = false
+	battle.player.point_at(r.centroid + Vector3.UP * 1.5)
+	battle.hud.show_message(Lang.t("%s — at %s!") % [names, r.title.to_lower() if r.title != Lang.t(ORDINAL1) + " " + Lang.t(r.info["name"]) else Lang.t("those ") + Lang.t(String(r.info["name"])).to_lower()], 2.0)
+	battle.play_sound_ui("shout", -2.0)
+	battle.hud.end_target_mode()
 
 
 func _names(regs: Array) -> String:
@@ -1031,7 +1050,12 @@ func _order(what: String) -> void:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
-	# Alerts show even in first person.
+	# The battlefield news (whole regiments wavering, routing, rallying),
+	# big and bold, and under it the kill feed: both show in first person.
+	if bold == null:
+		bold = FontVariation.new()
+		bold.base_font = font
+		bold.variation_embolden = 0.9
 	var y := 84.0 if active else 150.0
 	var ax := 14.0 if active else 226.0
 	for a in alerts:
@@ -1041,9 +1065,13 @@ func _draw() -> void:
 		var col := UI.PIPECLAY
 		if r != null and r.side == 0 and String(a[0]).find("rall") < 0:
 			col = Color(1.0, 0.72, 0.6)
-		draw_style_box(_box(Color(UI.NIGHT, 0.72 * alpha), Color(col, 0.3 * alpha)), Rect2(ax, y, 520 if active else 420, 30))
-		draw_string(font, Vector2(ax + 10, y + 22), String(a[0]), HORIZONTAL_ALIGNMENT_LEFT, 500, 19, Color(col, alpha))
-		y += 34.0
+		draw_style_box(_box(Color(UI.NIGHT, 0.78 * alpha), Color(col, 0.45 * alpha)), Rect2(ax, y, 560 if active else 470, 36))
+		draw_string_outline(bold, Vector2(ax + 10, y + 26), String(a[0]), HORIZONTAL_ALIGNMENT_LEFT, 540, 22, 3, Color(0, 0, 0, 0.6 * alpha))
+		draw_string(bold, Vector2(ax + 10, y + 26), String(a[0]), HORIZONTAL_ALIGNMENT_LEFT, 540, 22, Color(col, alpha))
+		y += 40.0
+	y += 4.0
+	for e in feed:
+		y = _draw_feed_line(e, Vector2(ax, y))
 	if not active:
 		return
 	var s := size
@@ -1190,3 +1218,165 @@ func _text_c(t: String, centre: Vector2, fs: int, col: Color, f: Font = null) ->
 func _text_l(t: String, pos: Vector2, fs: int, col: Color, f: Font = null, max_w := -1.0) -> void:
 	var ff := f if f != null else font
 	draw_string(ff, pos, t, HORIZONTAL_ALIGNMENT_LEFT, max_w, fs, col)
+
+
+# ---------------------------------------------------------------- the kill feed
+
+const FEED_LIFE := 9.0
+const FEED_MAX := 7
+const FEED_GREEN := Color(0.55, 0.95, 0.5)
+const FEED_RED := Color(1.0, 0.45, 0.38)
+const FEED_AMBER := Color(1.0, 0.75, 0.3)
+
+
+## A man (or a lizard) is down: who did it, with what.
+func feed_down(u) -> void:
+	if field == null or u == null:
+		return
+	var k = u.get("last_hit_by")
+	if k != null and not is_instance_valid(k):
+		k = null
+	var vside := _feed_side(u)
+	var kside := _feed_side(k) if k != null else (1 - vside)
+	feed.push_front({"k": _feed_name(k) if k != null else "", "v": _feed_name(u), "w": _feed_weapon(k, u) if k != null else "",
+		"ours": kside != 1, "ff": k != null and (kside == 1) == (vside == 1), "wounded": String(u.get("down_status") if u.get("down_status") != null else "") == "wounded",
+		"vk": _feed_lizard(u), "kk": _feed_lizard(k) if k != null else "", "age": 0.0})
+	while feed.size() > FEED_MAX:
+		feed.pop_back()
+
+
+func _feed_side(x) -> int:
+	if x == null:
+		return 1
+	if x == battle.player:
+		return 0
+	return field.side_of(x) if field.side_of(x) >= 0 else (1 if x.is_in_group("enemies") else 0)
+
+
+## What to call him: your name, a man's name, or what kind of lizard.
+func _feed_name(x) -> String:
+	if x == battle.player:
+		return String(Company.officer.get("name", Lang.t("You"))) if Company.active else Lang.t("You")
+	if x.get("record") != null and x.get("display_name") != null:
+		return String(x.display_name)
+	var lz := _feed_lizard(x)
+	if lz != "":
+		return Lang.t({"warrior": "Lizard warrior", "skirm": "Javelin thrower", "brute": "Brute", "shaman": "Shaman", "raptor": "Raptor rider"}.get(lz, "Lizard"))
+	var r = x.get("reg")
+	if r != null:
+		return String(r.title)
+	return Lang.t("Someone")
+
+
+## A lizard's kind ("" for a man).
+func _feed_lizard(x) -> String:
+	if x == null:
+		return ""
+	if x.get("mount") == "raptor":
+		return "raptor"
+	if x.get("rig_kind") == "lizard":
+		return String(x.get("variant")) if x.get("variant") != null else "warrior"
+	return ""
+
+
+## The weapon: what the killer carries, and whether it was close or not.
+func _feed_weapon(k, v) -> String:
+	if k == battle.player:
+		var w := String(battle.player.weapon)
+		if battle.player.gun != null:
+			return "cannon"
+		match w:
+			"musket": return "musket"
+			"pistol": return "musket"
+			"saber": return "blade"
+		return "pike" if battle.player.has_pike or battle.player.has_lance else "blade"
+	if k.get("crew") != null:
+		return "cannon"
+	var far: bool = k.global_position.distance_to(v.global_position) > 4.0
+	var lz := _feed_lizard(k)
+	if lz == "skirm" and far:
+		return "javelin"
+	if lz == "raptor":
+		return "claw"
+	if lz != "":
+		return "club" if lz == "brute" else "cleaver"
+	if k.get("mount") != null:
+		return "musket" if far else ("pike" if String(k.get("variant")) == "lancer" else "blade")
+	if far:
+		var m := String(k.get("missile")) if k.get("missile") != null else "ball"
+		return {"arrow": "arrow", "bolt": "arrow"}.get(m, "musket")
+	if bool(k.get("pike")):
+		return "pike"
+	return "blade"
+
+
+func _draw_feed_line(e: Dictionary, at: Vector2) -> float:
+	var alpha := clampf((FEED_LIFE - float(e["age"])) / 2.0, 0.0, 1.0)
+	var col: Color = FEED_GREEN if bool(e["ours"]) else FEED_RED
+	if bool(e.get("ff", false)):
+		col = FEED_AMBER # (one of our own, by one of our own)
+	var fs := 17
+	var parts_w := 0.0
+	var kw := font.get_string_size(String(e["k"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var vw := font.get_string_size(String(e["v"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var wtag := Lang.t("wounded") if bool(e["wounded"]) else ""
+	var tw := font.get_string_size(wtag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x if wtag != "" else 0.0
+	parts_w = kw + 40.0 + vw + (tw + 10.0 if wtag != "" else 0.0) + (20.0 if String(e["kk"]) != "" else 0.0) + (20.0 if String(e["vk"]) != "" else 0.0)
+	draw_style_box(_box(Color(UI.NIGHT, 0.55 * alpha), Color(col, 0.18 * alpha)), Rect2(at, Vector2(parts_w + 20.0, 26)))
+	var x := at.x + 8.0
+	var mid := at.y + 13.0
+	if String(e["kk"]) != "":
+		_feed_lizard_mark(Vector2(x + 7, mid), Color(col, alpha))
+		x += 20.0
+	if String(e["k"]) != "":
+		draw_string(font, Vector2(x, at.y + 19), String(e["k"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col, alpha))
+		x += kw + 6.0
+	_feed_icon(String(e["w"]), Vector2(x + 14, mid), Color(1, 1, 1, 0.9 * alpha))
+	x += 34.0
+	if String(e["vk"]) != "":
+		_feed_lizard_mark(Vector2(x + 7, mid), Color(Color.WHITE, 0.85 * alpha))
+		x += 20.0
+	draw_string(font, Vector2(x, at.y + 19), String(e["v"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(Color.WHITE, 0.9 * alpha))
+	x += vw + 10.0
+	if wtag != "":
+		draw_string(font, Vector2(x, at.y + 18), wtag, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1.0, 0.85, 0.45, alpha))
+	return at.y + 29.0
+
+
+## A little lizard's head, before a lizard's name.
+func _feed_lizard_mark(c: Vector2, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([c + Vector2(-6, -4), c + Vector2(2, -6), c + Vector2(8, -2), c + Vector2(8, 2), c + Vector2(-6, 5)]), Color(0.45, 0.75, 0.35, col.a))
+	draw_circle(c + Vector2(1, -2), 1.3, Color(0, 0, 0, col.a))
+
+
+## The weapon's symbol, between the two names.
+func _feed_icon(w: String, c: Vector2, col: Color) -> void:
+	match w:
+		"musket":
+			draw_line(c + Vector2(-13, 4), c + Vector2(13, -3), col, 2.0)
+			draw_line(c + Vector2(-13, 4), c + Vector2(-6, 6), col, 4.0)
+			draw_circle(c + Vector2(16, -4), 1.6, Color(1.0, 0.8, 0.4, col.a))
+		"blade":
+			draw_line(c + Vector2(-9, 6), c + Vector2(11, -7), col, 2.0)
+			draw_line(c + Vector2(-9, 1), c + Vector2(-4, 8), col, 2.0)
+		"pike", "javelin":
+			draw_line(c + Vector2(-13, 5), c + Vector2(10, -4), col, 2.0)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(9, -7), c + Vector2(15, -6), c + Vector2(10, -1)]), col)
+		"arrow":
+			draw_line(c + Vector2(-12, 4), c + Vector2(10, -3), col, 1.5)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(9, -6), c + Vector2(15, -4), c + Vector2(10, 0)]), col)
+			draw_line(c + Vector2(-12, 4), c + Vector2(-15, 1), col, 1.5)
+			draw_line(c + Vector2(-12, 4), c + Vector2(-14, 8), col, 1.5)
+		"cannon":
+			draw_circle(c, 6.0, col)
+			draw_line(c + Vector2(-14, 0), c + Vector2(-8, 0), col, 1.5)
+		"cleaver":
+			draw_line(c + Vector2(-10, 6), c + Vector2(2, -2), col, 2.5)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -3), c + Vector2(10, -9), c + Vector2(13, -2), c + Vector2(4, 3)]), col)
+		"club":
+			draw_line(c + Vector2(-10, 6), c + Vector2(8, -5), col, 5.0)
+		"claw":
+			for k in 3:
+				draw_line(c + Vector2(-6 + k * 5, -6), c + Vector2(-9 + k * 5, 6), col, 2.0)
+		_:
+			draw_circle(c, 3.0, col)

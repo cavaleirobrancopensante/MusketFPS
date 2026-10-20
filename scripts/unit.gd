@@ -335,6 +335,9 @@ func _die() -> void:
 	if battle != null and battle.get("pickups") != null:
 		battle.pickups.drop_from(self)
 	_on_died()
+	# Who did it, for the kill feed down the left (field_ui.gd).
+	if battle != null and battle.get("field") != null and battle.field.ui != null:
+		battle.field.ui.feed_down(self)
 
 
 func _on_died() -> void:

@@ -1117,6 +1117,25 @@ box only when he actually carries water, food and shot.
 A flat field, you in the centre of your line, and a lizard warband charging
 from the distance, sometimes in two groups.
 
+### Commanding on foot, and the kill feed
+
+In first or third person, the regiment your crosshair is on lights up
+(a pulsing blue edge) in the bar of cards top right, and its name shows
+under the crosshair: tap its card to select it. With a regiment selected,
+**ATTACK** makes them ready (muskets presented, pikes levelled) and turns
+the crosshair into red target corners: aim at an enemy regiment (its name
+shows under the crosshair) and press **ATTACK!** (or tap it). It's the
+same order as tapping the enemy from COMMAND, and the command view shows
+it. CANCEL stands them down.
+
+Down the left, as in Mount & Blade, the **kill feed**: who brought down
+whom, with the weapon's symbol between them (musket, blade, pike, arrow,
+javelin, cannon, cleaver, a brute's club, a raptor's claws), a lizard's
+head before a lizard's kind, and "wounded" when the man will live. Green
+when our side did it, red when theirs did, amber for one of ours by one of
+ours. Above it, bigger and in bold, the battlefield news: whole regiments
+wavering, breaking, rallying.
+
 ### Touch controls
 
 | Control | What it does |
